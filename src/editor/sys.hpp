@@ -8,7 +8,7 @@ namespace sys {
 struct Proc { long long h = 0; };                                    // proceso lanzado (pid o HANDLE)
 bool spawn(const std::vector<std::string> &args, Proc *out, bool hidden = false); // sin esperar (hidden: sin consola en Windows)
 int run(const std::vector<std::string> &args);                       // espera; devuelve el codigo de salida (-1 si falla)
-bool finished(Proc &p);                                              // true si ya termino (y lo recoge)
+bool finished(Proc &p, int *code = nullptr);                         // true si ya termino (y lo recoge); code: su codigo de salida
 std::string makeTempDir();                                           // carpeta temporal nueva
 void setExecutable(const std::string &path);                         // chmod 755 (nada en Windows)
 void localTime(time_t t, tm &out);

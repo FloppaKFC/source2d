@@ -64,8 +64,10 @@ def guardar_y_firmar(d, archivos):
 
 
 def subir(d, mensaje, extra=()):
-    subprocess.run(["git", "-C", d, "add", "noticias.json", "noticias.json.firma", "versiones.json", "versiones.json.firma",
-                    "imagenes", *extra], check=False)
+    # git add falla entero si falta alguna ruta (imagenes/ no existe hasta el primer anuncio con imagen)
+    rutas = [r for r in ("noticias.json", "noticias.json.firma", "versiones.json", "versiones.json.firma", "imagenes", *extra)
+             if os.path.exists(os.path.join(d, r))]
+    subprocess.run(["git", "-C", d, "add", *rutas], check=True)
     if subprocess.run(["git", "-C", d, "diff", "--cached", "--quiet"]).returncode == 0:
         print("No hay cambios que subir.")
         return

@@ -55,9 +55,11 @@ int run(const std::vector<std::string> &args) {
     CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
     return (int)code;
 }
-bool finished(Proc &p) {
+bool finished(Proc &p, int *code) {
     HANDLE h = (HANDLE)(intptr_t)p.h;
     if (WaitForSingleObject(h, 0) != WAIT_OBJECT_0) return false;
+    DWORD c = 1;
+    if (code) { GetExitCodeProcess(h, &c); *code = (int)c; }
     CloseHandle(h);
     return true;
 }
@@ -97,7 +99,12 @@ int run(const std::vector<std::string> &args) {
     waitpid(pid, &st, 0);
     return WIFEXITED(st) ? WEXITSTATUS(st) : -1;
 }
-bool finished(Proc &p) { int st; return waitpid((pid_t)p.h, &st, WNOHANG) == (pid_t)p.h; }
+bool finished(Proc &p, int *code) {
+    int st;
+    if (waitpid((pid_t)p.h, &st, WNOHANG) != (pid_t)p.h) return false;
+    if (code) *code = WIFEXITED(st) ? WEXITSTATUS(st) : -1;
+    return true;
+}
 void setExecutable(const std::string &path) { chmod(path.c_str(), 0755); }
 void localTime(time_t t, tm &out) { localtime_r(&t, &out); }
 int processId() { return (int)getpid(); }

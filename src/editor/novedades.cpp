@@ -33,7 +33,7 @@ const char *kSistema = "linux", *kExe = "Source2D";
 const char *kBase = "https://raw.githubusercontent.com/FloppaKFC/source2d-versiones/main/";
 const time_t kCada = 3 * 3600;               // se vuelve a mirar cada 3 h si el editor sigue abierto
 
-struct Bajada { sys::Proc p; std::string dest, hash; bool vivo = false; };
+struct Bajada { sys::Proc p; std::string dest, hash; bool vivo = false; int code = 0; };   // code: salida de curl (22 = no esta en el servidor)
 struct DescargaVer { Version v; sys::Proc p; bool vivo = false; std::string parcial, final_, error; };
 
 bool g_on = false, g_buscar = false, g_pruebas = false, g_hayCache = false;
@@ -192,6 +192,8 @@ void cargarCache() {
 // las 4 descargas de la busqueda acabaron: se queda con lo que venga bien firmado
 void procesarBusqueda() {
     int ok = 0, falta = 0;
+    bool conectado = false;   // el servidor contesto aunque fuera "no existe": hay internet
+    for (auto &b : g_meta) if (b.code == 0 || b.code == 22) conectado = true;
     for (const char *nm : {"noticias.json", "versiones.json"}) {
         std::string d = leer(tmpDir() + "/" + nm), f = leer(tmpDir() + "/" + nm + ".firma");
         if (d.empty() || f.empty()) { falta++; continue; }
@@ -207,6 +209,7 @@ void procesarBusqueda() {
     fs::remove_all(fs::u8path(tmpDir()), ec);
     cargarCache();
     if (ok == 2) g_estado.clear();
+    else if (falta == 2 && conectado) g_estado = g_hayCache ? "" : "Todavía no hay noticias publicadas.";
     else if (falta == 2) g_estado = g_hayCache ? "Sin conexión: se ven las últimas noticias descargadas." : "Sin conexión. Las noticias saldrán aquí cuando haya internet.";
     else g_estado = "Algunas noticias no se pudieron comprobar y no se muestran.";
 }
@@ -262,8 +265,8 @@ void tick() {
     if (!g_on) return;
     if (!g_meta.empty()) {
         bool all = true;
-        for (auto &b : g_meta) if (b.vivo && !sys::finished(b.p)) all = false; else b.vivo = false;
-        if (all) { g_meta.clear(); procesarBusqueda(); }
+        for (auto &b : g_meta) if (b.vivo && !sys::finished(b.p, &b.code)) all = false; else b.vivo = false;
+        if (all) { procesarBusqueda(); g_meta.clear(); }
     }
     bool img = false;
     for (auto it = g_imgs.begin(); it != g_imgs.end();) {
