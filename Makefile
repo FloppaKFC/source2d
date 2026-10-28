@@ -52,7 +52,7 @@ src/runtime_js.h: src/runtime.js tools/gen_runtime.py tools/jsmin.py
 
 # licencias de terceros: dentro del jugador (./juego --licencias), del editor (Ayuda) y junto a la Release
 LIC_SRC = tools/gen_licencias.py third_party/raylib/LICENSE third_party/raylib/src/external/glfw/LICENSE.md third_party/quickjs/LICENSE third_party/vulkan/LICENSE.txt \
-          third_party/dejavu/LICENSE.txt third_party/imgui/LICENSE.txt third_party/rlImGui/LICENSE third_party/outfit/OFL.txt
+          third_party/dejavu/LICENSE.txt third_party/imgui/LICENSE.txt third_party/rlImGui/LICENSE third_party/outfit/OFL.txt third_party/monocypher/LICENCE.md
 src/licencias_jugador.h: $(LIC_SRC)
 	python3 tools/gen_licencias.py jugador $@
 build/gen/licencias_editor.h: $(LIC_SRC) | build/gen
@@ -168,7 +168,12 @@ check-portable: $(PLAYER)
 check-deps: $(PLAYER) $(EDITOR)
 	@for f in $(PLAYER) $(EDITOR); do echo "== $$f"; ldd $$f; done
 
+# herramienta para firmar noticias y versiones (solo la usa quien publica; ver tools/firma.c)
+firma: build/firma
+build/firma: tools/firma.c third_party/monocypher/monocypher.c | build
+	$(CC) -O2 -Wall -Ithird_party/monocypher tools/firma.c third_party/monocypher/monocypher.c -o $@
+
 clean:
 	rm -rf build
 
-.PHONY: all player editor check-deps check-portable clean
+.PHONY: all player editor firma check-deps check-portable clean

@@ -37,6 +37,8 @@
 #include "sys.hpp"
 #include "version.hpp"
 #include "school.hpp"
+#include "novedades.hpp"
+#include "firma_publica.hpp"
 
 namespace fs = std::filesystem;
 
@@ -81,7 +83,8 @@ struct App {
     int exportKind = 0;                   // 0 ligera, 1 pesada, 2 optimizada
     bool exWin = true, exLinux = true, exWeb = false, exAndroid = false;
     std::string exportDir;
-    int homeSection = 0;                                  // pagina de inicio: 0 Crear, 1 Juegos, 2 Plantillas
+    int homeSection = 0;                                  // pagina de inicio: 0 Crear, 1 Juegos, 2 Plantillas, 3 Escuela, 5 Noticias
+    std::string pendingLink;                              // enlace de una noticia: se confirma antes de abrirlo
     double lastAutosave = 0;                              // guardado automatico (cada Opciones > segundos)
     double lastRecovery = 0;                              // experimental: copia de recuperacion
     bool showOptions = false, showVersions = false, scriptVersions = false;
@@ -852,6 +855,7 @@ struct EditorPrefs {
     bool animations = true;                       // animaciones suaves del editor
     bool safeSave = false;                        // experimental: recuperacion si se apaga el equipo
     std::string lang;                             // idioma del editor ("" = Espanol)
+    bool news = true;                             // buscar noticias y actualizaciones (Inicio > Noticias)
 };
 static EditorPrefs &prefs() {
     static EditorPrefs p;
@@ -865,6 +869,7 @@ static EditorPrefs &prefs() {
             p.name = jstr(j, "nombre"); p.color = (int)jnum(j, "color", 0);
             p.autosaveSecs = std::clamp((int)jnum(j, "segundosGuardado", 30), 5, 3600); p.keepVersions = std::clamp((int)jnum(j, "versiones", 20), 0, 200);
             p.animations = jbool(j, "animaciones", true); p.safeSave = jbool(j, "guardadoSeguro", false); p.lang = jstr(j, "idioma");
+            p.news = jbool(j, "buscarNoticias", true);
         }
         if (p.name.empty()) p.name = collab::defaultName();
         if (p.projectsDir.empty()) p.projectsDir = ui::documentsDir() + "/Source 2D";
@@ -879,7 +884,7 @@ static void savePrefs() {
                                                              {"nombre", prefs().name}, {"color", prefs().color},
                                                              {"segundosGuardado", prefs().autosaveSecs}, {"versiones", prefs().keepVersions},
                                                              {"animaciones", prefs().animations}, {"guardadoSeguro", prefs().safeSave},
-                                                             {"idioma", prefs().lang}}.dump(1);
+                                                             {"idioma", prefs().lang}, {"buscarNoticias", prefs().news}}.dump(1);
 }
 // la carpeta se crea sola la primera vez que hace falta
 static std::string projectsDir() {
@@ -958,7 +963,7 @@ static std::vector<InstalledVersion> installedVersions() {
         if (!d.is_directory(ec)) continue;
         for (auto &f : fs::directory_iterator(d.path(), ec)) {
             std::string fn = f.path().filename().string();
-            if (fn.rfind("Source2D", 0) == 0) { out.push_back({d.path().filename().string(), f.path().string()}); break; }
+            if (fn.rfind("Source2D", 0) == 0 && fs::path(fn).extension() != ".parcial") { out.push_back({d.path().filename().string(), f.path().string()}); break; }
         }
     }
     bool here = false;
@@ -966,6 +971,22 @@ static std::vector<InstalledVersion> installedVersions() {
     if (!here) out.push_back({S2D_VERSION, selfExe()});
     std::sort(out.begin(), out.end(), [](const InstalledVersion &a, const InstalledVersion &b) { return a.name > b.name; });
     return out;
+}
+
+// abre otra version (o esta misma en otro modo) y cierra esta, preguntando si hay cambios sin guardar
+static void launchVersion(const std::string &exe, bool vk) {
+    std::string e = exe.empty() ? selfExe() : exe;
+    if (e.empty()) { notify("Esta copia del editor no puede abrir otra versión (no está comprimida)", true); return; }
+    guardSwitch([e, vk] {
+        sys::Proc pr;
+        std::vector<std::string> args = {e};
+        if (vk) args.push_back("--vulkan");
+        if (sys::spawn(args, &pr)) app.quit = true; else notify("No se pudo abrir esa versión", true);
+    });
+}
+static bool hasDownloadable() {
+    for (auto &v : novedades::versiones()) if (!novedades::instalada(v.nombre) && (v.canal == "estable" || app.showExperimental)) return true;
+    return false;
 }
 
 static std::string exeDir() {
@@ -1542,6 +1563,114 @@ static void drawStudio() {
     ImGui::End();
 }
 
+/* ---------------- noticias (Inicio > Noticias) ----------------
+   Anuncios y versiones firmados por @floppa-1550 (ver novedades.cpp). Las tarjetas llevan una franja del color de su
+   tipo; las de una version nueva traen el boton para bajarla y abrirla. */
+static ImU32 newsColor(const std::string &tipo) {
+    if (tipo == "actualizacion") return IM_COL32(0x4C, 0xC3, 0x8A, 255);
+    if (tipo == "evento") return ui::kAccent;
+    if (tipo == "consejo") return IM_COL32(0x55, 0xA8, 0xF0, 255);
+    return IM_COL32(0xF0, 0xA0, 0x40, 255);   // aviso
+}
+static const char *newsKind(const std::string &tipo) {
+    if (tipo == "actualizacion") return "Actualización";
+    if (tipo == "evento") return "Evento";
+    if (tipo == "consejo") return "Consejo";
+    return "Aviso";
+}
+static std::string fechaBonita(const std::string &f) {   // 2026-10-28 -> 28/10/2026
+    return f.size() == 10 ? f.substr(8, 2) + "/" + f.substr(5, 2) + "/" + f.substr(0, 4) : f;
+}
+static const Texture2D *newsImage(const std::string &path) {
+    static std::map<std::string, Texture2D> cache;
+    if (path.empty()) return nullptr;
+    auto it = cache.find(path);
+    if (it == cache.end()) {
+        Texture2D t = LoadTexture(path.c_str());
+        if (t.id) SetTextureFilter(t, TEXTURE_FILTER_BILINEAR);
+        it = cache.emplace(path, t).first;
+    }
+    return it->second.id ? &it->second : nullptr;
+}
+// descargar / ver el progreso / abrir una version del repositorio
+static void versionButton(const novedades::Version &v) {
+    ImGui::PushID(v.nombre.c_str());
+    if (v.nombre == S2D_VERSION) ImGui::TextDisabled("Ya estás usando esta versión.");
+    else if (novedades::instalada(v.nombre)) {
+        if (homeButton(("Abrir " + v.nombre).c_str(), true))
+            for (auto &iv : installedVersions()) if (iv.name == v.nombre) launchVersion(iv.exe, false);
+    } else {
+        float pr = novedades::progreso(v.nombre);
+        if (pr >= 0) {
+            ImGui::ProgressBar(pr, ImVec2(320, 0), (std::to_string((int)(pr * 100)) + " %").c_str());
+            ImGui::SameLine(); ImGui::TextDisabled("Descargando %.1f MB", v.tam / 1048576.0);
+        } else {
+            std::string err = novedades::errorDescarga(v.nombre);
+            if (homeButton((err.empty() ? "Descargar " + v.nombre : "Reintentar").c_str(), true)) novedades::descargar(v);
+            ImGui::SameLine(); ImGui::AlignTextToFramePadding();
+            if (!err.empty()) ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.5f, 1.0f), "%s", err.c_str());
+            else ImGui::TextDisabled("%.1f MB · se queda en el selector de versiones", v.tam / 1048576.0);
+        }
+    }
+    ImGui::PopID();
+}
+static void newsCard(const novedades::Noticia &n, float w) {
+    ImGui::PushID(n.id);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ui::kPanel);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(22, 16));
+    ImGui::BeginChild("##card", ImVec2(w, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
+    ImU32 col = newsColor(n.tipo);
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col), "%s", newsKind(n.tipo));
+    ImGui::SameLine(); ImGui::TextDisabled("· %s", fechaBonita(n.fecha).c_str());
+    if (n.fijada) { ImGui::SameLine(); ImGui::TextDisabled("· Fijada"); }
+    if (novedades::nueva(n.id)) { ImGui::SameLine(); ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kAccent), "Nuevo"); }
+    ImGui::PushFont(ui::boldFont(), 20);
+    ImGui::PushTextWrapPos(w - 22);
+    ImGui::TextUnformatted(n.titulo.c_str());
+    ImGui::PopFont();
+    if (const Texture2D *t = newsImage(n.imagen)) {
+        float iw = std::min((float)t->width, w - 44), ih = iw * t->height / std::max(1, t->width);
+        ImGui::Image((ImTextureID)(intptr_t)t->id, ImVec2(iw, ih));
+    }
+    if (!n.texto.empty()) ImGui::TextUnformatted(n.texto.c_str());
+    ImGui::PopTextWrapPos();
+    if (!n.version.empty())
+        for (auto &v : novedades::versiones()) if (v.nombre == n.version) { ImGui::Dummy(ImVec2(0, 2)); versionButton(v); }
+    if (!n.enlace.empty()) { ImGui::Dummy(ImVec2(0, 2)); if (homeButton("Abrir enlace", false, 30)) app.pendingLink = n.enlace; }
+    ImGui::Dummy(ImVec2(0, 2));
+    ImGui::TextDisabled("Publicado por " S2D_FIRMA_AUTOR " · firma verificada");
+    ImGui::EndChild();
+    ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+    ImGui::GetWindowDrawList()->AddRectFilled(a, ImVec2(a.x + 5, b.y), col, 10, ImDrawFlags_RoundCornersLeft);
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+    ImGui::Dummy(ImVec2(0, 8));
+    ImGui::PopID();
+}
+static void drawNewsSection() {
+    sectionTitle("Noticias", 30);
+    std::string st = novedades::estado();
+    if (!st.empty()) ImGui::TextDisabled("%s", st.c_str());
+    ImGui::Dummy(ImVec2(0, 6));
+    float w = std::min(ImGui::GetContentRegionAvail().x, 760.0f);
+    // version estable mas nueva que esta: arriba de todo (si no tiene ya su propia noticia)
+    auto &ns = novedades::noticias();
+    for (auto &v : novedades::versiones()) {
+        if (v.canal != "estable" || v.num <= S2D_VERSION_NUM) continue;
+        bool hasNews = false;
+        for (auto &n : ns) if (n.version == v.nombre) hasNews = true;
+        if (hasNews) break;
+        novedades::Noticia n;
+        n.id = -1; n.tipo = "actualizacion"; n.fecha = v.fecha; n.titulo = "Nueva actualización: " + v.nombre; n.texto = v.notas; n.version = v.nombre;
+        newsCard(n, w);
+        break;
+    }
+    if (ns.empty() && st.empty()) ImGui::TextDisabled("Todavía no hay noticias.");
+    for (auto &n : ns) newsCard(n, w);
+    novedades::marcarLeidas();
+}
+
 static void drawStartPage() {
     const float menuW = 210;
     ImDrawList *dl = ImGui::GetWindowDrawList();
@@ -1554,10 +1683,14 @@ static void drawStartPage() {
         ml->AddText(ui::boldFont(), 21, ImVec2(lp.x + 18, lp.y + 18), ui::kText, "Source 2D");
         ImGui::Dummy(ImVec2(0, 62));
     } else ImGui::Dummy(ImVec2(0, 12));
-    struct Item { const char *label; ui::Icon icon; };
-    const Item items[] = {{"Crear", ui::Icon::Create}, {"Juegos", ui::Icon::Gamepad}, {"Plantillas", ui::Icon::Book}, {"Escuela", ui::Icon::People},
-                          {"Source Sprite", ui::Icon::Image}};
-    for (int i = 0; i < 5; i++) {
+    // id: el apartado (4 abre Source Sprite); Noticias solo si este editor busca noticias
+    struct Item { const char *label; ui::Icon icon; int id; };
+    std::vector<Item> items = {{"Crear", ui::Icon::Create, 0}, {"Juegos", ui::Icon::Gamepad, 1}, {"Plantillas", ui::Icon::Book, 2}, {"Escuela", ui::Icon::People, 3}};
+    if (novedades::activo()) items.push_back({"Noticias", ui::Icon::Bell, 5});
+    items.push_back({"Source Sprite", ui::Icon::Image, 4});
+    for (int k = 0; k < (int)items.size(); k++) {
+        const Item &it = items[k];
+        int i = it.id;
         ImVec2 p = ImGui::GetCursorScreenPos();
         p.x += 8;
         ImGui::SetCursorScreenPos(p);
@@ -1568,8 +1701,9 @@ static void drawStartPage() {
         ImDrawList *ml = ImGui::GetWindowDrawList();
         if (sel || hov) ml->AddRectFilled(p, ImVec2(p.x + menuW - 16, p.y + 40), sel ? ui::kPanel2 : ui::kHover, 8);
         ImU32 c = sel ? ui::kSelectedIconBg : ui::kText2;
-        ui::drawIcon(ml, items[i].icon, ImVec2(p.x + 24, p.y + 20), 18, c);
-        ml->AddText(sel ? ui::boldFont() : ImGui::GetFont(), ImGui::GetFontSize() + 1, ImVec2(p.x + 46, p.y + 11), sel ? ui::kText : ui::kText2, items[i].label);
+        ui::drawIcon(ml, it.icon, ImVec2(p.x + 24, p.y + 20), 18, c);
+        ml->AddText(sel ? ui::boldFont() : ImGui::GetFont(), ImGui::GetFontSize() + 1, ImVec2(p.x + 46, p.y + 11), sel ? ui::kText : ui::kText2, it.label);
+        if (i == 5 && novedades::sinLeer() > 0) ml->AddCircleFilled(ImVec2(p.x + menuW - 40, p.y + 20), 4.5f, ui::kAccent);   // hay noticias sin leer
         ImGui::PopID();
         ImGui::Dummy(ImVec2(0, 2));
     }
@@ -1583,22 +1717,28 @@ static void drawStartPage() {
     if (ImGui::BeginCombo("##ver", curVer.c_str())) {
         static std::vector<InstalledVersion> vers;
         if (ImGui::IsWindowAppearing()) vers = installedVersions();
-        // abre otra version (o esta misma en otro modo) y cierra esta, preguntando si hay cambios sin guardar
-        auto launch = [](const std::string &exe, bool vk) {
-            std::string e = exe.empty() ? selfExe() : exe;
-            if (e.empty()) { notify("Esta copia del editor no puede abrir otra versión (no está comprimida)", true); return; }
-            guardSwitch([e, vk] {
-                sys::Proc pr;
-                std::vector<std::string> args = {e};
-                if (vk) args.push_back("--vulkan");
-                if (sys::spawn(args, &pr)) app.quit = true; else notify("No se pudo abrir esa versión", true);
-            });
-        };
+        auto launch = launchVersion;
         for (auto &v : vers) {
             bool cur = v.name == S2D_VERSION && !app.vulkan;
             if (ImGui::Selectable(v.name.c_str(), cur) && !cur) launch(v.name == S2D_VERSION ? selfExe() : v.exe, false);
         }
-        if (vers.size() <= 1 && !app.showExperimental) ImGui::TextDisabled("Las versiones que abras se guardan aquí.");
+        if (vers.size() <= 1 && !app.showExperimental && !hasDownloadable()) ImGui::TextDisabled("Las versiones que abras se guardan aquí.");
+        // las del repositorio que no estan en este equipo: se bajan aqui mismo y luego salen arriba
+        bool title = false;
+        for (auto &v : novedades::versiones()) {
+            if (novedades::instalada(v.nombre) || (v.canal != "estable" && !app.showExperimental)) continue;
+            if (!title) { ImGui::SeparatorText("Para descargar"); title = true; }
+            ImGui::PushID(v.nombre.c_str());
+            float pr = novedades::progreso(v.nombre);
+            std::string lbl = v.nombre + (v.canal != "estable" ? " (experimental)" : "");
+            if (pr >= 0) { ImGui::TextUnformatted(lbl.c_str()); ImGui::ProgressBar(pr, ImVec2(-1, 0)); }
+            else if (ImGui::Selectable(lbl.c_str(), false, ImGuiSelectableFlags_DontClosePopups)) novedades::descargar(v);
+            else if (ImGui::IsItemHovered()) ImGui::SetTooltip("Descargar (%.1f MB)", v.tam / 1048576.0);
+            std::string err = novedades::errorDescarga(v.nombre);
+            if (!err.empty()) ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.5f, 1.0f), "%s", err.c_str());
+            ImGui::PopID();
+        }
+        if (title && ImGui::IsWindowFocused()) vers = installedVersions();   // la que acaba de bajarse sale arriba
         ImGui::Separator();
         if (ImGui::Selectable(app.showExperimental ? "- Experimentales" : "+ Experimentales", false, ImGuiSelectableFlags_DontClosePopups))
             app.showExperimental = !app.showExperimental;
@@ -1629,6 +1769,7 @@ static void drawStartPage() {
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (1.0f - fa) * 10.0f);
     if (app.homeSection == 1) drawTestsSection(false); else if (app.homeSection == 2) drawTestsSection(true);
     else if (app.homeSection == 3) { sectionTitle("Escuela", 30); school::drawSection(); }
+    else if (app.homeSection == 5) drawNewsSection();
     else drawCreateSection();
     ImGui::PopStyleVar();
     ImGui::Dummy(ImVec2(0, 20));
@@ -1663,6 +1804,47 @@ static void drawStartDialogs() {
         std::ofstream out(recentFile());
         for (auto &r : app.recent) out << r << "\n";
         app.forgetRecent.clear();
+    }
+    if (!app.pendingLink.empty() && !ImGui::IsPopupOpen("Abrir enlace")) ImGui::OpenPopup("Abrir enlace");
+    ImGui::SetNextWindowSize(ImVec2(520, 0));
+    if (ui::beginModal("Abrir enlace", nullptr, ImGuiWindowFlags_NoResize)) {
+        ImGui::PushTextWrapPos();
+        ImGui::TextUnformatted("Se abrirá esta página en el navegador:");
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kAccent), "%s", app.pendingLink.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::Dummy(ImVec2(0, 4));
+        if (ui::primaryButton("Abrir", ImVec2(120, 0))) { OpenURL(app.pendingLink.c_str()); app.pendingLink.clear(); ImGui::CloseCurrentPopup(); }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancelar", ImVec2(110, 0))) { app.pendingLink.clear(); ImGui::CloseCurrentPopup(); }
+        ImGui::EndPopup();
+    }
+    // anuncio importante: sale una sola vez en una ventana al abrir el editor
+    static int shownImportant = 0;
+    if (const novedades::Noticia *imp = novedades::importantePendiente(); imp && !ImGui::IsPopupOpen("Aviso", ImGuiPopupFlags_AnyPopupId) && !ImGui::GetTopMostPopupModal()) {
+        shownImportant = imp->id;
+        ImGui::OpenPopup("Aviso");
+    }
+    ImGui::SetNextWindowSize(ImVec2(560, 0));
+    if (ui::beginModal("Aviso", nullptr, ImGuiWindowFlags_NoResize)) {
+        const novedades::Noticia *imp = nullptr;
+        for (auto &n : novedades::noticias()) if (n.id == shownImportant) imp = &n;
+        if (imp) {
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(newsColor(imp->tipo)), "%s", newsKind(imp->tipo));
+            ImGui::PushTextWrapPos();
+            ImGui::PushFont(ui::boldFont(), 20); ImGui::TextUnformatted(imp->titulo.c_str()); ImGui::PopFont();
+            ImGui::TextUnformatted(imp->texto.c_str());
+            ImGui::PopTextWrapPos();
+            ImGui::TextDisabled("Publicado por " S2D_FIRMA_AUTOR " · firma verificada");
+        }
+        ImGui::Dummy(ImVec2(0, 4));
+        bool go = ui::primaryButton("Ver noticias", ImVec2(140, 0));
+        ImGui::SameLine();
+        if (go || ImGui::Button("Cerrar", ImVec2(110, 0))) {
+            novedades::importanteVisto(shownImportant);
+            if (go) { app.homeSection = 5; app.focusWelcome = app.hasProject; }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
     }
     if (app.askNew) { ImGui::OpenPopup("Nuevo proyecto"); app.askNew = false; }
     ImGui::SetNextWindowSize(ImVec2(560, 0));
@@ -1795,6 +1977,10 @@ static void drawStartDialogs() {
             ImGui::EndCombo();
         }
         ImGui::TextDisabled("Los idiomas son los .txt de la carpeta Idiomas (junto al editor).");
+        if (novedades::activo()) {
+            if (ImGui::Checkbox("Buscar noticias y actualizaciones", &P.news)) novedades::setBuscar(P.news);
+            ImGui::TextDisabled("Al abrir y cada 3 horas. Solo se descargan archivos públicos; no se envía nada.");
+        }
         ImGui::SeparatorText("Experimental");
         ImGui::Checkbox("Guardado a prueba de apagones", &P.safeSave);
         ImGui::TextDisabled("Cada 5 s copia lo que no has guardado (forzado al disco). Si se va la luz o el\n"
@@ -3019,6 +3205,28 @@ static void runScriptStep() {
         else { printf("S2DEDIT FAIL boton de la barra desconocido [%s]: %s\n", a.c_str(), line.c_str()); app.fails++; }
     }
     else if (cmd == "home.section") in >> app.homeSection;   // 0 Crear, 1 Prueba
+    // noticias (con S2D_NOVEDADES_URL=file://... y S2D_FIRMA_PUBLICA de una clave de prueba)
+    else if (cmd == "noticias.espera") { if (novedades::estado() == "Buscando noticias...") app.scriptPos--; }
+    else if (cmd == "noticias.expect") {   // noticias.expect <noticias> <versiones> <importante 0|1>
+        int n, v, imp; in >> n >> v >> imp;
+        int gn = (int)novedades::noticias().size(), gv = (int)novedades::versiones().size(), gi = novedades::importantePendiente() != nullptr;
+        bool ok = gn == n && gv == v && gi == imp;
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s -> noticias=%d versiones=%d importante=%d estado=[%s]\n", ok ? "OK" : "FAIL", line.c_str(), gn, gv, gi, novedades::estado().c_str());
+    }
+    else if (cmd == "noticias.descargar") {
+        std::string nm; std::getline(in >> std::ws, nm);
+        for (auto &v : novedades::versiones()) if (v.nombre == nm) novedades::descargar(v);
+    }
+    else if (cmd == "noticias.instalada") {   // espera a que acabe la descarga y comprueba que quedo bien
+        std::string nm; std::getline(in >> std::ws, nm);
+        if (novedades::progreso(nm) >= 0) app.scriptPos--;
+        else {
+            bool ok = novedades::instalada(nm);
+            if (!ok) app.fails++;
+            printf("S2DEDIT %s %s -> %s\n", ok ? "OK" : "FAIL", line.c_str(), novedades::errorDescarga(nm).c_str());
+        }
+    }
     else if (cmd == "lang") { std::string l; std::getline(in >> std::ws, l); ui::setLanguage(l); }   // idioma del editor (pruebas)
     else if (cmd == "home.remix") { int i; in >> i; if (i >= 0 && i < (int)exampleGames().size() && !exampleGames()[i].doc.empty()) openExampleCopy(i); }   // "Ver por dentro"
     else if (cmd == "expectsaved") {   // el proyecto abierto tiene archivo y esta guardado
@@ -3094,6 +3302,7 @@ int main(int argc, char **argv) {
         app.openFirstScene = true;
     };
     if (!prefs().lang.empty()) ui::setLanguage(prefs().lang);
+    novedades::iniciar(prefs().news, versionsDir(), !app.script.empty());
     if (app.script.empty()) {
         installThisVersion();
         std::error_code ec;                              // lo que quedo de un cierre de golpe (luz, apagado)
@@ -3129,6 +3338,7 @@ int main(int argc, char **argv) {
             if (--app.perfFrames == 0) printf("S2DEDIT perf media %.1f ms, peor %.1f ms\n", (now - app.perfStart) * 1000 / app.perfN, app.perfMax * 1000);
         }
         if (!app.script.empty()) runScriptStep();
+        novedades::tick();
         globalShortcuts();
         drawMenuAndToolbar();
         if (g_studio.on) drawStudio();

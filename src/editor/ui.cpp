@@ -395,6 +395,20 @@ void drawIcon(ImDrawList *dl, Icon ic, ImVec2 c, float s, ImU32 col) {
         for (int i = 0; i < 12; i += 2) { float a0 = i * 3.14159f / 6, a1 = (i + 1) * 3.14159f / 6;
             dl->AddLine(P(0.85f * cosf(a0), 0.6f * sinf(a0)), P(0.85f * cosf(a1), 0.6f * sinf(a1)), col, t); }
         break;
+    case Icon::Bell:   // campana (noticias)
+        dl->AddBezierCubic(P(-0.7f, 0.45f), P(-0.45f, 0.1f), P(-0.6f, -0.75f), P(0, -0.75f), col, t);
+        dl->AddBezierCubic(P(0, -0.75f), P(0.6f, -0.75f), P(0.45f, 0.1f), P(0.7f, 0.45f), col, t);
+        dl->AddLine(P(-0.8f, 0.45f), P(0.8f, 0.45f), col, t);
+        dl->AddCircleFilled(P(0, 0.72f), h * 0.16f, col);
+        break;
+    case Icon::Download:   // flecha hacia una bandeja
+        dl->AddLine(P(0, -0.85f), P(0, 0.3f), col, t);
+        dl->AddLine(P(-0.45f, -0.15f), P(0, 0.3f), col, t);
+        dl->AddLine(P(0.45f, -0.15f), P(0, 0.3f), col, t);
+        dl->AddLine(P(-0.8f, 0.4f), P(-0.8f, 0.8f), col, t);
+        dl->AddLine(P(-0.8f, 0.8f), P(0.8f, 0.8f), col, t);
+        dl->AddLine(P(0.8f, 0.8f), P(0.8f, 0.4f), col, t);
+        break;
     case Icon::People:   // dos personas (trabajar juntos)
         dl->AddCircle(P(-0.32f, -0.35f), h * 0.26f, col, 0, t);
         dl->AddBezierQuadratic(P(-0.85f, 0.75f), P(-0.32f, -0.15f), P(0.21f, 0.75f), col, t);

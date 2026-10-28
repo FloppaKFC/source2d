@@ -40,7 +40,7 @@ void helpMarker(const char *text);
 enum class Icon { Pencil, Eraser, Bucket, Picker, Line, Rect, Ellipse, Select, Move, Hand, Play, Stop, Plus, Minus,
                   Copy, Trash, Eye, EyeOff, Lock, Unlock, Up, Down, Onion, Grid, MirrorX, MirrorY, Prev, Next, Folder, Save, Undo, Redo, Home, Image,
                   Menu, Scene, Events, Settings, Export, Object, Hammer, Book, Create, Gamepad, Delete, Lasso, Wand, Crop, Close, People,
-                  Spray, Gradient, Contour, SelEllipse };
+                  Spray, Gradient, Contour, SelEllipse, Bell, Download };
 void drawIcon(ImDrawList *dl, Icon ic, ImVec2 center, float size, ImU32 col);
 // idiomas del editor: archivos <carpeta>/Idiomas/<Nombre>.txt con lineas "texto original = traduccion"
 void loadLanguages(const std::string &exeDir);       // al arrancar: donde buscar la carpeta Idiomas

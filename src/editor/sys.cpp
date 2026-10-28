@@ -33,15 +33,15 @@ static std::wstring cmdLine(const std::vector<std::string> &args) {
     MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, w.data(), n);
     return w;
 }
-static bool create(const std::vector<std::string> &args, PROCESS_INFORMATION &pi) {
+static bool create(const std::vector<std::string> &args, PROCESS_INFORMATION &pi, DWORD flags = 0) {
     STARTUPINFOW si{};
     si.cb = sizeof si;
     std::wstring cl = cmdLine(args);
-    return CreateProcessW(nullptr, cl.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi) != 0;
+    return CreateProcessW(nullptr, cl.data(), nullptr, nullptr, FALSE, flags, nullptr, nullptr, &si, &pi) != 0;
 }
-bool spawn(const std::vector<std::string> &args, Proc *out) {
+bool spawn(const std::vector<std::string> &args, Proc *out, bool hidden) {
     PROCESS_INFORMATION pi{};
-    if (!create(args, pi)) return false;
+    if (!create(args, pi, hidden ? CREATE_NO_WINDOW : 0)) return false;
     CloseHandle(pi.hThread);
     if (out) out->h = (long long)(intptr_t)pi.hProcess; else CloseHandle(pi.hProcess);
     return true;
@@ -82,7 +82,7 @@ static std::vector<char *> argvOf(const std::vector<std::string> &args) {
     v.push_back(nullptr);
     return v;
 }
-bool spawn(const std::vector<std::string> &args, Proc *out) {
+bool spawn(const std::vector<std::string> &args, Proc *out, bool) {
     pid_t pid;
     auto v = argvOf(args);
     if (posix_spawnp(&pid, v[0], nullptr, nullptr, v.data(), environ) != 0) return false;

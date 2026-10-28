@@ -21,6 +21,7 @@ PARTES = [
      'imagenes, letras y audio, dentro de raylib', None, True),
     ('Dear ImGui', 'interfaz del editor (licencia MIT)', 'third_party/imgui/LICENSE.txt', False),
     ('rlImGui', 'union de Dear ImGui con raylib (licencia zlib)', 'third_party/rlImGui/LICENSE', False),
+    ('Monocypher', 'comprobar la firma de noticias y actualizaciones (BSD-2 o CC0)', 'third_party/monocypher/LICENCE.md', False),
     ('JSON for Modern C++ (nlohmann/json 3.11.3)', 'proyectos del editor (licencia MIT)', None, False),
     ('Outfit', 'fuente de la interfaz del editor (SIL Open Font License 1.1)', 'third_party/outfit/OFL.txt', False),
 ]

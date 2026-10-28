@@ -6,7 +6,7 @@
 
 namespace sys {
 struct Proc { long long h = 0; };                                    // proceso lanzado (pid o HANDLE)
-bool spawn(const std::vector<std::string> &args, Proc *out);         // sin esperar
+bool spawn(const std::vector<std::string> &args, Proc *out, bool hidden = false); // sin esperar (hidden: sin consola en Windows)
 int run(const std::vector<std::string> &args);                       // espera; devuelve el codigo de salida (-1 si falla)
 bool finished(Proc &p);                                              // true si ya termino (y lo recoge)
 std::string makeTempDir();                                           // carpeta temporal nueva
