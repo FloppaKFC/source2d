@@ -54,7 +54,7 @@ for t in Plataformas:plataformas Aventura:aventura Disparos:disparos Clics:clics
 done
 rm -rf Release/Idiomas && cp -r Idiomas Release/Idiomas
 cat > Release/LEEME.txt <<'TXT'
-Source 2D Beta 0.1 - motor de juegos 2D con eventos
+Source 2D Beta 0.2 - motor de juegos 2D con eventos
 
 Linux:   Release/Linux/Source2D        (dale permiso de ejecucion si hace falta: chmod +x Source2D)
 Windows: Release/Windows/Source2D.exe  (Windows 10 u 11; en 7 y 8.1 hace falta la actualizacion KB2999226 de Microsoft)
@@ -79,7 +79,7 @@ Steam: en Extensiones, "+ Steam (oficial)". Al publicar en Steam pon junto al ju
 (del SDK de Steamworks) y, para probarlo fuera de Steam, steam_appid.txt con el numero de tu juego.
 
 Versiones: cada version que abres se guarda; en la pagina de inicio (abajo a la izquierda) puedes elegir otra.
-En "+ Experimentales" esta "Beta 0.1 (Vulkan)": los juegos se prueban y exportan dibujando con Vulkan (si un equipo no
+En "+ Experimentales" esta "Beta 0.2 (Vulkan)": los juegos se prueban y exportan dibujando con Vulkan (si un equipo no
 tiene Vulkan, siguen con OpenGL solos). Un juego tambien se puede abrir con ./juego --vulkan o --opengl.
 Al probar un juego desde el editor: F3 muestra el depurador, F6 pausa y F7 avanza un fotograma.
 Si no abre en un equipo: ./Source2D --diagnostico (o ./juego --diagnostico) escribe source2d-diagnostico.txt.

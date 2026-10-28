@@ -1,4 +1,4 @@
-/* Source 2D engine - dibujo con Vulkan (experimental: version "Beta 0.1 (Vulkan)").
+/* Source 2D engine - dibujo con Vulkan (experimental: version "Beta 0.2 (Vulkan)").
  * Hace lo mismo que el dibujo con OpenGL de platform_raylib.c (lienzos, texturas, rellenos, degradados, filtros,
  * desenfoque, shaders de capa y presentacion con bandas) pero con Vulkan. La ventana, el teclado, el mando y el
  * sonido siguen siendo de raylib: aqui solo se crea una superficie de Vulkan sobre la misma ventana.
