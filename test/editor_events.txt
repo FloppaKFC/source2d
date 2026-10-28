@@ -1,0 +1,67 @@
+open PROYECTO
+wait 3
+ev.sentence 0 c.0 Al inicio de la escena
+ev.sentence 1 c.0 Jugador colisiona con Moneda
+ev.sentence 0 a.1 La cámara sigue a Jugador (suavizado 0.09)
+ev.sentence 5 c.0 La variable global score >= 120
+ev.sentence 2 c.0 Cada 0.35 segundos
+ev.select -1
+ev.add
+jexpect /scenes/0/events/8/conditions []
+ev.addcond 8 c or
+ev.addcond 8 c.0 onGround object=@Jugador
+ev.addcond 8 c.0 keyDown key=arrowup
+ev.invert 8 c.0.0
+ev.addact 8 setGlobal variable=vidas value=3
+ev.sentence 8 c.0 Si se cumple alguna de estas condiciones:
+ev.sentence 8 c.0.0 NO Jugador está en el suelo
+ev.sentence 8 c.0.1 La tecla Flecha arriba está pulsada
+ev.sentence 8 a.0 Poner la variable global vidas a 3
+ev.select 8
+ev.sub
+jexpect /scenes/0/events/9/level 1
+ev.add repeat
+jexpect /scenes/0/events/10/type "repeat"
+jexpect /scenes/0/events/10/level 1
+wait 2
+ev.comment
+jexpect /scenes/0/events/11/kind "comment"
+wait 2
+ev.group
+jexpect /scenes/0/events/12/kind "folder"
+wait 2
+ev.del 10
+jexpect /scenes/0/events/10/kind "comment"
+wait 2
+ev.undo
+jexpect /scenes/0/events/10/type "repeat"
+ev.redo
+jexpect /scenes/0/events/10/kind "comment"
+ev.expr Jugador.X + 40
+ev.expr Jugador.Foo => no existe
+ev.expr Pepe.X * 2 => no existe
+ev.expr abs(-3) + max(1, 2)
+ev.expr (1 + 2 => Falta cerrar
+ev.expr {g:score} * 2
+ev.expr Jugador => Usa Jugador.X
+ev.expr Jugador.X() => no es una función
+ev.expr $B[$sq + 16] & 7 | ($side << 3)
+ev.expr substr("abcdefgh", $f & 7, 1) + str(8 - ($t >> 4))
+ev.expr $lista[2 => Falta cerrar un corchete
+ev.expr Fn.NoExiste(1) => no existe
+ev.expr "sin cerrar => comillas
+ev.show
+wait 3
+ev.dialog act 8 a
+wait 4
+shot CAPTURA1
+ev.dialog cond 8 c collision
+wait 4
+shot CAPTURA2
+ev.dlgaccept
+jexpect /scenes/0/events/8/conditions/1/type "collision"
+ev.select 8
+wait 4
+shot CAPTURA3
+save SALIDA
+quit

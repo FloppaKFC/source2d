@@ -1,0 +1,13 @@
+# extension oficial Steam: se anade con su boton y sus condiciones y acciones aparecen en la hoja de eventos
+open PROYECTO
+wait 2
+ext.steam
+wait 2
+expectdef act ext:ext_steam:logro
+expectdef act ext:ext_steam:guardarNube
+expectdef act ext:ext_steam:cargarNube
+expectdef act ext:ext_steam:overlay
+expectdef cond ext:ext_steam:hayNube
+expectdef cond ext:ext_steam:disponible
+expectdef cond ext:ext_steam:tieneLogro
+quit

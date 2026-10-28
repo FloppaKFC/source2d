@@ -1,0 +1,112 @@
+# Source 2D para cualquier Linux de 64 bits (glibc 2.28 o mas nueva: Ubuntu 18.04+, Debian 10+, Linux Lite 4+, Mint 19+...).
+# Se compila con zig contra una glibc antigua: si se compila con el gcc del sistema, el ejecutable pide la glibc de
+# este sistema (en Arch, la ultima) y no abre en distribuciones con una glibc mas vieja ("GLIBC_2.38 not found").
+#   make -f Makefile.linux player   -> build/lnx/source2d-player (jugador: base de los juegos exportados para Linux)
+#   make -f Makefile.linux editor   -> build/lnx/Source2D (editor; antes hace falta "make" para build/gen)
+#   ZIG=/ruta/a/zig make -f Makefile.linux ...   (tools/release.sh lo hace todo)
+# X11 y OpenGL se cargan en tiempo de ejecucion (GLFW + dlopen): solo se necesitan sus cabeceras para compilar.
+ZIG        ?= zig
+GLIBC      ?= 2.28
+TARGET      = x86_64-linux-gnu.$(GLIBC)
+CC          = $(ZIG) cc -target $(TARGET)
+CXX         = $(ZIG) c++ -target $(TARGET)
+QJS_DIR    ?= third_party/quickjs
+RAYLIB_DIR  = third_party/raylib/src
+IMGUI_DIR   = third_party/imgui
+RLIMGUI_DIR = third_party/rlImGui
+JSON_DIR    = third_party/json
+OUT         = build/lnx
+# solo las cabeceras de X11 del sistema (no las de su glibc): una carpeta con un enlace a /usr/include/X11
+X11_INC     = $(OUT)/x11inc
+CFLAGS      = -O2 -std=c11 -fno-strict-aliasing -w -D_GNU_SOURCE
+CXXFLAGS    = -Os -std=c++17 -w -ffunction-sections -fdata-sections
+LDLIBS      = -lm -ldl -lpthread
+LDFLAGS     = -Wl,--gc-sections -s
+
+all: $(OUT)/source2d-player $(OUT)/Source2D
+
+$(OUT) $(OUT)/raylib $(OUT)/qjs $(OUT)/imgui $(OUT)/editor $(OUT)/gen:
+	mkdir -p $@
+$(X11_INC): | $(OUT)
+	mkdir -p $@ && ln -sfn /usr/include/X11 $@/X11
+
+RAYLIB_SRC = rcore rshapes rtextures rtext rmodels utils raudio rglfw
+RAYLIB_OBJ = $(patsubst %,$(OUT)/raylib/%.o,$(RAYLIB_SRC))
+$(OUT)/raylib/%.o: $(RAYLIB_DIR)/%.c | $(OUT)/raylib $(X11_INC)
+	$(CC) $(CFLAGS) -std=gnu99 -DPLATFORM_DESKTOP -DGRAPHICS_API_OPENGL_21 -D_GLFW_X11 -I$(RAYLIB_DIR) -I$(RAYLIB_DIR)/external/glfw/include -idirafter $(X11_INC) -c $< -o $@
+
+QJS_SRC = dtoa libregexp libunicode quickjs
+QJS_OBJ = $(patsubst %,$(OUT)/qjs/%.o,$(QJS_SRC))
+$(OUT)/qjs/%.o: $(QJS_DIR)/%.c | $(OUT)/qjs
+	$(CC) -O3 -w -D_GNU_SOURCE -I$(QJS_DIR) -c $< -o $@
+
+libs: $(RAYLIB_OBJ) $(QJS_OBJ)
+
+# ---- jugador ----
+player: $(OUT)/source2d-player
+$(OUT)/source2d-player: src/main.c src/platform_raylib.c src/text.c src/gpu_vulkan.c src/vk_shaders.h src/steam.c src/steam.h src/runtime_js.h src/gfx_js.h src/licencias_jugador.h src/font_data.h $(RAYLIB_OBJ) $(QJS_OBJ) | $(OUT)
+	$(CC) $(CFLAGS) -Isrc -I$(QJS_DIR) -I$(RAYLIB_DIR) -I$(RAYLIB_DIR)/external -DPLAYER -c src/main.c -o $(OUT)/main_player.o
+	$(CC) $(CFLAGS) -Isrc -I$(RAYLIB_DIR) -c src/platform_raylib.c -o $(OUT)/platform_raylib.o
+	$(CC) $(CFLAGS) -O3 -Wno-unused-function -Isrc -I$(RAYLIB_DIR)/external -c src/text.c -o $(OUT)/text.o
+	$(CC) $(CFLAGS) -Isrc -Ithird_party/vulkan/include -c src/gpu_vulkan.c -o $(OUT)/gpu_vulkan.o
+	$(CC) $(CFLAGS) -Isrc -c src/steam.c -o $(OUT)/steam.o
+	$(CC) $(OUT)/main_player.o $(OUT)/platform_raylib.o $(OUT)/text.o $(OUT)/gpu_vulkan.o $(OUT)/steam.o $(RAYLIB_OBJ) $(QJS_OBJ) -o $@ $(LDLIBS) $(LDFLAGS)
+
+# ---- motor ligero (sin 3D ni formatos poco usados, optimizado para ocupar poco) y lanzador de la exportacion ligera ----
+LITE       = $(OUT)/lite
+LITE_FLAGS = -Os -flto -w -ffunction-sections -fdata-sections -D_GNU_SOURCE
+LITE_RL    = $(patsubst %,$(LITE)/raylib/%.o,rcore rtextures utils raudio rglfw)
+LITE_QJS   = $(patsubst %,$(LITE)/qjs/%.o,$(QJS_SRC))
+$(LITE)/raylib/%.o: $(RAYLIB_DIR)/%.c src/raylib_lite_config.h | $(X11_INC)
+	@mkdir -p $(LITE)/raylib
+	$(CC) $(LITE_FLAGS) -std=gnu99 -DPLATFORM_DESKTOP -DGRAPHICS_API_OPENGL_21 -D_GLFW_X11 -DEXTERNAL_CONFIG_FLAGS -include src/raylib_lite_config.h -I$(RAYLIB_DIR) -I$(RAYLIB_DIR)/external/glfw/include -idirafter $(X11_INC) -c $< -o $@
+$(LITE)/qjs/%.o: $(QJS_DIR)/%.c
+	@mkdir -p $(LITE)/qjs
+	$(CC) $(LITE_FLAGS) -D__STDC_NO_ATOMICS__=1 -I$(QJS_DIR) -c $< -o $@
+$(LITE)/source2d-lite: src/main.c src/platform_raylib.c src/text.c src/gpu_vulkan.c src/vk_shaders.h src/steam.c src/steam.h src/runtime_js.h src/gfx_js.h src/licencias_jugador.h src/font_data_mini.h $(LITE_RL) $(LITE_QJS)
+	$(CC) $(LITE_FLAGS) -std=c11 -fno-strict-aliasing -Isrc -I$(QJS_DIR) -I$(RAYLIB_DIR) -I$(RAYLIB_DIR)/external -DPLAYER -DS2D_LITE -c src/main.c -o $(LITE)/main.o
+	$(CC) $(LITE_FLAGS) -std=c11 -fno-strict-aliasing -DS2D_LITE -Isrc -I$(RAYLIB_DIR) -c src/platform_raylib.c -o $(LITE)/platform.o
+	$(CC) $(LITE_FLAGS) -std=c11 -fno-strict-aliasing -DS2D_LITE -Isrc -I$(RAYLIB_DIR)/external -c src/text.c -o $(LITE)/text.o
+	$(CC) $(LITE_FLAGS) -std=gnu99 -Isrc -Ithird_party/vulkan/include -c src/gpu_vulkan.c -o $(LITE)/gpu_vulkan.o
+	$(CC) $(LITE_FLAGS) -std=gnu99 -Isrc -c src/steam.c -o $(LITE)/steam.o
+	$(CC) -flto $(LITE)/main.o $(LITE)/platform.o $(LITE)/text.o $(LITE)/gpu_vulkan.o $(LITE)/steam.o $(LITE_RL) $(LITE_QJS) -o $@ $(LDLIBS) $(LDFLAGS)
+$(LITE)/stub: src/stub.c src/lzdec.h
+	@mkdir -p $(LITE)
+	$(CC) -Os -w -ffunction-sections -fdata-sections -I$(RAYLIB_DIR)/external src/stub.c -o $@ $(LDFLAGS)
+lite: $(LITE)/source2d-lite $(LITE)/stub
+
+# ---- editor (usa las cabeceras de build/gen que genera el Makefile normal) ----
+IMGUI_SRC = $(IMGUI_DIR)/imgui.cpp $(IMGUI_DIR)/imgui_draw.cpp $(IMGUI_DIR)/imgui_tables.cpp $(IMGUI_DIR)/imgui_widgets.cpp $(RLIMGUI_DIR)/rlImGui.cpp
+IMGUI_OBJ = $(patsubst %.cpp,$(OUT)/imgui/%.o,$(notdir $(IMGUI_SRC)))
+EDITOR_SRC = $(wildcard src/editor/*.cpp)
+EDITOR_OBJ = $(patsubst src/editor/%.cpp,$(OUT)/editor/%.o,$(EDITOR_SRC))
+EDITOR_INC = -Isrc -Isrc/editor -Ibuild/gen -I$(RAYLIB_DIR) -I$(IMGUI_DIR) -I$(RLIMGUI_DIR) -I$(JSON_DIR) -I$(QJS_DIR)
+
+$(OUT)/imgui/%.o: $(IMGUI_DIR)/%.cpp | $(OUT)/imgui
+	$(CXX) $(CXXFLAGS) -I$(IMGUI_DIR) -I$(RAYLIB_DIR) -c $< -o $@
+$(OUT)/imgui/rlImGui.o: $(RLIMGUI_DIR)/rlImGui.cpp | $(OUT)/imgui
+	$(CXX) $(CXXFLAGS) -I$(IMGUI_DIR) -I$(RAYLIB_DIR) -c $< -o $@
+$(OUT)/editor/%.o: src/editor/%.cpp $(wildcard src/editor/*.hpp) src/runtime_js.h build/gen/gfx_web_js.h build/gen/players_portable.c | $(OUT)/editor
+	$(CXX) $(CXXFLAGS) $(EDITOR_INC) -c $< -o $@
+
+# los motores que lleva el editor para exportar (tools/gen_players.py): siempre los de Makefile.linux y Makefile.win
+# (Linux con glibc 2.28), nunca el del gcc del sistema. Hay que compilarlos antes: tools/release.sh lo hace.
+PORTABLE_PLAYERS = build/lnx/lite/stub build/lnx/source2d-player build/lnx/lite/source2d-lite build/win/lite/stub.exe build/win/source2d-player.exe build/win/lite/source2d-lite.exe
+build/gen/players_portable.c: $(wildcard $(PORTABLE_PLAYERS)) tools/gen_players.py
+	@mkdir -p build/gen
+	python3 tools/gen_players.py $@ $(PORTABLE_PLAYERS)
+$(OUT)/gen/players_portable.o: build/gen/players_portable.c | $(OUT)/gen
+	$(CC) -c $< -o $@
+
+editor: $(OUT)/Source2D
+$(OUT)/Source2D: $(EDITOR_OBJ) $(IMGUI_OBJ) $(OUT)/gen/players_portable.o $(RAYLIB_OBJ) $(QJS_OBJ)
+	$(CXX) $^ -o $@ $(LDLIBS) $(LDFLAGS)
+
+# glibc mas nueva que piden los ejecutables (debe ser <= GLIBC)
+check-glibc: $(OUT)/source2d-player $(OUT)/Source2D
+	@for f in $^; do printf '%s: ' $$f; objdump -T $$f | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1; done
+
+clean:
+	rm -rf $(OUT)
+
+.PHONY: all libs player lite editor check-glibc clean

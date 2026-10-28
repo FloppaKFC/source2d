@@ -1,0 +1,18 @@
+# trabajar juntos (anfitrion): comparte, recibe los cambios del invitado, ve su cursor y una edicion a la vez queda igual en los dos
+wait 3
+open PROYECTO
+wait 5
+colab.host Ana
+colab.waitpeers 1
+jset /objects/0/name "DesdeAna"
+colab.wait /objects/1/name "DesdeBeto"
+scene Nivel 1
+colab.pres scene:sc_4ltgw3 300 380
+colab.waitpres Beto scene:sc_4ltgw3
+wait 20
+shot CAPTURA_ANA
+jset /objects/2/name "Choque-Ana"
+wait 90
+colab.print /objects/2/name
+colab.waitpeers 0
+quit

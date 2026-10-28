@@ -1,0 +1,54 @@
+open PROYECTO
+wait 3
+sc.count 20
+sc.placeobj Moneda
+sc.place 333 222
+sc.count 21
+sc.expectsel x 336
+sc.expectsel y 224
+sc.move 10 0
+sc.expectsel x 346
+sc.dup
+sc.count 22
+sc.expectsel x 362
+sc.del
+sc.count 21
+sc.undo
+sc.count 22
+sc.redo
+sc.count 21
+sc.pick 120 400
+sc.expectsel x 120
+sc.pick 5000 5000
+sc.tilemap 0
+sc.paint 8 8 3
+jexpect /scenes/0/tilemaps/0/data/0 3
+sc.paint 8 8 -1
+jexpect /scenes/0/tilemaps/0/data/0 -1
+newobject text
+jexpect /objects/6/type "text"
+jexpect /objects/6/name "Texto 7"
+jexpect /objects/6/hud true
+object Jugador
+addbh health
+jexpect /objects/0/behaviorList/0/type "health"
+jexpect /objects/0/behaviorList/0/max 100
+addbh topdown
+jexpect /objects/0/behaviors/movement "topdown"
+delbh topdown
+jexpect /objects/0/behaviors/movement "none"
+addbh platformer
+jexpect /objects/0/behaviors/movement "platform"
+newscene
+jexpect /scenes/1/name "Escena 2"
+jexpect /scenes/1/width 960
+scene Nivel 1
+wait 4
+shot CAPTURA_ESCENA
+wait 2
+object Jugador
+wait 4
+shot CAPTURA_OBJETO
+wait 2
+save SALIDA
+quit

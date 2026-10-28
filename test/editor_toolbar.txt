@@ -1,0 +1,37 @@
+# barra superior: botones de espacio de trabajo y deshacer/rehacer enviados al ultimo editor usado
+open PROYECTO
+wait 3
+bar.scene
+wait 3
+bar.expectkind scene
+sc.count 20
+sc.placeobj Moneda
+sc.place 333 222
+sc.count 21
+bar.undo
+wait 1
+sc.count 20
+bar.redo
+wait 1
+sc.count 21
+bar.events
+wait 3
+bar.expectkind events
+shot CAPTURA_EVENTOS
+wait 2
+bar.scene
+wait 3
+bar.expectkind scene
+bar.undo
+wait 1
+sc.count 20
+shot CAPTURA_ESCENA
+wait 2
+bar.settings
+wait 3
+bar.expectkind settings
+bar.tree
+wait 3
+shot CAPTURA_SINPANEL
+wait 2
+quit

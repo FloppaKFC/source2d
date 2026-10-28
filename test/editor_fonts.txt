@@ -1,0 +1,23 @@
+# fuentes del proyecto: de pixeles (dibujada en el editor) e importada (TTF), usadas por textos
+open PROYECTO
+wait 3
+newpixelfont Pixel 8 12
+wait 3
+font.glyph 33
+color #ffffff
+tool pencil
+font.stroke 0 11 7 11
+wait 2
+shot CAPTURA_FUENTE
+wait 2
+font.use Puntuacion Pixel
+font.import MEDIA
+wait 2
+font.use Ayuda Outfit-SemiBold
+scene Nivel 1
+wait 3
+shot CAPTURA_ESCENA
+wait 2
+save SALIDA
+wait 2
+quit

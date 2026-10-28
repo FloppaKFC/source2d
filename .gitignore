@@ -1,0 +1,12 @@
+# compilado (make, Makefile.linux, Makefile.win, tools/release.sh)
+/build/
+/Release/
+third_party/quickjs/b-os/
+third_party/raylib/src/*.o
+third_party/raylib/src/libraylib.a
+
+# proyecto original de GDevelop de Ry-mik (tools/make_rymik.py lo convierte en examples_rymik.source2d.json)
+/Proyect Ry-mik/
+
+__pycache__/
+*.pyc

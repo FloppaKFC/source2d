@@ -1,0 +1,74 @@
+# Source Sprite (editor de sprites solo), seleccion con lazo y varita, recortes, cortar una hoja en frames, exportar y paletas de Aseprite
+wait 2
+studio.new 32 32
+wait 2
+tool rect
+opt fill 1
+color #ff0000
+stroke 2 2 9 9
+color #00ff00
+stroke 20 20 29 27
+wand 4 4
+expectsel 2 2 8 8
+wand 22 22 1
+expectsel 2 2 28 26
+selrect 0 0 32 32
+wand 0 0 2
+expectsel 2 2 28 26
+tool lasso
+stroke 1 1 12 1 12 12 1 12
+expectsel 1 1 12 12
+cutlayer
+expectsize 32 32 1 2
+expect 0 4 4 #ff0000
+selrect 20 20 10 8
+cropsel
+expectsize 10 8 1 2
+studio.new 32 32
+tool pencil
+color #0000ff
+stroke 10 10 12 12
+trim
+expectsize 3 3 1 1
+studio.load DIR/hoja.png
+expectsize 64 16 1 1
+slice 16 16 1
+expectsize 16 16 4 1
+expect 2 8 8 #0000ff
+studio.export DIR/out_h.png 1 1
+studio.export DIR/out_g.png 3 1
+studio.export DIR/out.gif 1 0
+studio.export DIR/frames.png 4 0
+studio.export DIR/s.s2dsprite 0 0
+studio.load DIR/out.gif
+expectsize 16 16 4 1
+studio.load DIR/s.s2dsprite
+expectsize 16 16 4 1
+pal.load DIR/p.aseprite
+pal.expect 5
+pal.load DIR/p.gpl
+pal.expect 3
+pal.load DIR/p.hex
+pal.expect 4
+pal.load DIR/p.pal
+pal.expect 2
+pal.load DIR/p.txt
+pal.expect 2
+pal.load DIR/p.act
+pal.expect 2
+pal.load DIR/p.ase
+pal.expect 2
+pal.load DIR/hoja.png
+pal.expect 4
+pal.save DIR/o.gpl
+pal.save DIR/o.pal
+pal.save DIR/o.hex
+pal.save DIR/o.act
+pal.save DIR/o.png
+pal.load DIR/o.gpl
+pal.expect 4
+pal.load DIR/o.png
+pal.expect 4
+tool lasso
+selrect 4 4 6 6
+quit

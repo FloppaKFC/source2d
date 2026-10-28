@@ -1,0 +1,21 @@
+# trabajar juntos (invitado), segunda parte: pinta sin soltar, suelta, y despues elige un evento con el cursor encima
+wait 60
+colab.join 127.0.0.1 CODIGO Beto
+colab.waitjoined
+sprite Jugador
+wait 10
+color #ff0000
+tool pencil
+brush 2
+strokehold 0 0 15 0 15 15 0 15 0 0 8 8
+wait 90
+strokerelease
+wait 60
+ev.show
+wait 10
+ev.select 2
+move 600 330
+wait 150
+colab.stop
+wait 5
+quit

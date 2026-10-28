@@ -1,0 +1,50 @@
+open PROYECTO
+wait 3
+import MEDIA/dos_colores.png sprite 16 16
+jexpect /sprites/3/name "dos_colores"
+jexpect /sprites/3/width 16
+jexpect /sprites/3/frames/0/pixels/0 "#ff0000"
+jexpect /sprites/3/frames/1/pixels/0 "#0000ff"
+import MEDIA/dos_colores.png tiles 16
+jexpect /tilesets/1/columns 2
+jexpect /tilesets/1/rows 1
+jexpect /tilesets/1/tiles/1/pixels/0 "#0000ff"
+newtileset Prueba 8 2 1
+jexpect /tilesets/2/tileSize 8
+ts.tile 1
+ts.flag solid 1
+jexpect /tilesets/2/tiles/1/solid true
+ts.grid 8 3 1
+jexpect /tilesets/2/columns 3
+jexpect /tilesets/2/tiles/1/solid true
+wait 2
+shot CAPTURA_TILES
+wait 2
+music.import MEDIA/pitido.wav
+jexpect /music/0/name "pitido"
+jexpect /music/0/mime "audio/wav"
+music.play pitido
+doc settings
+jset /settings/width 640
+jexpect /settings/width 640
+wait 2
+shot CAPTURA_AJUSTES
+wait 2
+shader.rain
+jexpect /shaders/0/id "sh_rain"
+doc shaders sh_rain
+wait 2
+shot CAPTURA_SHADERS
+wait 2
+ext.add estilo
+ext.add extension
+ext.add plugin
+expectdef act ext:ext_estilo_gd:pulsar
+expectdef act ext:ext_estilo_gd:parpadear
+jexpect /plugins/0/enabled true
+doc extensions ext_estilo_gd
+wait 2
+shot CAPTURA_EXT
+wait 2
+save SALIDA
+quit

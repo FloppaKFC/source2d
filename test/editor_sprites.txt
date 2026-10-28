@@ -1,0 +1,68 @@
+open PROYECTO
+wait 2
+sprite Jugador
+expectsize 16 16 1 1
+newsprite Prueba 8 8
+tool pencil
+color #ff0000
+stroke 0 0 3 0
+expect 0 0 0 #ff0000
+expect 0 3 0 #ff0000
+expect 0 4 0 none
+opt mirrorx 1
+stroke 0 2
+expect 0 7 2 #ff0000
+opt mirrorx 0
+tool bucket
+color #00ff00
+stroke 5 5
+expect 0 6 6 #00ff00
+expect 0 0 0 #ff0000
+undo
+expect 0 6 6 none
+redo
+expect 0 6 6 #00ff00
+tool eraser
+stroke 6 6
+expect 0 6 6 none
+tool rect
+color #0000ff
+stroke 1 3 4 6
+expect 0 1 3 #0000ff
+expect 0 2 4 #00ff00
+expect 0 4 6 #0000ff
+addlayer
+tool pencil
+color #ffffff
+stroke 2 4
+expect 0 2 4 #ffffff
+hide 1
+expect 0 2 4 #00ff00
+dupframe
+expectsize 8 8 2 2
+layer 0
+tool line
+color #ff00ff
+stroke 0 7 7 7
+expect 1 0 7 #ff00ff
+expect 0 0 7 #00ff00
+selectall
+copy
+addframe
+paste
+expect 2 0 7 #ff00ff
+resize 10 8
+expectsize 10 8 3 2
+flipx
+expect 2 9 7 #ff00ff
+tool pencil
+color #123456
+rstroke 1 1
+bg #123456
+rstroke 1 1
+expect 2 1 1 #123456
+save SALIDA
+wait 5
+shot CAPTURA
+wait 2
+quit

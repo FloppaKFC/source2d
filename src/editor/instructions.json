@@ -1,0 +1,5831 @@
+{
+ "lists": {
+  "OPS": [
+   [
+    "eq",
+    "="
+   ],
+   [
+    "ne",
+    "distinto"
+   ],
+   [
+    "lt",
+    "<"
+   ],
+   [
+    "le",
+    "<="
+   ],
+   [
+    "gt",
+    ">"
+   ],
+   [
+    "ge",
+    ">="
+   ]
+  ],
+  "AXES": [
+   [
+    "x",
+    "X"
+   ],
+   [
+    "y",
+    "Y"
+   ]
+  ],
+  "MOUSE": [
+   [
+    "left",
+    "Izquierdo"
+   ],
+   [
+    "middle",
+    "Central"
+   ],
+   [
+    "right",
+    "Derecho"
+   ]
+  ],
+  "ONOFF": [
+   [
+    "on",
+    "Activar"
+   ],
+   [
+    "off",
+    "Desactivar"
+   ]
+  ],
+  "JUMPMODE": [
+   [
+    "no",
+    "Solo en el suelo"
+   ],
+   [
+    "yes",
+    "Siempre"
+   ]
+  ],
+  "EASINGS": [
+   [
+    "linear",
+    "Lineal"
+   ],
+   [
+    "easeIn",
+    "Suave al entrar"
+   ],
+   [
+    "easeOut",
+    "Suave al salir"
+   ],
+   [
+    "easeInOut",
+    "Suave total"
+   ],
+   [
+    "back",
+    "Retroceso"
+   ],
+   [
+    "backOut",
+    "Rebote al llegar"
+   ],
+   [
+    "bounce",
+    "Rebote"
+   ],
+   [
+    "elastic",
+    "Elastico"
+   ]
+  ],
+  "TRANSITIONS": [
+   [
+    "none",
+    "Sin transición"
+   ],
+   [
+    "fade",
+    "Fundido a negro"
+   ],
+   [
+    "blur",
+    "Fundido suave"
+   ]
+  ],
+  "FILTERS": [
+   [
+    "none",
+    "Sin efecto"
+   ],
+   [
+    "grayscale(1)",
+    "Escala de grises"
+   ],
+   [
+    "sepia(0.8)",
+    "Sepia"
+   ],
+   [
+    "invert(1)",
+    "Invertir colores"
+   ],
+   [
+    "blur(2px)",
+    "Desenfoque"
+   ],
+   [
+    "brightness(1.5)",
+    "Brillo alto"
+   ],
+   [
+    "contrast(1.8)",
+    "Contraste"
+   ],
+   [
+    "saturate(2.2)",
+    "Color intenso"
+   ],
+   [
+    "hue-rotate(90deg)",
+    "Giro de tono"
+   ],
+   [
+    "drop-shadow(0 0 6px #ffffff)",
+    "Resplandor"
+   ],
+   [
+    "opacity(0.5)",
+    "Semi transparente"
+   ],
+   [
+    "blur(0.5px) brightness(1.2)",
+    "Brillo suave"
+   ]
+  ],
+  "SCENE_EFFECTS": [
+   [
+    "filter",
+    "Filtro de color"
+   ],
+   [
+    "scanlines",
+    "Líneas de escaneo"
+   ],
+   [
+    "vignette",
+    "Viñeta"
+   ],
+   [
+    "noise",
+    "Ruido analógico"
+   ],
+   [
+    "pixelate",
+    "Pixelado"
+   ],
+   [
+    "wave",
+    "Onda"
+   ],
+   [
+    "chroma",
+    "Aberración cromática"
+   ]
+  ],
+  "KEYS": [
+   [
+    "arrowup",
+    "Flecha arriba"
+   ],
+   [
+    "arrowdown",
+    "Flecha abajo"
+   ],
+   [
+    "arrowleft",
+    "Flecha izquierda"
+   ],
+   [
+    "arrowright",
+    "Flecha derecha"
+   ],
+   [
+    " ",
+    "Espacio"
+   ],
+   [
+    "enter",
+    "Enter"
+   ],
+   [
+    "escape",
+    "Escape"
+   ],
+   [
+    "shift",
+    "Shift"
+   ],
+   [
+    "control",
+    "Ctrl"
+   ],
+   [
+    "f1",
+    "F1"
+   ],
+   [
+    "f2",
+    "F2"
+   ],
+   [
+    "f5",
+    "F5"
+   ],
+   [
+    "a",
+    "A"
+   ],
+   [
+    "b",
+    "B"
+   ],
+   [
+    "c",
+    "C"
+   ],
+   [
+    "d",
+    "D"
+   ],
+   [
+    "e",
+    "E"
+   ],
+   [
+    "f",
+    "F"
+   ],
+   [
+    "g",
+    "G"
+   ],
+   [
+    "h",
+    "H"
+   ],
+   [
+    "i",
+    "I"
+   ],
+   [
+    "j",
+    "J"
+   ],
+   [
+    "k",
+    "K"
+   ],
+   [
+    "l",
+    "L"
+   ],
+   [
+    "m",
+    "M"
+   ],
+   [
+    "n",
+    "N"
+   ],
+   [
+    "o",
+    "O"
+   ],
+   [
+    "p",
+    "P"
+   ],
+   [
+    "q",
+    "Q"
+   ],
+   [
+    "r",
+    "R"
+   ],
+   [
+    "s",
+    "S"
+   ],
+   [
+    "t",
+    "T"
+   ],
+   [
+    "u",
+    "U"
+   ],
+   [
+    "v",
+    "V"
+   ],
+   [
+    "w",
+    "W"
+   ],
+   [
+    "x",
+    "X"
+   ],
+   [
+    "y",
+    "Y"
+   ],
+   [
+    "z",
+    "Z"
+   ],
+   [
+    "0",
+    "0"
+   ],
+   [
+    "1",
+    "1"
+   ],
+   [
+    "2",
+    "2"
+   ],
+   [
+    "3",
+    "3"
+   ],
+   [
+    "4",
+    "4"
+   ],
+   [
+    "5",
+    "5"
+   ],
+   [
+    "6",
+    "6"
+   ],
+   [
+    "7",
+    "7"
+   ],
+   [
+    "8",
+    "8"
+   ],
+   [
+    "9",
+    "9"
+   ],
+   [
+    "pad_a",
+    "Mando: A"
+   ],
+   [
+    "pad_b",
+    "Mando: B"
+   ],
+   [
+    "pad_x",
+    "Mando: X"
+   ],
+   [
+    "pad_y",
+    "Mando: Y"
+   ],
+   [
+    "pad_up",
+    "Mando: arriba"
+   ],
+   [
+    "pad_down",
+    "Mando: abajo"
+   ],
+   [
+    "pad_left",
+    "Mando: izquierda"
+   ],
+   [
+    "pad_right",
+    "Mando: derecha"
+   ],
+   [
+    "pad_lb",
+    "Mando: LB"
+   ],
+   [
+    "pad_rb",
+    "Mando: RB"
+   ],
+   [
+    "pad_lt",
+    "Mando: LT"
+   ],
+   [
+    "pad_rt",
+    "Mando: RT"
+   ],
+   [
+    "pad_start",
+    "Mando: Start"
+   ],
+   [
+    "pad_select",
+    "Mando: Select"
+   ],
+   [
+    "pad2_a",
+    "Mando 2: A"
+   ],
+   [
+    "pad2_left",
+    "Mando 2: izquierda"
+   ],
+   [
+    "pad2_right",
+    "Mando 2: derecha"
+   ],
+   [
+    "pad2_up",
+    "Mando 2: arriba"
+   ],
+   [
+    "pad2_down",
+    "Mando 2: abajo"
+   ]
+  ]
+ },
+ "cond": {
+  "always": {
+   "cat": "General",
+   "label": "Siempre (cada fotograma)",
+   "params": []
+  },
+  "atStart": {
+   "cat": "General",
+   "label": "Al inicio de la escena",
+   "params": []
+  },
+  "every": {
+   "cat": "General",
+   "label": "Cada X segundos",
+   "params": [
+    {
+     "k": "seconds",
+     "l": "seg",
+     "t": "number",
+     "d": 1
+    }
+   ]
+  },
+  "timeFromStart": {
+   "cat": "General",
+   "label": "Tiempo transcurrido",
+   "params": [
+    {
+     "k": "op",
+     "l": "",
+     "t": "op"
+    },
+    {
+     "k": "value",
+     "l": "segundos",
+     "t": "number",
+     "d": 5
+    }
+   ]
+  },
+  "random": {
+   "cat": "General",
+   "label": "Azar (probabilidad %)",
+   "params": [
+    {
+     "k": "percent",
+     "l": "%",
+     "t": "number",
+     "d": 50
+    }
+   ]
+  },
+  "jsCode": {
+   "cat": "General",
+   "label": "Código JavaScript",
+   "params": [
+    {
+     "k": "code",
+     "l": "",
+     "t": "code",
+     "d": "// Devuelve true o false\n// Ejemplo: return $.vars.score > 100;\nreturn true;"
+    }
+   ]
+  },
+  "keyDown": {
+   "cat": "Teclado",
+   "label": "Tecla mantenida",
+   "params": [
+    {
+     "k": "key",
+     "l": "",
+     "t": "key"
+    }
+   ]
+  },
+  "keyPressed": {
+   "cat": "Teclado",
+   "label": "Tecla pulsada (una vez)",
+   "params": [
+    {
+     "k": "key",
+     "l": "",
+     "t": "key"
+    }
+   ]
+  },
+  "keyReleased": {
+   "cat": "Teclado",
+   "label": "Tecla soltada",
+   "params": [
+    {
+     "k": "key",
+     "l": "",
+     "t": "key"
+    }
+   ]
+  },
+  "mouseDown": {
+   "cat": "Ratón",
+   "label": "Botón del ratón mantenido",
+   "params": [
+    {
+     "k": "button",
+     "l": "",
+     "t": "mouse"
+    }
+   ]
+  },
+  "mousePressed": {
+   "cat": "Ratón",
+   "label": "Botón del ratón pulsado",
+   "params": [
+    {
+     "k": "button",
+     "l": "",
+     "t": "mouse"
+    }
+   ]
+  },
+  "mouseOn": {
+   "cat": "Ratón",
+   "label": "Ratón sobre el objeto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "clicked": {
+   "cat": "Ratón",
+   "label": "Se hace clic en el objeto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "mouseInRect": {
+   "cat": "Ratón",
+   "label": "Ratón dentro de un área",
+   "params": [
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "w",
+     "l": "ancho",
+     "t": "number",
+     "d": 200
+    },
+    {
+     "k": "h",
+     "l": "alto",
+     "t": "number",
+     "d": 150
+    }
+   ]
+  },
+  "collision": {
+   "cat": "Objetos",
+   "label": "Colisiona con",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "with",
+     "l": "contra",
+     "t": "object"
+    }
+   ]
+  },
+  "onGround": {
+   "cat": "Física",
+   "label": "Está en el suelo",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "onWall": {
+   "cat": "Física",
+   "label": "Toca una pared",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "standsOn": {
+   "cat": "Física",
+   "label": "Está encima de",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "with",
+     "l": "de",
+     "t": "object"
+    }
+   ]
+  },
+  "objVar": {
+   "cat": "Objetos",
+   "label": "Variable del objeto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text"
+    },
+    {
+     "k": "op",
+     "l": "",
+     "t": "op"
+    },
+    {
+     "k": "value",
+     "l": "valor",
+     "t": "text"
+    }
+   ]
+  },
+  "objCount": {
+   "cat": "Objetos",
+   "label": "Número de objetos",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "op",
+     "l": "",
+     "t": "op"
+    },
+    {
+     "k": "value",
+     "l": "valor",
+     "t": "number",
+     "d": 1
+    }
+   ]
+  },
+  "objPos": {
+   "cat": "Objetos",
+   "label": "Posición del objeto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "axis",
+     "l": "",
+     "t": "axis"
+    },
+    {
+     "k": "op",
+     "l": "",
+     "t": "op"
+    },
+    {
+     "k": "value",
+     "l": "px",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "objAngle": {
+   "cat": "Objetos",
+   "label": "Ángulo del objeto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "op",
+     "l": "",
+     "t": "op"
+    },
+    {
+     "k": "value",
+     "l": "grados",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "objInRect": {
+   "cat": "Objetos",
+   "label": "Objeto dentro de un área",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "w",
+     "l": "ancho",
+     "t": "number",
+     "d": 200
+    },
+    {
+     "k": "h",
+     "l": "alto",
+     "t": "number",
+     "d": 150
+    }
+   ]
+  },
+  "objOutside": {
+   "cat": "Objetos",
+   "label": "Objeto fuera de la escena",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "objVisible": {
+   "cat": "Objetos",
+   "label": "Objeto visible",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "objGrounded": {
+   "cat": "Objetos",
+   "label": "Objeto tocando el suelo",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "objMoving": {
+   "cat": "Objetos",
+   "label": "Objeto en movimiento",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "globalVar": {
+   "cat": "Variables",
+   "label": "Variable global",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text"
+    },
+    {
+     "k": "op",
+     "l": "",
+     "t": "op"
+    },
+    {
+     "k": "value",
+     "l": "valor",
+     "t": "text"
+    }
+   ]
+  },
+  "cmpNum": {
+   "cat": "General",
+   "gd": "General",
+   "label": "Comparar dos números",
+   "params": [
+    {
+     "k": "a",
+     "l": "a",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "op",
+     "l": "",
+     "t": "op"
+    },
+    {
+     "k": "b",
+     "l": "b",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "cmpStr": {
+   "cat": "General",
+   "gd": "General",
+   "label": "Comparar dos textos",
+   "params": [
+    {
+     "k": "a",
+     "l": "a",
+     "t": "text",
+     "d": ""
+    },
+    {
+     "k": "op",
+     "l": "",
+     "t": "op"
+    },
+    {
+     "k": "b",
+     "l": "b",
+     "t": "text",
+     "d": ""
+    }
+   ]
+  },
+  "anyKeyPressed": {
+   "cat": "Teclado",
+   "gd": "Entrada",
+   "label": "Cualquier tecla pulsada (una vez)",
+   "params": []
+  },
+  "anyKeyDown": {
+   "cat": "Teclado",
+   "gd": "Entrada",
+   "label": "Cualquier tecla mantenida",
+   "params": []
+  },
+  "mouseReleased": {
+   "cat": "Ratón",
+   "gd": "Entrada",
+   "label": "Botón del ratón soltado",
+   "params": [
+    {
+     "k": "button",
+     "l": "",
+     "t": "mouse"
+    }
+   ]
+  },
+  "wheelUp": {
+   "cat": "Ratón",
+   "gd": "Entrada",
+   "label": "Rueda del ratón hacia arriba",
+   "params": []
+  },
+  "wheelDown": {
+   "cat": "Ratón",
+   "gd": "Entrada",
+   "label": "Rueda del ratón hacia abajo",
+   "params": []
+  },
+  "timerCompare": {
+   "cat": "Escena",
+   "gd": "Mecánica de juego",
+   "label": "Temporizador: comparar tiempo",
+   "params": [
+    {
+     "k": "name",
+     "l": "",
+     "t": "text",
+     "d": "temp"
+    },
+    {
+     "k": "op",
+     "l": "",
+     "t": "op"
+    },
+    {
+     "k": "value",
+     "l": "seg",
+     "t": "number",
+     "d": 5
+    }
+   ]
+  },
+  "saveExists": {
+   "cat": "Escena",
+   "gd": "Mecánica de juego",
+   "label": "Existe partida guardada",
+   "params": [
+    {
+     "k": "slot",
+     "l": "",
+     "t": "text",
+     "d": "slot1"
+    }
+   ]
+  },
+  "boolVar": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Variable booleana es verdadera",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text"
+    }
+   ]
+  },
+  "arrayContains": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Array contiene el valor",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text"
+    },
+    {
+     "k": "value",
+     "l": "valor",
+     "t": "text",
+     "d": ""
+    }
+   ]
+  },
+  "arrayLength": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Tamaño del array",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text"
+    },
+    {
+     "k": "op",
+     "l": "",
+     "t": "op"
+    },
+    {
+     "k": "value",
+     "l": "n",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "textContains": {
+   "cat": "General",
+   "gd": "General",
+   "label": "Texto contiene",
+   "params": [
+    {
+     "k": "a",
+     "l": "texto",
+     "t": "text",
+     "d": ""
+    },
+    {
+     "k": "b",
+     "l": "buscar",
+     "t": "text",
+     "d": ""
+    }
+   ]
+  },
+  "objectExists": {
+   "cat": "Objetos",
+   "label": "Existe el objeto en la escena",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "sceneIs": {
+   "cat": "Escena",
+   "gd": "Mecánica de juego",
+   "label": "La escena actual es",
+   "params": [
+    {
+     "k": "scene",
+     "l": "",
+     "t": "scene"
+    }
+   ]
+  },
+  "btnClicked": {
+   "cat": "Botón",
+   "gd": "Botón",
+   "label": "Botón presionado (clic)",
+   "objTypes": [
+    "button"
+   ],
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "btnDown": {
+   "cat": "Botón",
+   "gd": "Botón",
+   "label": "Botón mantenido presionado",
+   "objTypes": [
+    "button"
+   ],
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "btnReleased": {
+   "cat": "Botón",
+   "gd": "Botón",
+   "label": "Botón soltado",
+   "objTypes": [
+    "button"
+   ],
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "btnHover": {
+   "cat": "Botón",
+   "gd": "Botón",
+   "label": "Mouse sobre el botón",
+   "objTypes": [
+    "button"
+   ],
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "textIs": {
+   "cat": "Texto",
+   "gd": "Texto",
+   "label": "El texto es igual a",
+   "objTypes": [
+    "text"
+   ],
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "text",
+     "l": "texto",
+     "t": "text",
+     "d": ""
+    }
+   ]
+  },
+  "tileHas": {
+   "cat": "Tile",
+   "gd": "Tile",
+   "label": "Tile tiene vecino (arriba, abajo, izq., der.)",
+   "objTypes": [
+    "tile"
+   ],
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "tile",
+     "l": "tile n.",
+     "t": "number",
+     "d": "0"
+    },
+    {
+     "k": "dir",
+     "l": "lado",
+     "t": "select",
+     "options": [
+      [
+       "up",
+       "arriba"
+      ],
+      [
+       "down",
+       "abajo"
+      ],
+      [
+       "left",
+       "izquierda"
+      ],
+      [
+       "right",
+       "derecha"
+      ]
+     ],
+     "d": "up"
+    },
+    {
+     "k": "what",
+     "l": "es",
+     "t": "select",
+     "options": [
+      [
+       "empty",
+       "vacío (nada)"
+      ],
+      [
+       "any",
+       "cualquier tile"
+      ],
+      [
+       "tile",
+       "tile número..."
+      ]
+     ],
+     "d": "empty"
+    },
+    {
+     "k": "other",
+     "l": "tile",
+     "t": "number",
+     "d": "1"
+    }
+   ]
+  },
+  "cursorTile": {
+   "cat": "Tile",
+   "gd": "Tile",
+   "label": "El cursor está sobre el tile",
+   "objTypes": [
+    "tile"
+   ],
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "tile",
+     "l": "tile n.",
+     "t": "number",
+     "d": "0"
+    }
+   ]
+  },
+  "or": {
+   "cat": "Control",
+   "gd": "Eventos y control",
+   "label": "O (alguna de las subcondiciones)",
+   "group": true,
+   "params": []
+  },
+  "and": {
+   "cat": "Control",
+   "gd": "Eventos y control",
+   "label": "Y (todas las subcondiciones)",
+   "group": true,
+   "params": []
+  },
+  "not": {
+   "cat": "Control",
+   "gd": "Eventos y control",
+   "label": "No (ninguna combinación de las subcondiciones)",
+   "group": true,
+   "params": []
+  },
+  "triggerOnce": {
+   "cat": "Control",
+   "gd": "Eventos y control",
+   "label": "Una vez mientras sea verdad",
+   "params": []
+  },
+  "distance": {
+   "cat": "Objetos",
+   "label": "Distancia entre dos objetos",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "with",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "op",
+     "l": "",
+     "t": "op",
+     "d": "lt"
+    },
+    {
+     "k": "value",
+     "l": "px",
+     "t": "number",
+     "d": 100
+    }
+   ]
+  },
+  "pointInside": {
+   "cat": "Objetos",
+   "label": "Un punto está dentro del objeto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "animIs": {
+   "cat": "Animación",
+   "label": "La animación actual es",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "name",
+     "l": "",
+     "t": "text",
+     "d": "quieto"
+    }
+   ]
+  },
+  "animEnded": {
+   "cat": "Animación",
+   "label": "La animación ha terminado (sin bucle)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "objTimer": {
+   "cat": "Temporizadores",
+   "label": "Temporizador del objeto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "name",
+     "l": "",
+     "t": "text",
+     "d": "temp"
+    },
+    {
+     "k": "op",
+     "l": "",
+     "t": "op",
+     "d": "ge"
+    },
+    {
+     "k": "value",
+     "l": "s",
+     "t": "number",
+     "d": 1
+    }
+   ]
+  },
+  "platJumping": {
+   "cat": "Comportamiento: Personaje plataformero",
+   "bh": "platformer",
+   "label": "Está saltando",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "platFalling": {
+   "cat": "Comportamiento: Personaje plataformero",
+   "bh": "platformer",
+   "label": "Está cayendo",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "isDragged": {
+   "cat": "Comportamiento: Arrastrable",
+   "bh": "draggable",
+   "label": "Está siendo arrastrado",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "dropped": {
+   "cat": "Comportamiento: Arrastrable",
+   "bh": "draggable",
+   "label": "Se acaba de soltar",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "health": {
+   "cat": "Comportamiento: Salud",
+   "bh": "health",
+   "label": "Comparar la salud",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "op",
+     "l": "",
+     "t": "op",
+     "d": "le"
+    },
+    {
+     "k": "value",
+     "l": "",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "isDead": {
+   "cat": "Comportamiento: Salud",
+   "bh": "health",
+   "label": "Se quedó sin salud",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "isFlashing": {
+   "cat": "Comportamiento: Parpadeo",
+   "bh": "flash",
+   "label": "Está parpadeando",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "canFire": {
+   "cat": "Comportamiento: Disparador",
+   "bh": "fireBullet",
+   "label": "Puede disparar (enfriamiento terminado)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "exprTrue": {
+   "cat": "Control",
+   "gd": "Eventos y control",
+   "label": "La expresión es verdadera",
+   "params": [
+    {
+     "k": "value",
+     "l": "",
+     "t": "number",
+     "d": "$x > 0"
+    }
+   ]
+  },
+  "varCmp": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Comparar una variable (local o global)",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text",
+     "d": "x"
+    },
+    {
+     "k": "op",
+     "l": "",
+     "t": "op"
+    },
+    {
+     "k": "value",
+     "l": "valor",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "platEvent": {
+   "cat": "Plataformas",
+   "label": "Salto, doble salto, dash o aterrizaje",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "what",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "jump",
+       "acaba de saltar"
+      ],
+      [
+       "air",
+       "acaba de hacer un salto en el aire"
+      ],
+      [
+       "dash",
+       "acaba de empezar un dash"
+      ],
+      [
+       "dashing",
+       "está en un dash"
+      ],
+      [
+       "wall",
+       "acaba de saltar desde una pared"
+      ],
+      [
+       "land",
+       "acaba de aterrizar"
+      ]
+     ],
+     "d": "jump"
+    }
+   ]
+  },
+  "touchesTile": {
+   "cat": "Plataformas",
+   "label": "Toca un tile con una marca",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "flag",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "danger",
+       "peligroso"
+      ],
+      [
+       "solid",
+       "sólido"
+      ],
+      [
+       "oneway",
+       "traspasable"
+      ],
+      [
+       "ladder",
+       "de escalera"
+      ]
+     ],
+     "d": "danger"
+    }
+   ]
+  },
+  "musicPlaying": {
+   "cat": "Sonido",
+   "gd": "Audio",
+   "label": "La música está sonando",
+   "params": []
+  },
+  "tweenDone": {
+   "cat": "Tweens",
+   "label": "Una animación (tween) acaba de terminar",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "isTweening": {
+   "cat": "Tweens",
+   "label": "Se está animando (tween)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "soundPlaying": {
+   "cat": "Sonido",
+   "gd": "Audio",
+   "label": "El sonido está sonando",
+   "params": [
+    {
+     "k": "track",
+     "l": "",
+     "t": "music",
+     "d": ""
+    }
+   ]
+  },
+  "gamePaused": {
+   "cat": "Escena",
+   "gd": "Mecánica de juego",
+   "label": "El juego está en pausa",
+   "params": []
+  },
+  "messageReceived": {
+   "cat": "Control",
+   "gd": "Eventos y control",
+   "label": "Se recibió un mensaje",
+   "params": [
+    {
+     "k": "name",
+     "l": "",
+     "t": "text",
+     "d": "abrir_puerta"
+    }
+   ]
+  },
+  "padConnected": {
+   "cat": "Mando",
+   "gd": "Entrada",
+   "label": "Hay un mando conectado",
+   "params": [
+    {
+     "k": "pad",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "1",
+       "Mando 1"
+      ],
+      [
+       "2",
+       "Mando 2"
+      ],
+      [
+       "3",
+       "Mando 3"
+      ],
+      [
+       "4",
+       "Mando 4"
+      ]
+     ],
+     "d": "1"
+    }
+   ]
+  },
+  "padAxis": {
+   "cat": "Mando",
+   "gd": "Entrada",
+   "label": "Comparar un eje del mando (stick o gatillo)",
+   "params": [
+    {
+     "k": "pad",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "1",
+       "Mando 1"
+      ],
+      [
+       "2",
+       "Mando 2"
+      ],
+      [
+       "3",
+       "Mando 3"
+      ],
+      [
+       "4",
+       "Mando 4"
+      ]
+     ],
+     "d": "1"
+    },
+    {
+     "k": "axis",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "0",
+       "Stick izquierdo X"
+      ],
+      [
+       "1",
+       "Stick izquierdo Y"
+      ],
+      [
+       "2",
+       "Stick derecho X"
+      ],
+      [
+       "3",
+       "Stick derecho Y"
+      ],
+      [
+       "4",
+       "Gatillo izquierdo"
+      ],
+      [
+       "5",
+       "Gatillo derecho"
+      ]
+     ],
+     "d": "0"
+    },
+    {
+     "k": "op",
+     "l": "",
+     "t": "op"
+    },
+    {
+     "k": "value",
+     "l": "-1 a 1",
+     "t": "number",
+     "d": 0.5
+    }
+   ]
+  },
+  "raycast": {
+   "cat": "Movimiento",
+   "label": "Un rayo desde el objeto choca con algo",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "angle",
+     "l": "ángulo °",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "distance",
+     "l": "distancia px",
+     "t": "number",
+     "d": 200
+    },
+    {
+     "k": "target",
+     "l": "choca con",
+     "t": "object",
+     "d": ""
+    }
+   ]
+  },
+  "languageIs": {
+   "cat": "Escena",
+   "gd": "General",
+   "label": "El idioma es",
+   "params": [
+    {
+     "k": "lang",
+     "l": "",
+     "t": "text",
+     "d": "es"
+    }
+   ]
+  },
+  "pathArrived": {
+   "cat": "Movimiento",
+   "label": "Acaba de llegar al final de su camino",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "onPath": {
+   "cat": "Movimiento",
+   "label": "Está siguiendo un camino",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "pathFailed": {
+   "cat": "Movimiento",
+   "label": "No encontró camino",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "animEvent": {
+   "cat": "Animación",
+   "label": "La animación llega a un evento (fotograma:nombre)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "name",
+     "l": "",
+     "t": "text",
+     "d": "paso"
+    }
+   ]
+  },
+  "pickNearest": {
+   "cat": "Objetos",
+   "label": "Elegir el más cercano a un punto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "pickFarthest": {
+   "cat": "Objetos",
+   "label": "Elegir el más lejano de un punto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "pickRandom": {
+   "cat": "Objetos",
+   "label": "Elegir uno al azar",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  }
+ },
+ "act": {
+  "setVX": {
+   "cat": "Movimiento",
+   "label": "Poner velocidad X",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "px/s",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "setVY": {
+   "cat": "Movimiento",
+   "label": "Poner velocidad Y",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "px/s",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "addVX": {
+   "cat": "Movimiento",
+   "label": "Sumar velocidad X",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "px/s",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "addVY": {
+   "cat": "Movimiento",
+   "label": "Sumar velocidad Y",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "px/s",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "addForce": {
+   "cat": "Movimiento",
+   "label": "Aplicar impulso (X,Y)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": -200
+    }
+   ]
+  },
+  "moveTo": {
+   "cat": "Movimiento",
+   "label": "Mover hacia un punto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 400
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 300
+    },
+    {
+     "k": "speed",
+     "l": "velocidad",
+     "t": "number",
+     "d": 150
+    }
+   ]
+  },
+  "moveToObj": {
+   "cat": "Movimiento",
+   "label": "Mover hacia otro objeto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "target",
+     "l": "objetivo",
+     "t": "object"
+    },
+    {
+     "k": "speed",
+     "l": "velocidad",
+     "t": "number",
+     "d": 150
+    }
+   ]
+  },
+  "moveInDirection": {
+   "cat": "Movimiento",
+   "label": "Mover en una dirección",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "angle",
+     "l": "angulo",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "speed",
+     "l": "velocidad",
+     "t": "number",
+     "d": 200
+    }
+   ]
+  },
+  "stopMove": {
+   "cat": "Movimiento",
+   "label": "Detener movimiento",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "jump": {
+   "cat": "Movimiento",
+   "label": "Saltar",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "fuerza",
+     "t": "number",
+     "d": 620
+    },
+    {
+     "k": "always",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "no",
+       "Solo en el suelo"
+      ],
+      [
+       "yes",
+       "Siempre"
+      ]
+     ],
+     "d": "no"
+    }
+   ]
+  },
+  "lookAt": {
+   "cat": "Movimiento",
+   "label": "Mirar hacia un punto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "setPos": {
+   "cat": "Movimiento",
+   "label": "Poner posición (X,Y)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "setX": {
+   "cat": "Movimiento",
+   "label": "Poner posición X",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "px",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "setY": {
+   "cat": "Movimiento",
+   "label": "Poner posición Y",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "px",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "addToX": {
+   "cat": "Movimiento",
+   "label": "Sumar a posición X",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "px",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "addToY": {
+   "cat": "Movimiento",
+   "label": "Sumar a posición Y",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "px",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "setAngle": {
+   "cat": "Movimiento",
+   "label": "Poner ángulo",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "grados",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "rotateBy": {
+   "cat": "Movimiento",
+   "label": "Rotar",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "grados",
+     "t": "number",
+     "d": 15
+    }
+   ]
+  },
+  "setSpin": {
+   "cat": "Movimiento",
+   "label": "Poner rotación continua",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "grados/s",
+     "t": "number",
+     "d": 90
+    }
+   ]
+  },
+  "setScale": {
+   "cat": "Apariencia",
+   "label": "Poner escala (X,Y)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 1
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 1
+    }
+   ]
+  },
+  "setOpacity": {
+   "cat": "Apariencia",
+   "label": "Poner opacidad (0-100)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "%",
+     "t": "number",
+     "d": 100
+    }
+   ]
+  },
+  "show": {
+   "cat": "Apariencia",
+   "label": "Mostrar objeto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "hide": {
+   "cat": "Apariencia",
+   "label": "Ocultar objeto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "platOn": {
+   "cat": "Plataformas",
+   "label": "Activar plataforma (mover)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "platOff": {
+   "cat": "Plataformas",
+   "label": "Detener plataforma",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "platFlip": {
+   "cat": "Plataformas",
+   "label": "Invertir dirección de plataforma",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "jumpNow": {
+   "cat": "Movimiento",
+   "label": "Saltar (fuerza)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "fuerza",
+     "t": "number",
+     "d": 620
+    }
+   ]
+  },
+  "setAnim": {
+   "cat": "Apariencia",
+   "label": "Reproducir animación",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "name",
+     "l": "nombre",
+     "t": "text",
+     "d": "Walk"
+    }
+   ]
+  },
+  "setFlip": {
+   "cat": "Apariencia",
+   "label": "Voltear (-1 izq / 1 der)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "sentido",
+     "t": "number",
+     "d": -1
+    }
+   ]
+  },
+  "setFrame": {
+   "cat": "Apariencia",
+   "label": "Poner frame del sprite",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "frame",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "nextFrame": {
+   "cat": "Apariencia",
+   "label": "Siguiente frame",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "setText": {
+   "cat": "Apariencia",
+   "label": "Poner texto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "text",
+     "l": "texto",
+     "t": "text"
+    }
+   ]
+  },
+  "setButtonText": {
+   "cat": "Botón",
+   "gd": "Botón",
+   "label": "Poner texto del botón",
+   "objTypes": [
+    "button"
+   ],
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "text",
+     "l": "texto",
+     "t": "text",
+     "d": ""
+    }
+   ]
+  },
+  "setEffect": {
+   "cat": "Apariencia",
+   "label": "Poner efecto visual",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "filter",
+     "l": "efecto",
+     "t": "filter"
+    }
+   ]
+  },
+  "setGravity": {
+   "cat": "Física",
+   "label": "Activar o desactivar gravedad",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "state",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "on",
+       "Activar"
+      ],
+      [
+       "off",
+       "Desactivar"
+      ]
+     ],
+     "d": "on"
+    }
+   ]
+  },
+  "setSolid": {
+   "cat": "Física",
+   "label": "Activar o desactivar solidez",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "state",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "on",
+       "Activar"
+      ],
+      [
+       "off",
+       "Desactivar"
+      ]
+     ],
+     "d": "on"
+    }
+   ]
+  },
+  "setFriction": {
+   "cat": "Física",
+   "label": "Poner rozamiento",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "0-1",
+     "t": "number",
+     "d": 0.85
+    }
+   ]
+  },
+  "setBounce": {
+   "cat": "Física",
+   "label": "Poner rebote",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "0-1",
+     "t": "number",
+     "d": 0.5
+    }
+   ]
+  },
+  "tweenPos": {
+   "cat": "Tweens",
+   "label": "Animar posición",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 400
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 300
+    },
+    {
+     "k": "duration",
+     "l": "seg",
+     "t": "number",
+     "d": 1
+    },
+    {
+     "k": "easing",
+     "l": "",
+     "t": "easing",
+     "d": "easeInOut"
+    }
+   ]
+  },
+  "tweenScale": {
+   "cat": "Tweens",
+   "label": "Animar escala",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 1.5
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 1.5
+    },
+    {
+     "k": "duration",
+     "l": "seg",
+     "t": "number",
+     "d": 0.4
+    },
+    {
+     "k": "easing",
+     "l": "",
+     "t": "easing",
+     "d": "back"
+    }
+   ]
+  },
+  "tweenAngle": {
+   "cat": "Tweens",
+   "label": "Animar ángulo",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "grados",
+     "t": "number",
+     "d": 360
+    },
+    {
+     "k": "duration",
+     "l": "seg",
+     "t": "number",
+     "d": 1
+    },
+    {
+     "k": "easing",
+     "l": "",
+     "t": "easing",
+     "d": "easeOut"
+    }
+   ]
+  },
+  "tweenOpacity": {
+   "cat": "Tweens",
+   "label": "Animar opacidad",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "%",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "duration",
+     "l": "seg",
+     "t": "number",
+     "d": 0.8
+    },
+    {
+     "k": "easing",
+     "l": "",
+     "t": "easing",
+     "d": "easeOut"
+    }
+   ]
+  },
+  "tweenStop": {
+   "cat": "Tweens",
+   "label": "Detener animaciones",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "create": {
+   "cat": "Objetos",
+   "label": "Crear objeto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 480
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 270
+    }
+   ]
+  },
+  "removeObj": {
+   "cat": "Objetos",
+   "label": "Eliminar objeto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "setObjVar": {
+   "cat": "Objetos",
+   "label": "Poner variable del objeto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text"
+    },
+    {
+     "k": "value",
+     "l": "valor",
+     "t": "text"
+    }
+   ]
+  },
+  "addObjVar": {
+   "cat": "Objetos",
+   "label": "Sumar a variable del objeto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text"
+    },
+    {
+     "k": "value",
+     "l": "valor",
+     "t": "number",
+     "d": 1
+    }
+   ]
+  },
+  "cameraFollow": {
+   "cat": "Cámara",
+   "label": "La cámara sigue al objeto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "smoothing",
+     "l": "suavizado 0-1",
+     "t": "number",
+     "d": 0.1
+    },
+    {
+     "k": "lookahead",
+     "l": "anticipación s",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "deadzone",
+     "l": "zona muerta px",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "cameraMoveTo": {
+   "cat": "Cámara",
+   "label": "Mover la cámara a un punto",
+   "params": [
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 400
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 300
+    }
+   ]
+  },
+  "cameraSetPos": {
+   "cat": "Cámara",
+   "label": "Fijar la cámara",
+   "params": [
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "cameraZoom": {
+   "cat": "Cámara",
+   "label": "Poner zoom de la cámara",
+   "params": [
+    {
+     "k": "value",
+     "l": "zoom",
+     "t": "number",
+     "d": 1
+    }
+   ]
+  },
+  "cameraLimits": {
+   "cat": "Cámara",
+   "label": "Límites de la cámara",
+   "params": [
+    {
+     "k": "mode",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "scene",
+       "Toda la escena"
+      ],
+      [
+       "custom",
+       "Zona personalizada"
+      ],
+      [
+       "none",
+       "Sin límites"
+      ]
+     ],
+     "d": "scene"
+    },
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "w",
+     "l": "ancho",
+     "t": "number",
+     "d": 960
+    },
+    {
+     "k": "h",
+     "l": "alto",
+     "t": "number",
+     "d": 540
+    }
+   ]
+  },
+  "cameraFree": {
+   "cat": "Cámara",
+   "label": "Liberar la cámara",
+   "params": []
+  },
+  "shakeCamera": {
+   "cat": "Cámara",
+   "label": "Sacudir la cámara",
+   "params": [
+    {
+     "k": "intensity",
+     "l": "fuerza",
+     "t": "number",
+     "d": 10
+    },
+    {
+     "k": "duration",
+     "l": "seg",
+     "t": "number",
+     "d": 0.3
+    }
+   ]
+  },
+  "changeScene": {
+   "cat": "Escena",
+   "label": "Cambiar a escena",
+   "params": [
+    {
+     "k": "scene",
+     "l": "",
+     "t": "scene"
+    },
+    {
+     "k": "transition",
+     "l": "",
+     "t": "transition",
+     "d": "fade"
+    },
+    {
+     "k": "duration",
+     "l": "seg",
+     "t": "number",
+     "d": 0.5
+    }
+   ]
+  },
+  "nextScene": {
+   "cat": "Escena",
+   "label": "Siguiente escena",
+   "params": [
+    {
+     "k": "transition",
+     "l": "",
+     "t": "transition",
+     "d": "fade"
+    },
+    {
+     "k": "duration",
+     "l": "seg",
+     "t": "number",
+     "d": 0.5
+    }
+   ]
+  },
+  "restartScene": {
+   "cat": "Escena",
+   "label": "Reiniciar escena",
+   "params": []
+  },
+  "endGame": {
+   "cat": "Escena",
+   "label": "Terminar juego",
+   "params": [
+    {
+     "k": "message",
+     "l": "mensaje",
+     "t": "text"
+    }
+   ]
+  },
+  "fullscreen": {
+   "cat": "Escena",
+   "label": "Cambiar a pantalla completa",
+   "params": []
+  },
+  "stopGame": {
+   "cat": "Escena",
+   "label": "Detener el juego",
+   "params": []
+  },
+  "setGlobal": {
+   "cat": "Variables",
+   "label": "Poner variable global",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text"
+    },
+    {
+     "k": "value",
+     "l": "valor",
+     "t": "text"
+    }
+   ]
+  },
+  "addGlobal": {
+   "cat": "Variables",
+   "label": "Sumar a variable global",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text"
+    },
+    {
+     "k": "value",
+     "l": "valor",
+     "t": "number",
+     "d": 1
+    }
+   ]
+  },
+  "playMusic": {
+   "cat": "Sonido",
+   "label": "Reproducir audio",
+   "params": [
+    {
+     "k": "track",
+     "l": "",
+     "t": "music",
+     "d": ""
+    },
+    {
+     "k": "loop",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "yes",
+       "En bucle"
+      ],
+      [
+       "no",
+       "Una vez"
+      ]
+     ],
+     "d": "yes"
+    }
+   ]
+  },
+  "stopMusic": {
+   "cat": "Sonido",
+   "label": "Detener audio",
+   "params": [],
+   "hidden": true
+  },
+  "beep": {
+   "cat": "Sonido",
+   "label": "Sonido",
+   "hidden": true,
+   "params": [
+    {
+     "k": "freq",
+     "l": "Hz",
+     "t": "number",
+     "d": 440
+    },
+    {
+     "k": "duration",
+     "l": "seg",
+     "t": "number",
+     "d": 0.12
+    }
+   ]
+  },
+  "jsCode": {
+   "cat": "Código",
+   "label": "Código JavaScript",
+   "params": [
+    {
+     "k": "code",
+     "l": "",
+     "t": "code",
+     "d": "// Recibes un objeto $ con helpers.\n// Ejemplo: $.create(\"Bala\", $.inst.x, $.inst.y);\n"
+    }
+   ]
+  },
+  "timerCtl": {
+   "cat": "Escena",
+   "gd": "Mecánica de juego",
+   "label": "Temporizador: iniciar, pausar, reiniciar o borrar",
+   "params": [
+    {
+     "k": "name",
+     "l": "",
+     "t": "text",
+     "d": "temp"
+    },
+    {
+     "k": "action",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "start",
+       "Iniciar o reanudar"
+      ],
+      [
+       "pause",
+       "Pausar"
+      ],
+      [
+       "reset",
+       "Reiniciar a cero"
+      ],
+      [
+       "remove",
+       "Borrar"
+      ]
+     ],
+     "d": "start"
+    }
+   ]
+  },
+  "timeScale": {
+   "cat": "Escena",
+   "gd": "Mecánica de juego",
+   "label": "Escala de tiempo (1 = normal)",
+   "params": [
+    {
+     "k": "value",
+     "l": "x",
+     "t": "number",
+     "d": 1
+    }
+   ]
+  },
+  "saveGame": {
+   "cat": "Escena",
+   "gd": "Mecánica de juego",
+   "label": "Guardar partida",
+   "params": [
+    {
+     "k": "slot",
+     "l": "",
+     "t": "text",
+     "d": "slot1"
+    },
+    {
+     "k": "what",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "all",
+       "Todo (objetos, cámara, variables)"
+      ],
+      [
+       "vars",
+       "Solo variables y escena"
+      ]
+     ],
+     "d": "all"
+    }
+   ]
+  },
+  "loadGame": {
+   "cat": "Escena",
+   "gd": "Mecánica de juego",
+   "label": "Cargar partida",
+   "params": [
+    {
+     "k": "slot",
+     "l": "",
+     "t": "text",
+     "d": "slot1"
+    }
+   ]
+  },
+  "deleteSave": {
+   "cat": "Escena",
+   "gd": "Mecánica de juego",
+   "label": "Borrar partida guardada",
+   "params": [
+    {
+     "k": "slot",
+     "l": "",
+     "t": "text",
+     "d": "slot1"
+    }
+   ]
+  },
+  "hideCursor": {
+   "cat": "Ratón",
+   "gd": "Entrada",
+   "label": "Ocultar el cursor",
+   "params": []
+  },
+  "showCursor": {
+   "cat": "Ratón",
+   "gd": "Entrada",
+   "label": "Mostrar el cursor",
+   "params": []
+  },
+  "mulGlobal": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Multiplicar variable global",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text"
+    },
+    {
+     "k": "value",
+     "l": "valor",
+     "t": "number",
+     "d": 2
+    }
+   ]
+  },
+  "setBool": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Poner variable booleana",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text"
+    },
+    {
+     "k": "value",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "true",
+       "Verdadero"
+      ],
+      [
+       "false",
+       "Falso"
+      ]
+     ],
+     "d": "true"
+    }
+   ]
+  },
+  "toggleBool": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Invertir variable booleana",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text"
+    }
+   ]
+  },
+  "arrayPush": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Añadir valor al array",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text"
+    },
+    {
+     "k": "value",
+     "l": "valor",
+     "t": "text",
+     "d": ""
+    }
+   ]
+  },
+  "arrayPop": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Quitar el último valor del array",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text"
+    }
+   ]
+  },
+  "arrayClear": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Vaciar array",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text"
+    }
+   ]
+  },
+  "textAppend": {
+   "cat": "Texto",
+   "gd": "Texto",
+   "label": "Añadir texto al final",
+   "objTypes": [
+    "text"
+   ],
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "text",
+     "l": "texto",
+     "t": "text",
+     "d": ""
+    }
+   ]
+  },
+  "typewriter": {
+   "cat": "Texto",
+   "gd": "Texto",
+   "label": "Escribir texto con efecto máquina",
+   "objTypes": [
+    "text"
+   ],
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "text",
+     "l": "texto",
+     "t": "text",
+     "d": ""
+    },
+    {
+     "k": "speed",
+     "l": "letras/seg",
+     "t": "number",
+     "d": "20"
+    }
+   ]
+  },
+  "setTextColor": {
+   "cat": "Texto",
+   "gd": "Texto",
+   "label": "Poner color del texto",
+   "objTypes": [
+    "text"
+   ],
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "color",
+     "l": "color",
+     "t": "text",
+     "d": "#ffffff"
+    }
+   ]
+  },
+  "setButtonColor": {
+   "cat": "Botón",
+   "gd": "Botón",
+   "label": "Poner color de fondo del botón",
+   "objTypes": [
+    "button"
+   ],
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "color",
+     "l": "color",
+     "t": "text",
+     "d": "#4a76c4"
+    }
+   ]
+  },
+  "setButtonFg": {
+   "cat": "Botón",
+   "gd": "Botón",
+   "label": "Poner color del texto del botón",
+   "objTypes": [
+    "button"
+   ],
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "color",
+     "l": "color",
+     "t": "text",
+     "d": "#ffffff"
+    }
+   ]
+  },
+  "tilePlaceCursor": {
+   "cat": "Tile",
+   "gd": "Tile",
+   "label": "Colocar tile en la celda del cursor",
+   "objTypes": [
+    "tile"
+   ],
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "tile",
+     "l": "tile n.",
+     "t": "number",
+     "d": "1"
+    }
+   ]
+  },
+  "tileEraseCursor": {
+   "cat": "Tile",
+   "gd": "Tile",
+   "label": "Borrar tile en la celda del cursor",
+   "objTypes": [
+    "tile"
+   ],
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "tilePlace": {
+   "cat": "Tile",
+   "gd": "Tile",
+   "label": "Colocar tile en celda (columna, fila)",
+   "objTypes": [
+    "tile"
+   ],
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "tile",
+     "l": "tile n.",
+     "t": "number",
+     "d": "1"
+    },
+    {
+     "k": "col",
+     "l": "columna",
+     "t": "number",
+     "d": "0"
+    },
+    {
+     "k": "row",
+     "l": "fila",
+     "t": "number",
+     "d": "0"
+    }
+   ]
+  },
+  "tileConvert": {
+   "cat": "Tile",
+   "gd": "Tile",
+   "label": "Convertir tile A en B si tiene vecino",
+   "objTypes": [
+    "tile"
+   ],
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "from",
+     "l": "de tile",
+     "t": "number",
+     "d": "0"
+    },
+    {
+     "k": "to",
+     "l": "a tile",
+     "t": "number",
+     "d": "1"
+    },
+    {
+     "k": "dir",
+     "l": "vecino",
+     "t": "select",
+     "options": [
+      [
+       "up",
+       "arriba"
+      ],
+      [
+       "down",
+       "abajo"
+      ],
+      [
+       "left",
+       "izquierda"
+      ],
+      [
+       "right",
+       "derecha"
+      ]
+     ],
+     "d": "up"
+    },
+    {
+     "k": "what",
+     "l": "es",
+     "t": "select",
+     "options": [
+      [
+       "empty",
+       "vacío (nada)"
+      ],
+      [
+       "any",
+       "cualquier tile"
+      ],
+      [
+       "tile",
+       "tile número..."
+      ]
+     ],
+     "d": "empty"
+    },
+    {
+     "k": "other",
+     "l": "tile",
+     "t": "number",
+     "d": "1"
+    }
+   ]
+  },
+  "objTimerCtl": {
+   "cat": "Temporizadores",
+   "label": "Temporizador del objeto: iniciar, pausar, reiniciar o borrar",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "name",
+     "l": "",
+     "t": "text",
+     "d": "temp"
+    },
+    {
+     "k": "action",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "start",
+       "Iniciar o reanudar"
+      ],
+      [
+       "pause",
+       "Pausar"
+      ],
+      [
+       "reset",
+       "Reiniciar a cero"
+      ],
+      [
+       "remove",
+       "Borrar"
+      ]
+     ],
+     "d": "reset"
+    }
+   ]
+  },
+  "rotateToward": {
+   "cat": "Movimiento",
+   "label": "Rotar hacia una posición",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "speed",
+     "l": "grados/s (0 = al instante)",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "separate": {
+   "cat": "Movimiento",
+   "label": "Separar de otro objeto (sacarlo si se solapan)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "with",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "animPause": {
+   "cat": "Animación",
+   "label": "Pausar o reanudar la animación",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "state",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "pause",
+       "Pausar"
+      ],
+      [
+       "play",
+       "Reanudar"
+      ]
+     ],
+     "d": "pause"
+    }
+   ]
+  },
+  "animSpeed": {
+   "cat": "Animación",
+   "label": "Velocidad de la animación (1 = normal)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "",
+     "t": "number",
+     "d": 1
+    }
+   ]
+  },
+  "setMoveSpeed": {
+   "cat": "Movimiento",
+   "label": "Cambiar la rapidez del movimiento automático",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "",
+     "t": "number",
+     "d": 150
+    }
+   ]
+  },
+  "platSim": {
+   "cat": "Comportamiento: Personaje plataformero",
+   "bh": "platformer",
+   "label": "Simular un control (izquierda, derecha, saltar, bajar)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "control",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "left",
+       "Izquierda"
+      ],
+      [
+       "right",
+       "Derecha"
+      ],
+      [
+       "jump",
+       "Saltar"
+      ],
+      [
+       "down",
+       "Bajar"
+      ]
+     ],
+     "d": "jump"
+    }
+   ]
+  },
+  "setJumpForce": {
+   "cat": "Comportamiento: Personaje plataformero",
+   "bh": "platformer",
+   "label": "Cambiar la fuerza de salto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "",
+     "t": "number",
+     "d": 620
+    }
+   ]
+  },
+  "damage": {
+   "cat": "Comportamiento: Salud",
+   "bh": "health",
+   "label": "Aplicar daño",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "",
+     "t": "number",
+     "d": 10
+    }
+   ]
+  },
+  "heal": {
+   "cat": "Comportamiento: Salud",
+   "bh": "health",
+   "label": "Curar",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "",
+     "t": "number",
+     "d": 10
+    }
+   ]
+  },
+  "setHealth": {
+   "cat": "Comportamiento: Salud",
+   "bh": "health",
+   "label": "Poner la salud",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "",
+     "t": "number",
+     "d": 100
+    }
+   ]
+  },
+  "flash": {
+   "cat": "Comportamiento: Parpadeo",
+   "bh": "flash",
+   "label": "Hacer parpadear",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "duration",
+     "l": "s",
+     "t": "number",
+     "d": 1
+    }
+   ]
+  },
+  "fireAngle": {
+   "cat": "Comportamiento: Disparador",
+   "bh": "fireBullet",
+   "label": "Disparar en un ángulo",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "bullet",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "angle",
+     "l": "",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "speed",
+     "l": "",
+     "t": "number",
+     "d": 400
+    }
+   ]
+  },
+  "fireAt": {
+   "cat": "Comportamiento: Disparador",
+   "bh": "fireBullet",
+   "label": "Disparar hacia una posición",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "bullet",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "speed",
+     "l": "",
+     "t": "number",
+     "d": 400
+    }
+   ]
+  },
+  "dragToggle": {
+   "cat": "Comportamiento: Arrastrable",
+   "bh": "draggable",
+   "label": "Activar o desactivar el arrastre",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "state",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "on",
+       "Activado"
+      ],
+      [
+       "off",
+       "Desactivado"
+      ]
+     ],
+     "d": "off"
+    }
+   ]
+  },
+  "setVar": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Cambiar una variable (expresión)",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text",
+     "d": "x"
+    },
+    {
+     "k": "op",
+     "l": "",
+     "t": "select",
+     "d": "set",
+     "options": [
+      [
+       "set",
+       "="
+      ],
+      [
+       "add",
+       "+="
+      ],
+      [
+       "sub",
+       "-="
+      ],
+      [
+       "mul",
+       "*="
+      ],
+      [
+       "div",
+       "/="
+      ],
+      [
+       "mod",
+       "%="
+      ]
+     ]
+    },
+    {
+     "k": "value",
+     "l": "valor",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "setVarText": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Poner un texto en una variable",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text",
+     "d": "mensaje"
+    },
+    {
+     "k": "text",
+     "l": "texto",
+     "t": "text",
+     "d": "Hola {g:nombre}"
+    }
+   ]
+  },
+  "localVar": {
+   "cat": "Funciones",
+   "gd": "Eventos y control",
+   "label": "Crear una variable local",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text",
+     "d": "i"
+    },
+    {
+     "k": "value",
+     "l": "valor",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "arrayFill": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Crear un array relleno",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text",
+     "d": "lista"
+    },
+    {
+     "k": "size",
+     "l": "tamaño",
+     "t": "number",
+     "d": 10
+    },
+    {
+     "k": "value",
+     "l": "valor",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "arrayPushNum": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Añadir al array (expresión)",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text",
+     "d": "lista"
+    },
+    {
+     "k": "value",
+     "l": "valor",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "arrayResize": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Cambiar el tamaño del array",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text",
+     "d": "lista"
+    },
+    {
+     "k": "size",
+     "l": "tamaño",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "arrayCopy": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Copiar un array",
+   "params": [
+    {
+     "k": "from",
+     "l": "de",
+     "t": "text",
+     "d": "origen"
+    },
+    {
+     "k": "to",
+     "l": "a",
+     "t": "text",
+     "d": "copia"
+    }
+   ]
+  },
+  "arrayAppend": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Añadir un array al final de otro",
+   "params": [
+    {
+     "k": "from",
+     "l": "de",
+     "t": "text",
+     "d": "origen"
+    },
+    {
+     "k": "to",
+     "l": "a",
+     "t": "text",
+     "d": "destino"
+    }
+   ]
+  },
+  "arrayRemoveAt": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Quitar un elemento del array",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text",
+     "d": "lista"
+    },
+    {
+     "k": "index",
+     "l": "posición",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "arrayInsertAt": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Insertar en el array",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text",
+     "d": "lista"
+    },
+    {
+     "k": "index",
+     "l": "posición",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "value",
+     "l": "valor",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "arraySort": {
+   "cat": "Variables",
+   "gd": "General",
+   "label": "Ordenar un array",
+   "params": [
+    {
+     "k": "variable",
+     "l": "var",
+     "t": "text",
+     "d": "lista"
+    },
+    {
+     "k": "order",
+     "l": "",
+     "t": "select",
+     "d": "asc",
+     "options": [
+      [
+       "asc",
+       "de menor a mayor"
+      ],
+      [
+       "desc",
+       "de mayor a menor"
+      ]
+     ]
+    }
+   ]
+  },
+  "callFunction": {
+   "cat": "Funciones",
+   "gd": "Eventos y control",
+   "label": "Llamar a una función",
+   "params": [
+    {
+     "k": "name",
+     "l": "función",
+     "t": "text",
+     "d": "MiFuncion"
+    },
+    {
+     "k": "args",
+     "l": "argumentos",
+     "t": "number",
+     "d": ""
+    },
+    {
+     "k": "result",
+     "l": "guardar en",
+     "t": "text",
+     "d": ""
+    }
+   ]
+  },
+  "returnValue": {
+   "cat": "Funciones",
+   "gd": "Eventos y control",
+   "label": "Devolver un valor y terminar la función",
+   "params": [
+    {
+     "k": "value",
+     "l": "valor",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "breakLoop": {
+   "cat": "Funciones",
+   "gd": "Eventos y control",
+   "label": "Salir del bucle",
+   "params": []
+  },
+  "setZ": {
+   "cat": "Apariencia",
+   "label": "Poner el orden de dibujo (Z)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "value",
+     "l": "z",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "particles": {
+   "cat": "Apariencia",
+   "label": "Emitir partículas",
+   "params": [
+    {
+     "k": "object",
+     "l": "desde",
+     "t": "object",
+     "d": ""
+    },
+    {
+     "k": "x",
+     "l": "x (desplazamiento o posición)",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "count",
+     "l": "cantidad",
+     "t": "number",
+     "d": 12
+    },
+    {
+     "k": "color",
+     "l": "colores (#hex, separados por comas)",
+     "t": "text",
+     "d": "#ffffff"
+    },
+    {
+     "k": "speed",
+     "l": "velocidad",
+     "t": "number",
+     "d": 180
+    },
+    {
+     "k": "angle",
+     "l": "dirección (grados)",
+     "t": "number",
+     "d": -90
+    },
+    {
+     "k": "spread",
+     "l": "apertura (grados)",
+     "t": "number",
+     "d": 360
+    },
+    {
+     "k": "life",
+     "l": "vida (s)",
+     "t": "number",
+     "d": 0.6
+    },
+    {
+     "k": "size",
+     "l": "tamaño",
+     "t": "number",
+     "d": 4
+    },
+    {
+     "k": "gravity",
+     "l": "gravedad",
+     "t": "number",
+     "d": 400
+    },
+    {
+     "k": "glow",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "no",
+       "Normal"
+      ],
+      [
+       "yes",
+       "Brillante"
+      ]
+     ],
+     "d": "no"
+    },
+    {
+     "k": "image",
+     "l": "imagen (objeto)",
+     "t": "object",
+     "d": ""
+    },
+    {
+     "k": "spin",
+     "l": "giro °/s",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "quitGame": {
+   "cat": "Escena",
+   "label": "Salir del juego",
+   "params": []
+  },
+  "setColor": {
+   "cat": "Apariencia",
+   "label": "Poner tinte (color) de un sprite",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "color",
+     "l": "r;g;b o #rrggbb",
+     "t": "text",
+     "d": "255;255;255"
+    }
+   ],
+   "gd": "Efecto visual",
+   "objTypes": [
+    "sprite"
+   ]
+  },
+  "setBgColor": {
+   "cat": "Escena",
+   "label": "Poner color de fondo de la escena",
+   "params": [
+    {
+     "k": "color",
+     "l": "r;g;b o #rrggbb",
+     "t": "text",
+     "d": "#202329"
+    }
+   ],
+   "gd": "Efecto visual"
+  },
+  "cameraRotate": {
+   "cat": "Cámara",
+   "label": "Poner rotación de la cámara",
+   "params": [
+    {
+     "k": "value",
+     "l": "grados",
+     "t": "number",
+     "d": 0
+    }
+   ]
+  },
+  "musicVolume": {
+   "cat": "Sonido",
+   "label": "Poner volumen de la música",
+   "params": [
+    {
+     "k": "value",
+     "l": "0-100",
+     "t": "number",
+     "d": 60
+    }
+   ],
+   "gd": "Audio"
+  },
+  "musicSeek": {
+   "cat": "Sonido",
+   "label": "Saltar a un momento de la música",
+   "params": [
+    {
+     "k": "seconds",
+     "l": "seg",
+     "t": "number",
+     "d": 0
+    }
+   ],
+   "gd": "Audio"
+  },
+  "sfx": {
+   "cat": "Sonido",
+   "label": "Efecto de sonido sintetizado (barrido)",
+   "params": [
+    {
+     "k": "wave",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "sine",
+       "Senoidal"
+      ],
+      [
+       "square",
+       "Cuadrada"
+      ],
+      [
+       "triangle",
+       "Triangular"
+      ],
+      [
+       "sawtooth",
+       "Diente de sierra"
+      ]
+     ],
+     "d": "sine"
+    },
+    {
+     "k": "freqFrom",
+     "l": "Hz",
+     "t": "number",
+     "d": 880
+    },
+    {
+     "k": "freqTo",
+     "l": "Hz",
+     "t": "number",
+     "d": 440
+    },
+    {
+     "k": "duration",
+     "l": "seg",
+     "t": "number",
+     "d": 0.1
+    },
+    {
+     "k": "volume",
+     "l": "0-100",
+     "t": "number",
+     "d": 50
+    }
+   ],
+   "gd": "Audio"
+  },
+  "screenShader": {
+   "cat": "Escena",
+   "label": "Activar o quitar un shader de pantalla",
+   "params": [
+    {
+     "k": "shader",
+     "l": "",
+     "t": "shader"
+    },
+    {
+     "k": "state",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "on",
+       "Activar"
+      ],
+      [
+       "off",
+       "Quitar"
+      ],
+      [
+       "toggle",
+       "Alternar"
+      ]
+     ],
+     "d": "toggle"
+    }
+   ],
+   "gd": "Efecto visual"
+  },
+  "saveVars": {
+   "cat": "Escena",
+   "label": "Guardar algunas variables globales",
+   "params": [
+    {
+     "k": "slot",
+     "l": "",
+     "t": "text",
+     "d": "slot1"
+    },
+    {
+     "k": "vars",
+     "l": "nombres separados por comas",
+     "t": "text",
+     "d": ""
+    }
+   ],
+   "gd": "Mecánica de juego"
+  },
+  "setOutline": {
+   "cat": "Apariencia",
+   "label": "Poner contorno (outline)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "width",
+     "l": "px",
+     "t": "number",
+     "d": 2
+    },
+    {
+     "k": "color",
+     "l": "color",
+     "t": "text",
+     "d": "0;0;0"
+    }
+   ],
+   "gd": "Efecto visual"
+  },
+  "fileRead": {
+   "cat": "Archivos",
+   "label": "Leer un archivo de texto",
+   "params": [
+    {
+     "k": "path",
+     "l": "ruta",
+     "t": "text",
+     "d": ""
+    },
+    {
+     "k": "variable",
+     "l": "",
+     "t": "text",
+     "d": "texto"
+    }
+   ],
+   "gd": "Otros"
+  },
+  "fileReadB64": {
+   "cat": "Archivos",
+   "label": "Leer un archivo en base64 (imágenes, audio)",
+   "params": [
+    {
+     "k": "path",
+     "l": "ruta",
+     "t": "text",
+     "d": ""
+    },
+    {
+     "k": "variable",
+     "l": "",
+     "t": "text",
+     "d": "texto"
+    }
+   ],
+   "gd": "Otros"
+  },
+  "fileWrite": {
+   "cat": "Archivos",
+   "label": "Escribir un archivo de texto",
+   "params": [
+    {
+     "k": "path",
+     "l": "ruta",
+     "t": "text",
+     "d": ""
+    },
+    {
+     "k": "source",
+     "l": "variable con el texto",
+     "t": "text",
+     "d": "texto"
+    }
+   ],
+   "gd": "Otros"
+  },
+  "makeDir": {
+   "cat": "Archivos",
+   "label": "Crear una carpeta",
+   "params": [
+    {
+     "k": "path",
+     "l": "ruta",
+     "t": "text",
+     "d": ""
+    }
+   ],
+   "gd": "Otros"
+  },
+  "dirList": {
+   "cat": "Archivos",
+   "label": "Listar una carpeta",
+   "params": [
+    {
+     "k": "path",
+     "l": "ruta",
+     "t": "text",
+     "d": ""
+    },
+    {
+     "k": "variable",
+     "l": "array",
+     "t": "text",
+     "d": "lista"
+    }
+   ],
+   "gd": "Otros"
+  },
+  "initialFiles": {
+   "cat": "Archivos",
+   "label": "Lista de archivos iniciales",
+   "params": [
+    {
+     "k": "variable",
+     "l": "array",
+     "t": "text",
+     "d": "archivos"
+    }
+   ],
+   "gd": "Otros"
+  },
+  "initialFileRead": {
+   "cat": "Archivos",
+   "label": "Leer un archivo inicial",
+   "params": [
+    {
+     "k": "name",
+     "l": "nombre",
+     "t": "text",
+     "d": ""
+    },
+    {
+     "k": "variable",
+     "l": "",
+     "t": "text",
+     "d": "texto"
+    }
+   ],
+   "gd": "Otros"
+  },
+  "jsonToVars": {
+   "cat": "Variables",
+   "label": "Convertir JSON en variables",
+   "params": [
+    {
+     "k": "source",
+     "l": "variable con el JSON",
+     "t": "text",
+     "d": "texto"
+    },
+    {
+     "k": "prefix",
+     "l": "variable padre",
+     "t": "text",
+     "d": "datos"
+    }
+   ]
+  },
+  "varsToJson": {
+   "cat": "Variables",
+   "label": "Convertir variables en JSON",
+   "params": [
+    {
+     "k": "prefix",
+     "l": "variable padre",
+     "t": "text",
+     "d": "datos"
+    },
+    {
+     "k": "variable",
+     "l": "",
+     "t": "text",
+     "d": "texto"
+    }
+   ]
+  },
+  "varsClear": {
+   "cat": "Variables",
+   "label": "Borrar variables hijas",
+   "params": [
+    {
+     "k": "prefix",
+     "l": "variable padre",
+     "t": "text",
+     "d": "datos"
+    }
+   ]
+  },
+  "musicFromData": {
+   "cat": "Sonido",
+   "label": "Crear un audio desde datos en base64",
+   "params": [
+    {
+     "k": "id",
+     "l": "nombre",
+     "t": "text",
+     "d": "cancion"
+    },
+    {
+     "k": "source",
+     "l": "variable con el base64",
+     "t": "text",
+     "d": "datos"
+    },
+    {
+     "k": "mime",
+     "l": "tipo",
+     "t": "text",
+     "d": "audio/mpeg"
+    }
+   ],
+   "gd": "Audio"
+  },
+  "imageFromData": {
+   "cat": "Apariencia",
+   "label": "Mostrar una imagen desde datos en base64",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "key",
+     "l": "clave (caché)",
+     "t": "text",
+     "d": ""
+    },
+    {
+     "k": "source",
+     "l": "variable con el base64",
+     "t": "text",
+     "d": "imagen"
+    }
+   ],
+   "gd": "Efecto visual"
+  },
+  "shaderAmount": {
+   "cat": "Escena",
+   "label": "Intensidad de un shader de pantalla",
+   "params": [
+    {
+     "k": "shader",
+     "l": "",
+     "t": "shader"
+    },
+    {
+     "k": "value",
+     "l": "0-1",
+     "t": "number",
+     "d": 1
+    }
+   ],
+   "gd": "Efecto visual"
+  },
+  "fileDelete": {
+   "cat": "Archivos",
+   "gd": "Otros",
+   "label": "Borrar un archivo",
+   "params": [
+    {
+     "k": "path",
+     "l": "ruta",
+     "t": "text",
+     "d": ""
+    }
+   ]
+  },
+  "platAbility": {
+   "cat": "Plataformas",
+   "label": "Dar o quitar una habilidad del plataformero",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "ability",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "air",
+       "salto en el aire"
+      ],
+      [
+       "dash",
+       "dash"
+      ],
+      [
+       "wall",
+       "pared (deslizarse y saltar)"
+      ]
+     ],
+     "d": "dash"
+    },
+    {
+     "k": "state",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "on",
+       "Activar"
+      ],
+      [
+       "off",
+       "Desactivar"
+      ]
+     ],
+     "d": "on"
+    }
+   ]
+  },
+  "wait": {
+   "cat": "Control",
+   "gd": "Eventos y control",
+   "label": "Esperar (y seguir con las demás acciones)",
+   "params": [
+    {
+     "k": "seconds",
+     "l": "seg",
+     "t": "number",
+     "d": 1
+    }
+   ]
+  },
+  "playSound": {
+   "cat": "Sonido",
+   "gd": "Audio",
+   "label": "Reproducir sonido (varios a la vez, por canal)",
+   "params": [
+    {
+     "k": "track",
+     "l": "",
+     "t": "music",
+     "d": ""
+    },
+    {
+     "k": "volume",
+     "l": "vol %",
+     "t": "number",
+     "d": 100
+    },
+    {
+     "k": "pitch",
+     "l": "tono",
+     "t": "number",
+     "d": 1
+    },
+    {
+     "k": "vary",
+     "l": "variación %",
+     "t": "number",
+     "d": 0
+    },
+    {
+     "k": "channel",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "0",
+       "Efectos"
+      ],
+      [
+       "1",
+       "Voces"
+      ],
+      [
+       "2",
+       "Ambiente"
+      ],
+      [
+       "3",
+       "Interfaz"
+      ],
+      [
+       "4",
+       "Canal 5"
+      ],
+      [
+       "5",
+       "Canal 6"
+      ],
+      [
+       "6",
+       "Canal 7"
+      ],
+      [
+       "7",
+       "Canal 8"
+      ]
+     ],
+     "d": "0"
+    }
+   ]
+  },
+  "playSoundAt": {
+   "cat": "Sonido",
+   "label": "Reproducir sonido en la posición del objeto",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "track",
+     "l": "",
+     "t": "music",
+     "d": ""
+    },
+    {
+     "k": "volume",
+     "l": "vol %",
+     "t": "number",
+     "d": 100
+    },
+    {
+     "k": "range",
+     "l": "alcance px",
+     "t": "number",
+     "d": 600
+    },
+    {
+     "k": "channel",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "0",
+       "Efectos"
+      ],
+      [
+       "1",
+       "Voces"
+      ],
+      [
+       "2",
+       "Ambiente"
+      ],
+      [
+       "3",
+       "Interfaz"
+      ],
+      [
+       "4",
+       "Canal 5"
+      ],
+      [
+       "5",
+       "Canal 6"
+      ],
+      [
+       "6",
+       "Canal 7"
+      ],
+      [
+       "7",
+       "Canal 8"
+      ]
+     ],
+     "d": "0"
+    }
+   ]
+  },
+  "channelVolume": {
+   "cat": "Sonido",
+   "gd": "Audio",
+   "label": "Volumen de un canal de sonido",
+   "params": [
+    {
+     "k": "channel",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "0",
+       "Efectos"
+      ],
+      [
+       "1",
+       "Voces"
+      ],
+      [
+       "2",
+       "Ambiente"
+      ],
+      [
+       "3",
+       "Interfaz"
+      ],
+      [
+       "4",
+       "Canal 5"
+      ],
+      [
+       "5",
+       "Canal 6"
+      ],
+      [
+       "6",
+       "Canal 7"
+      ],
+      [
+       "7",
+       "Canal 8"
+      ]
+     ],
+     "d": "0"
+    },
+    {
+     "k": "value",
+     "l": "%",
+     "t": "number",
+     "d": 100
+    }
+   ]
+  },
+  "channelStop": {
+   "cat": "Sonido",
+   "gd": "Audio",
+   "label": "Parar los sonidos de un canal",
+   "params": [
+    {
+     "k": "channel",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "0",
+       "Efectos"
+      ],
+      [
+       "1",
+       "Voces"
+      ],
+      [
+       "2",
+       "Ambiente"
+      ],
+      [
+       "3",
+       "Interfaz"
+      ],
+      [
+       "4",
+       "Canal 5"
+      ],
+      [
+       "5",
+       "Canal 6"
+      ],
+      [
+       "6",
+       "Canal 7"
+      ],
+      [
+       "7",
+       "Canal 8"
+      ]
+     ],
+     "d": "0"
+    }
+   ]
+  },
+  "channelPause": {
+   "cat": "Sonido",
+   "gd": "Audio",
+   "label": "Pausar o seguir un canal de sonido",
+   "params": [
+    {
+     "k": "channel",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "0",
+       "Efectos"
+      ],
+      [
+       "1",
+       "Voces"
+      ],
+      [
+       "2",
+       "Ambiente"
+      ],
+      [
+       "3",
+       "Interfaz"
+      ],
+      [
+       "4",
+       "Canal 5"
+      ],
+      [
+       "5",
+       "Canal 6"
+      ],
+      [
+       "6",
+       "Canal 7"
+      ],
+      [
+       "7",
+       "Canal 8"
+      ]
+     ],
+     "d": "0"
+    },
+    {
+     "k": "mode",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "pause",
+       "Pausar"
+      ],
+      [
+       "resume",
+       "Seguir"
+      ]
+     ],
+     "d": "pause"
+    }
+   ]
+  },
+  "vibrate": {
+   "cat": "Mando",
+   "gd": "Entrada",
+   "label": "Vibrar el mando",
+   "params": [
+    {
+     "k": "pad",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "1",
+       "Mando 1"
+      ],
+      [
+       "2",
+       "Mando 2"
+      ],
+      [
+       "3",
+       "Mando 3"
+      ],
+      [
+       "4",
+       "Mando 4"
+      ]
+     ],
+     "d": "1"
+    },
+    {
+     "k": "strength",
+     "l": "fuerza %",
+     "t": "number",
+     "d": 60
+    },
+    {
+     "k": "duration",
+     "l": "seg",
+     "t": "number",
+     "d": 0.2
+    }
+   ]
+  },
+  "pauseGame": {
+   "cat": "Escena",
+   "gd": "Mecánica de juego",
+   "label": "Pausar el juego (los eventos siguen)",
+   "params": [
+    {
+     "k": "mode",
+     "l": "",
+     "t": "select",
+     "options": [
+      [
+       "on",
+       "Pausar"
+      ],
+      [
+       "off",
+       "Quitar la pausa"
+      ],
+      [
+       "toggle",
+       "Cambiar"
+      ]
+     ],
+     "d": "toggle"
+    }
+   ]
+  },
+  "sendMessage": {
+   "cat": "Control",
+   "gd": "Eventos y control",
+   "label": "Enviar un mensaje (lo recibe el siguiente fotograma)",
+   "params": [
+    {
+     "k": "name",
+     "l": "",
+     "t": "text",
+     "d": "abrir_puerta"
+    }
+   ]
+  },
+  "hitStop": {
+   "cat": "Escena",
+   "gd": "Efecto visual",
+   "label": "Pausa de impacto (congela el juego un momento)",
+   "params": [
+    {
+     "k": "seconds",
+     "l": "seg",
+     "t": "number",
+     "d": 0.08
+    }
+   ]
+  },
+  "flashWhite": {
+   "cat": "Apariencia",
+   "label": "Destello blanco (al recibir un golpe)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "duration",
+     "l": "seg",
+     "t": "number",
+     "d": 0.08
+    }
+   ]
+  },
+  "squash": {
+   "cat": "Apariencia",
+   "label": "Estirar o aplastar un momento",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "amount",
+     "l": "% (+ aplasta, - estira)",
+     "t": "number",
+     "d": 30
+    },
+    {
+     "k": "duration",
+     "l": "seg",
+     "t": "number",
+     "d": 0.15
+    }
+   ]
+  },
+  "setLanguage": {
+   "cat": "Escena",
+   "gd": "General",
+   "label": "Cambiar el idioma del juego",
+   "params": [
+    {
+     "k": "lang",
+     "l": "",
+     "t": "text",
+     "d": "en"
+    }
+   ]
+  },
+  "pathTo": {
+   "cat": "Movimiento",
+   "label": "Ir a un punto buscando el camino (esquiva paredes)",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    },
+    {
+     "k": "x",
+     "l": "x",
+     "t": "number",
+     "d": 400
+    },
+    {
+     "k": "y",
+     "l": "y",
+     "t": "number",
+     "d": 300
+    },
+    {
+     "k": "speed",
+     "l": "velocidad",
+     "t": "number",
+     "d": 120
+    }
+   ]
+  },
+  "pathStop": {
+   "cat": "Movimiento",
+   "label": "Dejar de seguir el camino",
+   "params": [
+    {
+     "k": "object",
+     "l": "",
+     "t": "object"
+    }
+   ]
+  },
+  "setDarkness": {
+   "cat": "Escena",
+   "gd": "Efecto visual",
+   "label": "Oscuridad de la escena (luces)",
+   "params": [
+    {
+     "k": "value",
+     "l": "0-100",
+     "t": "number",
+     "d": 70
+    },
+    {
+     "k": "color",
+     "l": "color",
+     "t": "text",
+     "d": "#05060f"
+    }
+   ]
+  }
+ },
+ "sentences": {
+  "cond": {
+   "always": "Siempre",
+   "atStart": "Al inicio de la escena",
+   "every": "Cada {seconds} segundos",
+   "timeFromStart": "El tiempo desde el inicio es {op} {value} s",
+   "random": "Al azar, con probabilidad {percent} %",
+   "jsCode": "Código JavaScript",
+   "keyDown": "La tecla {key} está pulsada",
+   "keyPressed": "Se acaba de pulsar la tecla {key}",
+   "keyReleased": "Se acaba de soltar la tecla {key}",
+   "mouseDown": "El botón {button} del ratón está pulsado",
+   "mousePressed": "Se acaba de pulsar el botón {button} del ratón",
+   "mouseOn": "El cursor está sobre {object}",
+   "clicked": "Se hace clic en {object}",
+   "mouseInRect": "El cursor está dentro del área {x};{y} de {w}x{h}",
+   "collision": "{object} colisiona con {with}",
+   "onGround": "{object} está en el suelo",
+   "onWall": "{object} toca una pared",
+   "standsOn": "{object} está encima de {with}",
+   "objVar": "La variable {variable} de {object} {op} {value}",
+   "objCount": "El número de {object} {op} {value}",
+   "objPos": "La posición {axis} de {object} {op} {value}",
+   "objAngle": "El ángulo de {object} {op} {value}°",
+   "objInRect": "{object} está dentro del área {x};{y} de {w}x{h}",
+   "objOutside": "{object} está fuera de la escena",
+   "objVisible": "{object} es visible",
+   "objGrounded": "{object} toca el suelo",
+   "objMoving": "{object} se está moviendo",
+   "globalVar": "La variable global {variable} {op} {value}",
+   "cmpNum": "{a} {op} {b}",
+   "cmpStr": "{a} {op} {b}",
+   "anyKeyPressed": "Se pulsa cualquier tecla",
+   "anyKeyDown": "Cualquier tecla está pulsada",
+   "mouseReleased": "Se suelta el botón {button} del ratón",
+   "wheelUp": "La rueda del ratón gira hacia arriba",
+   "wheelDown": "La rueda del ratón gira hacia abajo",
+   "timerCompare": "El temporizador {name} {op} {value} s",
+   "saveExists": "Existe la partida guardada {slot}",
+   "boolVar": "La variable {variable} es verdadera",
+   "arrayContains": "El array {variable} contiene {value}",
+   "arrayLength": "El tamaño del array {variable} {op} {value}",
+   "textContains": "{a} contiene {b}",
+   "objectExists": "Hay al menos un {object} en la escena",
+   "sceneIs": "La escena actual es {scene}",
+   "btnClicked": "Se hace clic en el botón {object}",
+   "btnDown": "El botón {object} está presionado",
+   "btnReleased": "Se suelta el botón {object}",
+   "btnHover": "El cursor está sobre el botón {object}",
+   "textIs": "El texto de {object} es {text}",
+   "tileHas": "El tile {tile} de {object} tiene {what} a su {dir}",
+   "cursorTile": "El cursor está sobre el tile {tile} de {object}",
+   "or": "Si se cumple alguna de estas condiciones:",
+   "and": "Si se cumplen todas estas condiciones:",
+   "not": "Si NO se cumplen estas condiciones:",
+   "triggerOnce": "Una vez mientras sea verdad",
+   "distance": "La distancia entre {object} y {with} es {op} {value} px",
+   "pointInside": "El punto {x};{y} está dentro de {object}",
+   "animIs": "La animación de {object} es {name}",
+   "animEnded": "La animación de {object} ha terminado",
+   "objTimer": "El temporizador {name} de {object} {op} {value} s",
+   "platJumping": "{object} está saltando",
+   "platFalling": "{object} está cayendo",
+   "isDragged": "{object} está siendo arrastrado",
+   "dropped": "Se acaba de soltar {object}",
+   "health": "La salud de {object} {op} {value}",
+   "isDead": "{object} se quedó sin salud",
+   "isFlashing": "{object} está parpadeando",
+   "canFire": "{object} puede disparar",
+   "exprTrue": "{value}",
+   "varCmp": "La variable {variable} {op} {value}",
+   "platEvent": "{object} {what}",
+   "touchesTile": "{object} toca un tile {flag}",
+   "musicPlaying": "La música está sonando",
+   "tweenDone": "Una animación de {object} acaba de terminar",
+   "isTweening": "{object} se está animando",
+   "soundPlaying": "El sonido {track} está sonando",
+   "gamePaused": "El juego está en pausa",
+   "messageReceived": "Se recibió el mensaje {name}",
+   "padConnected": "{pad} está conectado",
+   "padAxis": "{axis} de {pad} {op} {value}",
+   "raycast": "Un rayo desde {object} a {angle}° choca antes de {distance} px con {target}",
+   "languageIs": "El idioma es {lang}",
+   "pathArrived": "{object} acaba de llegar al final de su camino",
+   "onPath": "{object} está siguiendo un camino",
+   "pathFailed": "{object} no encontró camino",
+   "animEvent": "La animación de {object} llega al evento {name}",
+   "pickNearest": "Elegir el {object} más cercano a {x};{y}",
+   "pickFarthest": "Elegir el {object} más lejano de {x};{y}",
+   "pickRandom": "Elegir un {object} al azar"
+  },
+  "act": {
+   "setVX": "Poner la velocidad X de {object} a {value}",
+   "setVY": "Poner la velocidad Y de {object} a {value}",
+   "addVX": "Sumar {value} a la velocidad X de {object}",
+   "addVY": "Sumar {value} a la velocidad Y de {object}",
+   "addForce": "Aplicar a {object} un impulso de {x};{y}",
+   "moveTo": "Mover {object} hacia {x};{y} a {speed} px/s",
+   "moveToObj": "Mover {object} hacia {target} a {speed} px/s",
+   "moveInDirection": "Mover {object} en la dirección {angle}° a {speed} px/s",
+   "stopMove": "Detener el movimiento de {object}",
+   "jump": "Hacer saltar a {object} con fuerza {value} ({always})",
+   "lookAt": "Hacer que {object} mire hacia {x};{y}",
+   "setPos": "Poner {object} en la posición {x};{y}",
+   "setX": "Poner la posición X de {object} a {value}",
+   "setY": "Poner la posición Y de {object} a {value}",
+   "addToX": "Sumar {value} a la posición X de {object}",
+   "addToY": "Sumar {value} a la posición Y de {object}",
+   "setAngle": "Poner el ángulo de {object} a {value}°",
+   "rotateBy": "Rotar {object} {value}°",
+   "setSpin": "Hacer girar {object} a {value}°/s",
+   "setScale": "Poner la escala de {object} a {x};{y}",
+   "setOpacity": "Poner la opacidad de {object} a {value}",
+   "show": "Mostrar {object}",
+   "hide": "Ocultar {object}",
+   "platOn": "Activar el movimiento de la plataforma {object}",
+   "platOff": "Detener la plataforma {object}",
+   "platFlip": "Invertir la dirección de la plataforma {object}",
+   "jumpNow": "Hacer saltar a {object} con fuerza {value}",
+   "setAnim": "Reproducir la animación {name} en {object}",
+   "setFlip": "Voltear {object} (sentido {value})",
+   "setFrame": "Poner el frame de {object} a {value}",
+   "nextFrame": "Pasar {object} al siguiente frame",
+   "setText": "Cambiar el texto de {object} a {text}",
+   "setButtonText": "Cambiar el texto del botón {object} a {text}",
+   "setEffect": "Aplicar el efecto {filter} a {object}",
+   "setGravity": "Gravedad de {object}: {state}",
+   "setSolid": "Solidez de {object}: {state}",
+   "setFriction": "Poner el rozamiento de {object} a {value}",
+   "setBounce": "Poner el rebote de {object} a {value}",
+   "tweenPos": "Animar la posición de {object} hasta {x};{y} en {duration} s ({easing})",
+   "tweenScale": "Animar la escala de {object} hasta {x};{y} en {duration} s ({easing})",
+   "tweenAngle": "Animar el ángulo de {object} hasta {value}° en {duration} s ({easing})",
+   "tweenOpacity": "Animar la opacidad de {object} hasta {value} en {duration} s ({easing})",
+   "tweenStop": "Detener las animaciones de {object}",
+   "create": "Crear {object} en la posición {x};{y}",
+   "removeObj": "Eliminar {object}",
+   "setObjVar": "Poner la variable {variable} de {object} a {value}",
+   "addObjVar": "Sumar {value} a la variable {variable} de {object}",
+   "cameraFollow": "La cámara sigue a {object} (suavizado {smoothing})",
+   "cameraMoveTo": "Mover la cámara hacia {x};{y}",
+   "cameraSetPos": "Poner la cámara en {x};{y}",
+   "cameraZoom": "Poner el zoom de la cámara a {value}",
+   "cameraLimits": "Límites de la cámara: {mode}",
+   "cameraFree": "Liberar la cámara",
+   "shakeCamera": "Sacudir la cámara con fuerza {intensity} durante {duration} s",
+   "changeScene": "Cambiar a la escena {scene} ({transition}, {duration} s)",
+   "nextScene": "Ir a la siguiente escena ({transition}, {duration} s)",
+   "restartScene": "Reiniciar la escena",
+   "endGame": "Terminar el juego con el mensaje {message}",
+   "fullscreen": "Cambiar a pantalla completa",
+   "stopGame": "Detener el juego",
+   "setGlobal": "Poner la variable global {variable} a {value}",
+   "addGlobal": "Sumar {value} a la variable global {variable}",
+   "playMusic": "Reproducir el audio {track} ({loop})",
+   "stopMusic": "Detener el audio",
+   "beep": "Tocar un tono de {freq} Hz durante {duration} s",
+   "jsCode": "Código JavaScript",
+   "timerCtl": "Temporizador {name}: {action}",
+   "timeScale": "Poner la escala de tiempo a {value}",
+   "saveGame": "Guardar la partida en {slot} ({what})",
+   "loadGame": "Cargar la partida {slot}",
+   "deleteSave": "Borrar la partida guardada {slot}",
+   "hideCursor": "Ocultar el cursor",
+   "showCursor": "Mostrar el cursor",
+   "mulGlobal": "Multiplicar la variable global {variable} por {value}",
+   "setBool": "Poner la variable {variable} a {value}",
+   "toggleBool": "Invertir la variable {variable}",
+   "arrayPush": "Añadir {value} al array {variable}",
+   "arrayPop": "Quitar el último valor del array {variable}",
+   "arrayClear": "Vaciar el array {variable}",
+   "textAppend": "Añadir {text} al final del texto de {object}",
+   "typewriter": "Escribir {text} en {object} a {speed} letras/s",
+   "setTextColor": "Poner el color del texto de {object} a {color}",
+   "setButtonColor": "Poner el color de fondo del botón {object} a {color}",
+   "setButtonFg": "Poner el color del texto del botón {object} a {color}",
+   "tilePlaceCursor": "Colocar el tile {tile} de {object} en la celda del cursor",
+   "tileEraseCursor": "Borrar el tile de {object} en la celda del cursor",
+   "tilePlace": "Colocar el tile {tile} de {object} en la celda {col};{row}",
+   "tileConvert": "Convertir los tiles {from} de {object} en {to} si su vecino de {dir} es {what}",
+   "objTimerCtl": "Temporizador {name} de {object}: {action}",
+   "rotateToward": "Rotar {object} hacia {x};{y} a {speed}°/s",
+   "separate": "Separar {object} de {with}",
+   "animPause": "Animación de {object}: {state}",
+   "animSpeed": "Poner la velocidad de animación de {object} a {value}",
+   "setMoveSpeed": "Poner la rapidez de {object} a {value}",
+   "platSim": "Simular el control {control} en {object}",
+   "setJumpForce": "Poner la fuerza de salto de {object} a {value}",
+   "damage": "Aplicar {value} de daño a {object}",
+   "heal": "Curar {value} a {object}",
+   "setHealth": "Poner la salud de {object} a {value}",
+   "flash": "Hacer parpadear {object} durante {duration} s",
+   "fireAngle": "{object} dispara {bullet} en el ángulo {angle}° a {speed} px/s",
+   "fireAt": "{object} dispara {bullet} hacia {x};{y} a {speed} px/s",
+   "dragToggle": "Arrastre de {object}: {state}",
+   "setVar": "{variable} {op} {value}",
+   "setVarText": "Poner en {variable} el texto {text}",
+   "localVar": "Variable local {variable} = {value}",
+   "arrayFill": "Crear el array {variable} con {size} elementos a {value}",
+   "arrayPushNum": "Añadir {value} al array {variable}",
+   "arrayResize": "Dejar el array {variable} con {size} elementos",
+   "arrayCopy": "Copiar el array {from} en {to}",
+   "arrayAppend": "Añadir el array {from} al final de {to}",
+   "arrayRemoveAt": "Quitar el elemento {index} del array {variable}",
+   "arrayInsertAt": "Insertar {value} en la posición {index} del array {variable}",
+   "arraySort": "Ordenar el array {variable} {order}",
+   "callFunction": "Llamar a {name}({args}) y guardar el resultado en {result}",
+   "returnValue": "Devolver {value}",
+   "breakLoop": "Salir del bucle",
+   "setZ": "Poner el orden de dibujo de {object} a {value}",
+   "particles": "Emitir {count} partículas {color} desde {object} ({x}; {y})",
+   "quitGame": "Salir del juego (cierra la ventana)",
+   "setColor": "Teñir {object} de {color}",
+   "setBgColor": "Poner el color de fondo a {color}",
+   "cameraRotate": "Girar la cámara a {value}°",
+   "musicVolume": "Poner el volumen de la música a {value}",
+   "musicSeek": "Llevar la música al segundo {seconds}",
+   "sfx": "Sonido {wave} de {freqFrom} a {freqTo} Hz durante {duration} s (volumen {volume})",
+   "screenShader": "Shader de pantalla {shader}: {state}",
+   "saveVars": "Guardar las variables {vars} en {slot}",
+   "setOutline": "Contorno de {object}: {width} px de color {color}",
+   "fileRead": "Leer el archivo {path} en la variable {variable}",
+   "fileReadB64": "Leer el archivo {path} en base64 en {variable}",
+   "fileWrite": "Escribir el texto de {source} en el archivo {path}",
+   "makeDir": "Crear la carpeta {path}",
+   "dirList": "Poner en el array {variable} el contenido de la carpeta {path}",
+   "initialFiles": "Poner en el array {variable} los nombres de los archivos iniciales",
+   "initialFileRead": "Leer el archivo inicial {name} en {variable}",
+   "jsonToVars": "Convertir el JSON de {source} en las variables de {prefix}",
+   "varsToJson": "Poner en {variable} el JSON de las variables de {prefix}",
+   "varsClear": "Borrar las variables de {prefix}",
+   "musicFromData": "Crear el audio {id} con los datos de {source}",
+   "imageFromData": "Mostrar en {object} la imagen de {source}",
+   "shaderAmount": "Intensidad del shader {shader}: {value}",
+   "fileDelete": "Borrar el archivo {path}",
+   "platAbility": "Habilidad {ability} de {object}: {state}",
+   "wait": "Esperar {seconds} s",
+   "playSound": "Reproducir el sonido {track} (volumen {volume} %, tono {pitch}, variación {vary} %, {channel})",
+   "playSoundAt": "Reproducir el sonido {track} en {object} (volumen {volume} %, se oye hasta {range} px)",
+   "channelVolume": "Volumen del canal {channel}: {value} %",
+   "channelStop": "Parar los sonidos del canal {channel}",
+   "channelPause": "Canal {channel}: {mode}",
+   "vibrate": "Vibrar {pad} al {strength} % durante {duration} s",
+   "pauseGame": "Pausa: {mode}",
+   "sendMessage": "Enviar el mensaje {name}",
+   "hitStop": "Pausa de impacto de {seconds} s",
+   "flashWhite": "Destello blanco en {object} durante {duration} s",
+   "squash": "Aplastar {object} un {amount} % durante {duration} s",
+   "setLanguage": "Poner el idioma {lang}",
+   "pathTo": "{object} va a {x};{y} buscando el camino (velocidad {speed})",
+   "pathStop": "{object} deja de seguir su camino",
+   "setDarkness": "Oscuridad de la escena al {value} % ({color})"
+  }
+ },
+ "paramNames": {
+  "object": "Objeto",
+  "with": "Otro objeto",
+  "target": "Objetivo",
+  "value": "Valor",
+  "variable": "Variable",
+  "op": "Operador",
+  "x": "X",
+  "y": "Y",
+  "w": "Ancho",
+  "h": "Alto",
+  "key": "Clave",
+  "button": "Botón del ratón",
+  "seconds": "Segundos",
+  "percent": "Probabilidad (%)",
+  "axis": "Eje",
+  "text": "Texto",
+  "name": "Nombre",
+  "speed": "Velocidad",
+  "angle": "Ángulo",
+  "duration": "Duración (s)",
+  "easing": "Curva de animación",
+  "scene": "Escena",
+  "transition": "Transición",
+  "track": "Audio",
+  "loop": "Repeticion",
+  "message": "Mensaje",
+  "smoothing": "Suavizado (0-1)",
+  "intensity": "Fuerza",
+  "mode": "Modo",
+  "filter": "Efecto",
+  "state": "Estado",
+  "a": "Primer valor",
+  "b": "Segundo valor",
+  "code": "Código",
+  "slot": "Ranura",
+  "freq": "Frecuencia (Hz)",
+  "tile": "Tile",
+  "dir": "Lado",
+  "what": "Vecino",
+  "other": "Número del otro tile",
+  "col": "Columna",
+  "row": "Fila",
+  "from": "Tile de origen",
+  "to": "Tile de destino",
+  "color": "Color",
+  "always": "Modo de salto",
+  "action": "Acción",
+  "bullet": "Objeto proyectil",
+  "control": "Control",
+  "size": "Tamaño",
+  "index": "Posición",
+  "args": "Argumentos (separados por comas)",
+  "result": "Guardar el resultado en (opcional)",
+  "order": "Orden",
+  "shader": "Shader",
+  "wave": "Onda",
+  "volume": "Volumen",
+  "vars": "Variables",
+  "freqFrom": "Frecuencia inicial (Hz)",
+  "freqTo": "Frecuencia final (Hz)",
+  "path": "Ruta",
+  "source": "Origen",
+  "prefix": "Variable padre",
+  "width": "Grosor",
+  "id": "Nombre",
+  "mime": "Tipo",
+  "ability": "Habilidad"
+ },
+ "opWords": {
+  "eq": "=",
+  "ne": "!=",
+  "lt": "<",
+  "le": "<=",
+  "gt": ">",
+  "ge": ">="
+ },
+ "gdCats": [
+  "Eventos y control",
+  "General",
+  "Entrada",
+  "Audio",
+  "Cámara",
+  "Interfaz de usuario",
+  "Mecánica de juego",
+  "Efecto visual",
+  "Anuncios",
+  "Otros"
+ ],
+ "oldCatGd": {
+  "General": "General",
+  "Variables": "General",
+  "Código": "General",
+  "Teclado": "Entrada",
+  "Ratón": "Entrada",
+  "Sonido": "Audio",
+  "Cámara": "Cámara",
+  "Escena": "Mecánica de juego",
+  "Plataformas": "Mecánica de juego",
+  "Física": "Mecánica de juego",
+  "Movimiento": "Mecánica de juego",
+  "Apariencia": "Efecto visual",
+  "Tweens": "Efecto visual",
+  "Animación": "Efecto visual",
+  "Temporizadores": "Mecánica de juego",
+  "Funciones": "Eventos y control",
+  "Control": "Eventos y control",
+  "Mando": "Entrada"
+ }
+}

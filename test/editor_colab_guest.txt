@@ -1,0 +1,17 @@
+# trabajar juntos (invitado): entra con el codigo, recibe el proyecto y los cambios, y manda los suyos
+wait 60
+colab.join 127.0.0.1 CODIGO Beto
+colab.waitjoined
+colab.wait /objects/0/name "DesdeAna"
+jset /objects/1/name "DesdeBeto"
+scene Nivel 1
+colab.pres scene:sc_4ltgw3 700 300
+colab.waitpres Ana scene:sc_4ltgw3
+wait 20
+shot CAPTURA_BETO
+jset /objects/2/name "Choque-Beto"
+wait 90
+colab.print /objects/2/name
+colab.stop
+wait 5
+quit

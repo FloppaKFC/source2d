@@ -1,0 +1,36 @@
+# herramientas y efectos nuevos de Source Sprite (Beta 0.1)
+open PROYECTO
+wait 2
+newsprite Nuevo 8 8
+# degradado de negro a blanco de izquierda a derecha
+tool gradient
+color #000000
+bg #ffffff
+stroke 0 0 7 0
+expect 0 0 3 #000000
+expect 0 7 3 #ffffff
+# contorno relleno: un triangulo cerrado
+newsprite Forma 8 8
+tool contour
+color #ff0000
+stroke 0 0 7 0 7 7 0 0
+expect 0 6 2 #ff0000
+expect 0 0 7 none
+# efectos: invertir (rojo -> cian) y escala de grises
+fx 1
+expect 0 6 2 #00ffff
+fx 2
+# duplicar y combinar capas, escalar al 200 %
+duplayer
+expectsize 8 8 1 2
+mergedown
+expectsize 8 8 1 1
+scale 200
+expectsize 16 16 1 1
+# seleccion eliptica y aerografo (solo que no rompan)
+tool selellipse
+stroke 2 2 12 12
+tool spray
+color #00ff00
+stroke 8 8 9 9
+quit

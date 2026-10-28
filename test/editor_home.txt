@@ -1,0 +1,18 @@
+# pagina de inicio: Crear (proyectos de la carpeta de proyectos) y Prueba; crear un proyecto lo guarda ya en la carpeta
+wait 3
+shot CAPTURA_INICIO
+wait 2
+home.section 1
+wait 2
+shot CAPTURA_PRUEBA
+wait 2
+home.section 0
+home.new Mi juego
+wait 3
+jexpect /name "Mi juego"
+expectsaved
+bar.home
+wait 3
+shot CAPTURA_ABIERTO
+wait 2
+quit

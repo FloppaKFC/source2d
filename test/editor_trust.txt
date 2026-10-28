@@ -1,0 +1,10 @@
+# proyecto ajeno (fuera de la carpeta de proyectos, con una extension que no termina nunca): pide confirmacion antes de abrir
+wait 3
+openajeno PROYECTO
+wait 3
+expectproject 0
+confiar
+wait 5
+expectproject 1
+wait 2
+quit

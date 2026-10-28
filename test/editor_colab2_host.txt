@@ -1,0 +1,17 @@
+# trabajar juntos (anfitrion), segunda parte: ve en vivo el trazo que pinta el invitado en un sprite (antes de soltarlo),
+# recibe el pixel al soltar, y ve su cursor y su evento seleccionado en la hoja de eventos
+wait 3
+open PROYECTO
+wait 5
+colab.host Ana
+colab.waitpeers 1
+sprite Jugador
+wait 10
+colab.waitdoc Beto sprite:s_ylw6zo paint
+colab.wait /sprites/0/frames/0/pixels/0 "#ff0000"
+ev.show
+wait 10
+colab.waitdoc Beto events:sc_4ltgw3 sel
+colab.waitpres Beto events:sc_4ltgw3
+colab.waitpeers 0
+quit

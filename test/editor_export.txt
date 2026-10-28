@@ -1,0 +1,13 @@
+# exportar: normal y ligera (motor y juego comprimidos) para Linux y Windows, y para la web (.html y .zip con index.html); sin proyecto abierto no exporta nada
+wait 3
+export SALIDA_NADA linux ligera
+wait 3
+home.new Exportable
+wait 3
+export SALIDA_NORMAL linux
+export SALIDA_LIGERO linux ligera
+export SALIDA_WIN windows ligera
+export SALIDA_HTML html
+export SALIDA_ZIP html
+exportwait
+quit
