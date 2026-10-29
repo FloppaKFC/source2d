@@ -13,10 +13,8 @@
 
 using ui::Icon;
 
-// escena de la hoja que se esta dibujando (las listas de objetos de los parametros salen de ella)
 static std::string g_sheetScene;
 
-/* ---------------- definiciones ---------------- */
 InstrDefs &InstrDefs::get() {
     static InstrDefs g;
     if (g.d.is_null()) g.d = json::parse(std::string((const char *)instructions_json, instructions_json_len));
@@ -59,7 +57,6 @@ static ImU32 catColor(const std::string &c) {
     return IM_COL32(111, 199, 192, 255);
 }
 
-// icono de cada condicion o accion (se elige por el tipo y, si no, por la categoria), dibujado con lineas
 enum class IG { Key, Mouse, Pad, Note, Camera, Clock, Eye, Move, Rotate, Scale, Var, List, File, Code, Func, Loop, Flag,
                 Always, Plus, Trash, Heart, Spark, Text, Film, Scene, Hit, Grid, Jump, Fall, Button, Dice, Mail, Pause,
                 Wait, Curve, Shake, Save, Color, Speed, Tag };
@@ -234,7 +231,7 @@ std::vector<Seg> sentence(Project &proj, const std::string &kind, const json &ro
         if (!(*df)["params"].empty()) { tpl += ": "; bool first = true; for (auto &p : (*df)["params"]) { tpl += (first ? "{" : ", {") + jstr(p, "k") + "}"; first = false; } }
     }
     if (type == "callFunction" && jstr(params, "result").empty()) tpl = "Llamar a {name}({args})";
-    tpl = ui::tr(tpl);                                   // la frase entera en el idioma del editor (con sus {huecos})
+    tpl = ui::tr(tpl);
     size_t i = 0;
     std::string acc;
     while (i < tpl.size()) {
@@ -286,9 +283,6 @@ json newInstruction(Project &proj, const std::string &kind, const std::string &t
     return row;
 }
 
-/* ---------------- comprobacion de expresiones (la misma sintaxis que el runtime) ---------------- */
-// $var, $array[i] o el nombre sin $ (variables), Objeto.Propiedad, Fn.funcion(...), cursor.X(), textos entre
-// comillas, funciones de EXPR_FN y operadores de JS. Solo se avisa de lo que seguro es un error.
 std::string checkExpression(Project &proj, const std::string &expr0) {
     std::string e = expr0;
     size_t a = e.find_first_not_of(" \t"), b = e.find_last_not_of(" \t");
@@ -355,7 +349,7 @@ std::string checkExpression(Project &proj, const std::string &expr0) {
             }
             for (auto &o : proj.doc["objects"])
                 if (jstr(o, "name") == id) return "Usa " + id + ".X (o Y, Ancho...) para leer una propiedad de " + id + ".";
-            continue;   // funcion matematica o variable sin $
+            continue;
         }
         if (c == '(' || c == '[') stack.push_back((char)c);
         else if (c == ')' || c == ']') {
@@ -369,7 +363,6 @@ std::string checkExpression(Project &proj, const std::string &expr0) {
     return "";
 }
 
-/* ---------------- texto enriquecido con ajuste de linea ---------------- */
 static float richLayout(ImDrawList *dl, ImVec2 pos, float wrapW, const std::vector<Seg> &segs, bool dim) {
     ImFont *f = ImGui::GetFont();
     float fs = ImGui::GetFontSize(), lh = ImGui::GetTextLineHeight(), x = 0, y = 0;
@@ -390,7 +383,7 @@ static float richLayout(ImDrawList *dl, ImVec2 pos, float wrapW, const std::vect
             if (dl) {
                 ImU32 c = dim ? (s.col & 0x00FFFFFF) | 0x70000000 : s.col;
                 dl->AddText(f, fs, ImVec2(pos.x + x, pos.y + y), c, w.c_str());
-                if (s.col != kTxt && !dim) dl->AddText(f, fs, ImVec2(pos.x + x + 0.6f, pos.y + y), c, w.c_str());   // valores en negrita
+                if (s.col != kTxt && !dim) dl->AddText(f, fs, ImVec2(pos.x + x + 0.6f, pos.y + y), c, w.c_str());
             }
             x += ww; i = j;
         }
@@ -398,7 +391,6 @@ static float richLayout(ImDrawList *dl, ImVec2 pos, float wrapW, const std::vect
     return y + lh;
 }
 
-/* ---------------- operaciones ---------------- */
 json &EventsEditor::events(Project &proj) { return sceneEvents(proj, sceneId); }
 
 std::string EventsEditor::title(Project &proj) {
@@ -453,7 +445,7 @@ void EventsEditor::addGroup(Project &proj) {
 void EventsEditor::deleteEvent(Project &proj, int i) {
     json &evs = events(proj);
     if (i < 0 || i >= (int)evs.size()) return;
-    if (jstr(evs[i], "kind") == "folder") {             // los eventos del grupo quedan fuera del grupo
+    if (jstr(evs[i], "kind") == "folder") {
         std::string id = jstr(evs[i], "id");
         for (auto &e : evs) if (jstr(e, "folder") == id) e.erase("folder");
         evs.erase(evs.begin() + i);
@@ -492,7 +484,6 @@ json *EventsEditor::instrAt(json &ev, const std::string &path, json **list, int 
     return &(*l)[i];
 }
 
-/* ---------------- dialogo de instruccion ---------------- */
 void EventsEditor::openDialog(Project &proj, const std::string &kind, int ev, const std::string &path, bool edit) {
     dlg = Dialog{};
     dlg.open = true; dlg.justOpened = true; dlg.kind = kind; dlg.ev = ev; dlg.path = path; dlg.edit = edit; dlg.cat = InstrDefs::get().d["gdCats"][1];
@@ -557,7 +548,7 @@ void EventsEditor::dialogList(Project &proj) {
     json *obj = findById(proj.doc["objects"], dlg.objId);
     if (dlg.tab == 0) {
         for (auto &o : proj.doc["objects"]) {
-            if (!objectInScene(o, sceneId)) continue;   // solo los objetos de la escena de esta hoja y los globales
+            if (!objectInScene(o, sceneId)) continue;
             std::string id = jstr(o, "id");
             ImGui::PushID(id.c_str());
             ImVec2 p = ImGui::GetCursorScreenPos();
@@ -580,7 +571,7 @@ void EventsEditor::dialogList(Project &proj) {
     ImGui::EndChild();
     ImGui::SameLine();
     ImGui::BeginChild("##right", ImVec2(0, h), ImGuiChildFlags_Borders);
-    std::vector<std::pair<std::string, std::string>> items;    // categoria, clave
+    std::vector<std::pair<std::string, std::string>> items;
     std::vector<std::string> objBh = obj ? objBehaviorTypes(*obj) : std::vector<std::string>();
     std::string objType = obj ? jstr(*obj, "type", "sprite") : "sprite";
     std::map<std::string, const json *> byKey;
@@ -671,7 +662,6 @@ void EventsEditor::dialogForm(Project &proj) {
     if (!df) { ImGui::TextColored(ImVec4(1, .6f, .6f, 1), "Instrucción desconocida"); return; }
     ImGui::TextDisabled("%s", isObjDef(*df) ? jstr(*df, "cat", "Objetos").c_str() : D.gdCat(*df).c_str());
     ImGui::PushFont(ui::boldFont(), 18.0f); ImGui::TextUnformatted(jstr(*df, "label").c_str()); ImGui::PopFont();
-    // frase en vivo
     ImVec2 p = ImGui::GetCursorScreenPos();
     float w = ImGui::GetContentRegionAvail().x;
     std::vector<Seg> segs;
@@ -739,7 +729,6 @@ void EventsEditor::drawDialog(Project &proj) {
     ImGui::EndPopup();
 }
 
-/* ---------------- hoja ---------------- */
 bool EventsEditor::matchesSearch(Project &proj, const json &ev) {
     std::string q = search;
     if (q.empty()) return true;
@@ -760,7 +749,7 @@ struct InsPayload { int ev; char path[48]; char kind[8]; };
 static void insertRange(json &arr, int at, const std::vector<json> &items) {
     for (size_t k = 0; k < items.size(); k++) arr.insert(arr.begin() + at + (int)k, items[k]);
 }
-static std::vector<std::function<void()>> g_post;            // cambios de estructura al final del fotograma
+static std::vector<std::function<void()>> g_post;
 
 bool EventsEditor::drawInstr(Project &proj, json &ev, int evIdx, const std::string &kind, const std::string &path, json &row, float width) {
     ImGui::PushID(path.c_str());
@@ -860,7 +849,6 @@ bool EventsEditor::drawInstr(Project &proj, json &ev, int evIdx, const std::stri
         ImGui::SetCursorScreenPos(after);
         ImGui::Dummy(ImVec2(0, 0));
     }
-    // bloque O / Y / No: subcondiciones con sangria
     if (df && jbool(*df, "group", false)) {
         if (!row.contains("sub") || !row["sub"].is_array()) row["sub"] = json::array();
         ImVec2 sp = ImGui::GetCursorScreenPos();
@@ -893,7 +881,7 @@ void EventsEditor::drawInstrColumn(Project &proj, json &ev, int evIdx, const std
                 if (src.ev >= (int)evs.size() || dev >= (int)evs.size()) return;
                 json *sl = nullptr; int si = 0;
                 json *sr = instrAt(evs[src.ev], src.path, &sl, &si);
-                if (!sr || droot.find(std::string(src.path)) == 0) return;      // no dentro de si misma
+                if (!sr || droot.find(std::string(src.path)) == 0) return;
                 json moving = *sr;
                 sl->erase(sl->begin() + si);
                 if (json *dlst = instrList(evs[dev], droot, true)) dlst->push_back(moving);
@@ -936,7 +924,6 @@ void EventsEditor::eventContext(Project &proj, json &evs, int i) {
     if (ImGui::MenuItem("Eliminar", "Supr")) g_post.push_back([this, &proj, i]() { deleteEvent(proj, i); });
 }
 
-// trabajar juntos: el evento que cada persona tiene seleccionado (borde de su color) y su cursor; y lo propio para ellos
 void EventsEditor::drawPresence(json &evs, const std::map<std::string, ImRect> &rects) {
     if (collab::role() == collab::Role::None) return;
     ImDrawList *dl = ImGui::GetWindowDrawList();
@@ -963,7 +950,6 @@ void EventsEditor::drawPresence(json &evs, const std::map<std::string, ImRect> &
         dl->AddRectFilled(lp, ImVec2(lp.x + ts.x + 10, lp.y + ts.y + 4), p.color, 4);
         dl->AddText(ImVec2(lp.x + 5, lp.y + 2), IM_COL32(20, 20, 26, 255), p.name.c_str());
     }
-    // lo propio: el evento bajo el raton (y donde dentro de el) y el seleccionado
     ImVec2 m = ImGui::GetIO().MousePos;
     std::string at;
     float fx = 0, fy = 0;
@@ -972,7 +958,7 @@ void EventsEditor::drawPresence(json &evs, const std::map<std::string, ImRect> &
             if (kv.second.Contains(m)) { at = kv.first; fx = (m.x - kv.second.Min.x) / std::max(1.0f, kv.second.GetWidth()); fy = m.y - kv.second.Min.y; break; }
     std::vector<std::string> mine;
     if (sel >= 0 && sel < (int)evs.size()) mine.push_back(jstr(evs[sel], "id"));
-    if (!at.empty() || ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows))   // solo el editor que se esta usando
+    if (!at.empty() || ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows))
         collab::setPresence(doc, fx, fy, !at.empty(), mine, at.empty() ? json() : json{{"at", at}});
 }
 
@@ -1046,7 +1032,6 @@ void EventsEditor::drawEvent(Project &proj, json &evs, int i) {
         ImRect r(p0, ImVec2(p0.x + W, p0.y + h + 12));
         if (ImGui::IsMouseHoveringRect(r.Min, r.Max) && ImGui::IsMouseClicked(1)) { sel = i; ImGui::OpenPopup("##evctx"); }
     } else {
-        // evento: canal 0 = fondo, canal 1 = contenido
         dl->ChannelsSplit(2);
         dl->ChannelsSetCurrent(1);
         const float gutter = 14;
@@ -1123,7 +1108,6 @@ void EventsEditor::drawEvent(Project &proj, json &evs, int i) {
         dl->AddRect(p0, p1, sel == i ? ui::kAccent : IM_COL32(58, 58, 71, 255), 6, 0, sel == i ? 2.0f : 1.0f);
         if (!enabled) dl->AddRectFilled(p0, p1, IM_COL32(20, 20, 26, 120), 6);
         dl->ChannelsMerge();
-        // asa para arrastrar el evento (y su bloque de subeventos)
         ImGui::SetCursorScreenPos(p0);
         ImGui::InvisibleButton("##grip", ImVec2(gutter, H));
         if (ImGui::IsItemClicked(0)) sel = i;
@@ -1138,7 +1122,6 @@ void EventsEditor::drawEvent(Project &proj, json &evs, int i) {
         ImGui::SetCursorScreenPos(ImVec2(p0.x - indent, p1.y + 6));
         ImGui::Dummy(ImVec2(availW, 0));
     }
-    // soltar un evento antes o despues de este
     {
         ImVec2 pmin = p0, pmax(p0.x + W, ImGui::GetCursorScreenPos().y - 4);
         if (ImGui::BeginDragDropTargetCustom(ImRect(pmin, pmax), ImGui::GetID("##evdrop"))) {
@@ -1262,8 +1245,6 @@ void EventsEditor::draw(Project &proj) {
     }
     std::map<std::string, bool> collapsed;
     for (auto &e : evs) if (jstr(e, "kind") == "folder") collapsed[jstr(e, "id")] = jbool(e, "collapsed", false);
-    // donde quedo cada evento en pantalla: los cursores de los demas van anclados al evento (no a la pantalla, que es
-    // distinta en cada equipo), en la misma fraccion del ancho y a la misma altura dentro de el
     std::map<std::string, ImRect> rects;
     float sheetX = ImGui::GetCursorScreenPos().x, sheetW = ImGui::GetContentRegionAvail().x;
     for (int i = 0; i < (int)evs.size(); i++) {

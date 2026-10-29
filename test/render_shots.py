@@ -13,11 +13,9 @@ RAIZ = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 FRAMES = 90
 
 C = lambda t, **p: dict(type=t, enabled=True, invert=False, params=p)
-# Math.random con semilla (mulberry32), lo primero de cada escena: particulas y ruido salen igual en cada pasada
 SEMILLA = ("if (!Math.__s2dSeed) { var s = 12345; Math.random = function () { s |= 0; s = s + 0x6D2B79F5 | 0; "
            "var t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; "
            "return ((t ^ t >>> 14) >>> 0) / 4294967296; }; Math.__s2dSeed = 1; }")
-
 
 def con_semilla(doc):
     for sc in doc['scenes']:
@@ -25,13 +23,11 @@ def con_semilla(doc):
                                                    actions=[C('jsCode', code=SEMILLA)]))
     return doc
 
-
 def escena_primero(doc, i):
     d = copy.deepcopy(doc)
     d['scenes'].insert(0, d['scenes'].pop(i))
     d.setdefault('settings', {})['autofullscreen'] = False
     return d
-
 
 def variantes_efectos():
     base = json.load(open(os.path.join(RAIZ, 'test', 'proyecto_prueba.source2d.json')))
@@ -51,7 +47,6 @@ def variantes_efectos():
         d = copy.deepcopy(base)
         d['scenes'][0]['effects'] = fx
         out['fx_' + k] = d
-    # objetos: filtro propio, tinte, contorno, giro y transparencia, texto con contorno, mapa de tiles con filtro
     d = copy.deepcopy(base)
     sc = d['scenes'][0]
     sc['effects'] = []
@@ -65,7 +60,6 @@ def variantes_efectos():
                                 actions=[C('jsCode', code="$.all('Enemigo').forEach(function (i, k) { i.tint = [255, 90, 90]; "
                                                           "i.angle = 30 * (k + 1); i.opacity = 70; i.scaleX = 2; i.scaleY = 1.5; });")]))
     out['objetos'] = d
-    # shader de escena en JavaScript con el contexto 2D: poligonos, arcos, degradado radial, texto y rectangulos
     d = copy.deepcopy(base)
     d['scenes'][0]['effects'] = []
     d['scenes'][0]['shaderCode'] = (
@@ -82,7 +76,6 @@ def variantes_efectos():
         "c.restore();")
     out['js_ctx'] = d
     return out
-
 
 def main():
     if len(sys.argv) < 3:
@@ -110,7 +103,6 @@ def main():
         estado = 'ok' if os.path.exists(png) else 'SIN CAPTURA'
         err = [l for l in r.stdout.decode('utf-8', 'replace').splitlines() if 'rror' in l or 'Source 2D' in l][:3]
         print('%-22s %s %s' % (nombre, estado, ' | '.join(err)))
-
 
 if __name__ == '__main__':
     main()

@@ -4,19 +4,15 @@ variable v), eventos propios de cada escena y eventos comunes. Imprime "S2DTEST 
 Uso: make_scenes_project.py <salida.json>"""
 import json, sys
 
-
 def C(t, inv=False, **p):
     return dict(type=t, enabled=True, invert=inv, params=p)
-
 
 def txt(oid, scene, v):
     return dict(id=oid, name='Txt_Hola', type='text', scene=scene, hud=True, text=dict(content='Hola', size=20, color='#ffffff', align='left'),
                 behaviors={}, vars=[dict(name='v', value=v)], animations=[])
 
-
 def inst(oid):
     return dict(id='i_' + oid, objectId=oid, x=10, y=10, angle=0, scaleX=1, scaleY=1, opacity=100, frame=0)
-
 
 A, B = 'sc_a', 'sc_b'
 report = r'''var g = $.state.globals, got = { a: g.a, b: g.b, onlyA: g.onlyA, onlyB: g.onlyB, comun: g.comun > 4, fnB: g.fnB };

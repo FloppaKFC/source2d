@@ -1,12 +1,5 @@
-/* Source 2D engine - ejecutable nativo de Linux.
- *
- * Estructura del archivo exportado:
- *   [ELF de este programa][payload][uint64 LE len][magic "S2DPAYLD"]
- * El payload es JavaScript (runtime + proyecto + arranque), opcionalmente
- * comprimido con LZSS en formato "PFZ1" (el mismo que usa el editor).
- */
 #ifndef _WIN32
-#define _DEFAULT_SOURCE        /* realpath */
+#define _DEFAULT_SOURCE
 #endif
 #include <ctype.h>
 #include <limits.h>
@@ -22,7 +15,7 @@
 #include "gfx_js.h"
 #ifdef PLAYER
 #include "runtime_js.h"
-#include "licencias_jugador.h"   /* --licencias: las de raylib, GLFW, QuickJS y DejaVu, que van dentro de cada juego */
+#include "licencias_jugador.h"
 #endif
 
 #define TRAILER_MAGIC "S2DPAYLD"
@@ -36,8 +29,7 @@ static uint32_t t_start;
 static int show_fps = 0;
 static int fixed_step = 0;
 static int debug_mode = 0;
-static int renderer_arg = 0;  /* --vulkan 1, --opengl 2; si no, lo que diga el proyecto ("renderer" en los ajustes) */
-/* "renderer": "vulkan" en el JSON del proyecto (sin analizarlo entero: aun no hay QuickJS) */
+static int renderer_arg = 0;
 static int project_wants_vulkan(const char *p, size_t n) {
     static const char key[] = "\"renderer\"";
     for (size_t i = 0; p && i + sizeof key < n; i++) {
@@ -47,14 +39,13 @@ static int project_wants_vulkan(const char *p, size_t n) {
         return j + 8 <= n && !memcmp(p + j, "\"vulkan\"", 8);
     }
     return 0;
-}   /* --debug: depurador del juego (F3), lo usa la vista previa del editor */
-static int profile = 0;      /* --profile: el runtime imprime cuanto tarda cada parte del fotograma */   /* --fixed-step: cada fotograma avanza 1/60 s exactos (pruebas repetibles) */
+}
+static int profile = 0;
 static int uncapped = 0;
 static long max_frames = -1;
 static uint32_t fps_t0 = 0;
 static int fps_frames = 0;
 
-/* ---------------- LZSS "PFZ1" (mismo formato que el editor) ---------------- */
 static unsigned char *lzss_unpack(const unsigned char *in, size_t inlen, size_t *outlen) {
     if (inlen < 12 || memcmp(in, "PFZ1", 4) != 0) return NULL;
     size_t rawlen = in[4] | (in[5] << 8) | (in[6] << 16) | ((size_t)in[7] << 24);
@@ -86,8 +77,6 @@ static unsigned char *lzss_unpack(const unsigned char *in, size_t inlen, size_t 
     return out;
 }
 
-/* ---------------- lectura del payload desde el propio ejecutable ---------------- */
-/* ruta de este ejecutable: /proc/self/exe en Linux, GetModuleFileName en Windows */
 #ifdef _WIN32
 #include <windows.h>
 #include <io.h>
@@ -101,7 +90,7 @@ static const char *self_path(void) {
 #include <unistd.h>
 static const char *self_path(void) { return "/proc/self/exe"; }
 #endif
-#include "s2d_fallback.h"   /* despues de windows.h */
+#include "s2d_fallback.h"
 
 static unsigned char *read_payload(size_t *outlen) {
     const char *sp = self_path();
@@ -124,7 +113,6 @@ static unsigned char *read_payload(size_t *outlen) {
 }
 
 #ifdef PLAYER
-/* Jugador: abre un .source2d.json directamente (runtime embebido + proyecto + arranque) */
 static char *read_text_file(const char *path, size_t *outlen) {
     FILE *f = fopen(path, "rb");
     if (!f) return NULL;
@@ -138,9 +126,6 @@ static char *read_text_file(const char *path, size_t *outlen) {
     *outlen = (size_t)sz;
     return buf;
 }
-/* Proyecto exportado con sus datos en binario ([json][0][datos], src/editor/exporter.cpp): cada marca
-   "\u0001S2DB:<inicio>:<largo>:<prefijo>" vuelve a ser prefijo + base64 de esos bytes, como en el proyecto original.
-   Devuelve el JSON nuevo (malloc) o el mismo si no hay datos aparte. */
 static char *expand_blobs(char *json, size_t *jl) {
     char *z = memchr(json, 0, *jl);
     if (!z) return json;
@@ -177,7 +162,6 @@ static char *expand_blobs(char *json, size_t *jl) {
     *jl = o;
     return out;
 }
-/* titulo de la ventana: el nombre del proyecto (o del archivo) */
 static void project_title(const char *json, const char *path, char *title, size_t n) {
     const char *nm = strstr(json, "\"name\":\"");
     size_t k = 0;
@@ -193,13 +177,12 @@ static void project_title(const char *json, const char *path, char *title, size_
 }
 #endif
 
-/* ---------------- helpers JS <-> C ---------------- */
 static void report_exception(void) {
     JSValue e = JS_GetException(ctx);
     const char *s = JS_ToCString(ctx, e);
     fprintf(stderr, "Source 2D engine: %s\n", s ? s : "error desconocido");
     if (s) JS_FreeCString(ctx, s);
-    JSValue st = JS_IsObject(e) ? JS_GetPropertyStr(ctx, e, "stack") : JS_UNDEFINED;   /* donde paso */
+    JSValue st = JS_IsObject(e) ? JS_GetPropertyStr(ctx, e, "stack") : JS_UNDEFINED;
     const char *ss = JS_IsString(st) ? JS_ToCString(ctx, st) : NULL;
     if (ss) { fprintf(stderr, "%s\n", ss); JS_FreeCString(ctx, ss); }
     JS_FreeValue(ctx, st);
@@ -236,7 +219,6 @@ static uint8_t *argbuf(JSValueConst v, size_t *len) {
     return p;
 }
 
-/* ---------------- funciones nativas expuestas como __native ---------------- */
 static JSValue n_print(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc;
     const char *s = JS_ToCString(c, argv[0]);
@@ -286,7 +268,6 @@ static JSValue n_tone(JSContext *c, JSValueConst t, int argc, JSValueConst *argv
     (void)c;
     return JS_UNDEFINED;
 }
-/* base64 -> bytes (las pistas llegan como texto desde el proyecto) */
 static unsigned char *b64_decode(const char *in, size_t *outlen) {
     size_t n = strlen(in), o = 0;
     unsigned char *out = malloc(n / 4 * 3 + 4);
@@ -300,7 +281,7 @@ static unsigned char *b64_decode(const char *in, size_t *outlen) {
         else if (c >= '0' && c <= '9') v = c - '0' + 52;
         else if (c == '+') v = 62;
         else if (c == '/') v = 63;
-        else continue;                 /* saltos, espacios y '=' */
+        else continue;
         acc = (acc << 6) | (unsigned)v;
         bits += 6;
         if (bits >= 0) { out[o++] = (unsigned char)((acc >> bits) & 0xFF); bits -= 8; }
@@ -308,7 +289,6 @@ static unsigned char *b64_decode(const char *in, size_t *outlen) {
     *outlen = o;
     return out;
 }
-/* sfx(f0, f1, dur, onda, vol): efecto de sonido con barrido de frecuencia */
 static JSValue n_sfx(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc; (void)c;
     plat_sfx(argd(argv[0]), argd(argv[1]), argd(argv[2]), argi(argv[3]), argd(argv[4]));
@@ -329,9 +309,6 @@ static JSValue n_musicPlaying(JSContext *c, JSValueConst t, int argc, JSValueCon
     return JS_NewBool(c, plat_music_playing());
 }
 
-/* localStorage del jugador: un archivo JSON en la carpeta de datos del usuario
-   (Linux: $XDG_DATA_HOME o ~/.local/share/source2d/datos.json; Windows: %APPDATA%\Source2D\datos.json).
-   S2D_STORE cambia la ruta (las pruebas usan un archivo temporal). */
 #ifdef _WIN32
 #include <direct.h>
 #define s2d_mkdir(p) _mkdir(p)
@@ -339,8 +316,6 @@ static JSValue n_musicPlaying(JSContext *c, JSValueConst t, int argc, JSValueCon
 #include <sys/stat.h>
 #define s2d_mkdir(p) mkdir(p, 0755)
 #endif
-/* --tienda <id> (juegos de Source Play, de otras personas): su carpeta de datos y sus partidas van aparte
-   (<datos>/tienda/<id>), y solo puede escribir y borrar ahi; leer, esa carpeta y Documentos */
 static int sandbox_tienda = 0;
 static char tienda_id[64];
 static const char *store_path(int create_dir) {
@@ -362,7 +337,7 @@ static const char *store_path(int create_dir) {
     snprintf(dir, sizeof dir, "%s/source2d", share);
 #endif
     if (create_dir) s2d_mkdir(dir);
-    if (sandbox_tienda) {   /* partidas de un juego de Source Play: aparte de las de los demas */
+    if (sandbox_tienda) {
         size_t l = strlen(dir);
 #ifdef _WIN32
         snprintf(dir + l, sizeof dir - l, "\\tienda");
@@ -420,14 +395,8 @@ static JSValue n_storeWrite(JSContext *c, JSValueConst t, int argc, JSValueConst
     return JS_NewBool(c, ok);
 }
 
-/* ---------------- archivos del usuario (niveles, imagenes, canciones...) ----------------
-   Un juego (y su JavaScript) solo puede escribir, borrar o crear carpetas en su carpeta de datos y en Documentos. Leer
-   y listar puede en cualquier sitio (otra carpeta, un pendrive, el disco D:) menos en carpetas o archivos ocultos
-   (.ssh, .bashrc, .config, .mozilla...) y AppData, donde estan las claves y los perfiles del navegador. Asi un proyecto
-   ajeno no puede leer secretos ni borrar o cambiar archivos fuera de sus carpetas. */
 static void user_dirs(char home[2048], char data[2100], char docs[2100]);
 
-/* ruta absoluta, con "/", sin "." ni ".." (y en Linux con los enlaces resueltos), para comparar */
 static void norm_path(const char *p, char *out, size_t n) {
     char abs[8192], tmp[8192];
 #ifdef _WIN32
@@ -438,7 +407,6 @@ static void norm_path(const char *p, char *out, size_t n) {
     if (isabs) snprintf(abs, sizeof abs, "%s", p);
     else { char cwd[4096] = "."; if (!getcwd(cwd, sizeof cwd)) strcpy(cwd, "."); snprintf(abs, sizeof abs, "%s/%s", cwd, p); }
     for (char *q = abs; *q; q++) if (*q == '\\') *q = '/';
-    /* componentes: "." fuera, ".." quita el anterior */
     char *parts[1024]; int np = 0;
     char *save = abs, *prefix = "";
 #ifdef _WIN32
@@ -457,7 +425,6 @@ static void norm_path(const char *p, char *out, size_t n) {
     for (char *q = tmp; *q; q++) *q = (char)tolower((unsigned char)*q);
     snprintf(out, n, "%s", tmp);
 #else
-    /* la parte que ya existe, con los enlaces simbolicos resueltos (un enlace en Documentos no lleva a ~/.ssh) */
     char head[8192], res[PATH_MAX];
     snprintf(head, sizeof head, "%s", tmp);
     size_t hl = strlen(head);
@@ -490,7 +457,7 @@ static int file_allowed(const char *p, int write) {
     if (!write) {
         int ok = 1;
         for (const char *q = np; *q && ok; q++)
-            if (*q == '/' && (q[1] == '.' || !strncmp(q + 1, "appdata", 7))) ok = 0;   /* ocultas y AppData */
+            if (*q == '/' && (q[1] == '.' || !strncmp(q + 1, "appdata", 7))) ok = 0;
         if (ok) return 1;
     }
     static char last[512];
@@ -516,7 +483,6 @@ static unsigned char *read_whole(const char *path, size_t *len) {
     *len = got;
     return buf;
 }
-/* fileRead(ruta) -> texto o null */
 static JSValue n_fileRead(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc;
     const char *p = JS_ToCString(c, argv[0]);
@@ -528,7 +494,6 @@ static JSValue n_fileRead(JSContext *c, JSValueConst t, int argc, JSValueConst *
     free(buf);
     return r;
 }
-/* fileReadB64(ruta) -> el archivo en base64 o null (canciones e imagenes) */
 static JSValue n_fileReadB64(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc;
     const char *p = JS_ToCString(c, argv[0]);
@@ -549,7 +514,6 @@ static JSValue n_fileReadB64(JSContext *c, JSValueConst t, int argc, JSValueCons
     free(out);
     return r;
 }
-/* makeDir(ruta): crea la carpeta y las que falten por encima */
 static void make_dirs(const char *path) {
     char tmp[4096];
     snprintf(tmp, sizeof tmp, "%s", path);
@@ -571,7 +535,6 @@ static JSValue n_fileDelete(JSContext *c, JSValueConst t, int argc, JSValueConst
     if (p) JS_FreeCString(c, p);
     return JS_NewBool(c, ok);
 }
-/* fileWrite(ruta, texto) -> true si se escribio (crea las carpetas que falten) */
 static JSValue n_fileWrite(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc;
     const char *p = JS_ToCString(c, argv[0]);
@@ -591,7 +554,6 @@ static JSValue n_fileWrite(JSContext *c, JSValueConst t, int argc, JSValueConst 
     if (s) JS_FreeCString(c, s);
     return JS_NewBool(c, ok);
 }
-/* dirList(ruta) -> nombres (las carpetas acaban en "/"), o null si no se puede abrir */
 #ifdef _WIN32
 static JSValue n_dirList(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc;
@@ -635,7 +597,6 @@ static JSValue n_dirList(JSContext *c, JSValueConst t, int argc, JSValueConst *a
     return arr;
 }
 #endif
-/* paths() -> [carpeta personal, carpeta de datos del jugador, Documentos] */
 static void user_dirs(char home[2048], char data[2100], char docs[2100]) {
 #ifdef _WIN32
     const char *h = getenv("USERPROFILE"), *ad = getenv("APPDATA");
@@ -661,7 +622,6 @@ static JSValue n_paths(JSContext *c, JSValueConst t, int argc, JSValueConst *arg
     JSValue vals[3] = { JS_NewString(c, home), JS_NewString(c, data), JS_NewString(c, docs) };
     return JS_NewArrayFrom(c, 3, vals);
 }
-/* imageDecode(base64) -> [ancho, alto, ArrayBuffer RGBA] o null */
 static JSValue n_imageDecode(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc;
     const char *b64 = JS_ToCString(c, argv[0]);
@@ -684,7 +644,6 @@ static JSValue n_shaderAmount(JSContext *c, JSValueConst t, int argc, JSValueCon
     return JS_UNDEFINED;
 }
 
-/* ---------------- dibujo en la GPU (ver plat_gpu_* en platform_raylib.c) ---------------- */
 static JSValue n_gpuTarget(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc;
     return JS_NewInt32(c, plat_gpu_target(argi(argv[0]), argi(argv[1])));
@@ -694,7 +653,6 @@ static JSValue n_gpuTargetFree(JSContext *c, JSValueConst t, int argc, JSValueCo
     plat_gpu_target_free(argi(argv[0]));
     return JS_UNDEFINED;
 }
-/* gpuTex(id, buf, w, h) -> id */
 static JSValue n_gpuTex(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc;
     size_t l = 0; uint8_t *buf = argbuf(argv[1], &l);
@@ -707,7 +665,6 @@ static JSValue n_gpuTexFree(JSContext *c, JSValueConst t, int argc, JSValueConst
     plat_gpu_tex_free(argi(argv[0]));
     return JS_UNDEFINED;
 }
-/* gpuDraw(target, srcEsLienzo, src, sx, sy, sw, sh, dx, dy, dw, dh, a, b, c, d, e, f, alpha, mode) */
 static JSValue n_gpuDraw(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc; (void)c;
     double m[6] = { argd(argv[11]), argd(argv[12]), argd(argv[13]), argd(argv[14]), argd(argv[15]), argd(argv[16]) };
@@ -715,9 +672,6 @@ static JSValue n_gpuDraw(JSContext *c, JSValueConst t, int argc, JSValueConst *a
                   argd(argv[7]), argd(argv[8]), argd(argv[9]), argd(argv[10]), m, argd(argv[17]), argi(argv[18]));
     return JS_UNDEFINED;
 }
-/* gpuBatch(Float64Array.buffer, n): ordenes seguidas, para no cruzar de JS a C en cada dibujo.
-   1 = dibujo (target, esLienzo, src, sx, sy, sw, sh, dx, dy, dw, dh, a, b, c, d, e, f, alpha, mode): 20 numeros
-   2 = rectangulo (target, x0, y0, x1, y1, r, g, b, a, mode): 11 numeros */
 static JSValue n_gpuBatch(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc; (void)c;
     size_t l = 0;
@@ -738,7 +692,6 @@ static JSValue n_gpuBatch(JSContext *c, JSValueConst t, int argc, JSValueConst *
     }
     return JS_UNDEFINED;
 }
-/* gpuFill(target, [x0, y0, x1, y1...], r, g, b, a, mode) */
 static JSValue n_gpuFill(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc; (void)c;
     int np = 0;
@@ -747,13 +700,11 @@ static JSValue n_gpuFill(JSContext *c, JSValueConst t, int argc, JSValueConst *a
     free(pts);
     return JS_UNDEFINED;
 }
-/* gpuRect(target, x0, y0, x1, y1, r, g, b, a, mode) */
 static JSValue n_gpuRect(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc; (void)c;
     plat_gpu_rect(argi(argv[0]), argd(argv[1]), argd(argv[2]), argd(argv[3]), argd(argv[4]), argd(argv[5]), argd(argv[6]), argd(argv[7]), argd(argv[8]), argi(argv[9]));
     return JS_UNDEFINED;
 }
-/* gpuShader(target, glsl, tiempo, camX, camY, zoom) -> true si se aplico */
 static JSValue n_gpuShader(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc;
     const char *code = JS_ToCString(c, argv[1]);
@@ -762,21 +713,18 @@ static JSValue n_gpuShader(JSContext *c, JSValueConst t, int argc, JSValueConst 
     if (code) JS_FreeCString(c, code);
     return JS_NewBool(c, ok == 0);
 }
-/* gpuColor(target, tipo, cantidad, x0, y0, x1, y1): filtro de color CSS en esa zona (tipos en platform.h) */
 static JSValue n_gpuColor(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc; (void)c;
     int rc[4] = { argi(argv[3]), argi(argv[4]), argi(argv[5]), argi(argv[6]) };
     plat_gpu_color(argi(argv[0]), argi(argv[1]), argd(argv[2]), rc);
     return JS_UNDEFINED;
 }
-/* gpuBlur(target, radio, x0, y0, x1, y1) */
 static JSValue n_gpuBlur(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc; (void)c;
     int rc[4] = { argi(argv[2]), argi(argv[3]), argi(argv[4]), argi(argv[5]) };
     plat_gpu_blur(argi(argv[0]), argd(argv[1]), rc);
     return JS_UNDEFINED;
 }
-/* gpuFillGrad(target, [x0, y0, ...], [cx, cy, r0, r1, paradas, (pos, r, g, b, a)...], alfa, modo) */
 static JSValue n_gpuFillGrad(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc; (void)c;
     int np = 0, ng = 0;
@@ -785,7 +733,6 @@ static JSValue n_gpuFillGrad(JSContext *c, JSValueConst t, int argc, JSValueCons
     free(pts); free(grad);
     return JS_UNDEFINED;
 }
-/* gpuRead(target, x, y, w, h) -> ArrayBuffer RGBA */
 static JSValue n_gpuRead(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc;
     int w = argi(argv[3]), h = argi(argv[4]);
@@ -797,12 +744,11 @@ static JSValue n_gpuRead(JSContext *c, JSValueConst t, int argc, JSValueConst *a
     free(buf);
     return r;
 }
-/* gpuPresent(target) -> [dx, dy, dw, dh] */
 static JSValue n_gpuPresent(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc;
     int id = argi(argv[0]);
     if (first_present && !fullscreen) {
-        plat_fit_window(argi(argv[1]), argi(argv[2]));   /* gpuPresent(lienzo, ancho, alto) */
+        plat_fit_window(argi(argv[1]), argi(argv[2]));
         first_present = 0;
     }
     int dx = 0, dy = 0, dw = 0, dh = 0;
@@ -811,7 +757,6 @@ static JSValue n_gpuPresent(JSContext *c, JSValueConst t, int argc, JSValueConst
     return JS_NewArrayFrom(c, 4, vals);
 }
 
-/* musicLoad(id, base64, ext) */
 static JSValue n_musicLoad(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc;
     const char *id = JS_ToCString(c, argv[0]);
@@ -828,7 +773,6 @@ static JSValue n_musicLoad(JSContext *c, JSValueConst t, int argc, JSValueConst 
     if (ext) JS_FreeCString(c, ext);
     return JS_NewBool(c, ok == 0);
 }
-/* soundLoad(id, base64, ext) */
 static JSValue n_soundLoad(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc;
     const char *id = JS_ToCString(c, argv[0]), *b64 = JS_ToCString(c, argv[1]), *ext = JS_ToCString(c, argv[2]);
@@ -844,7 +788,6 @@ static JSValue n_soundLoad(JSContext *c, JSValueConst t, int argc, JSValueConst 
     return JS_NewBool(c, ok == 0);
 }
 static double argnum(JSContext *c, JSValueConst v, double d) { double x; return JS_IsUndefined(v) || JS_ToFloat64(c, &x, v) ? d : x; }
-/* soundPlay(id, vol, pitch, pan, canal) */
 static JSValue n_soundPlay(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t;
     const char *id = JS_ToCString(c, argv[0]);
@@ -863,7 +806,6 @@ static JSValue n_soundPlaying(JSContext *c, JSValueConst t, int argc, JSValueCon
     if (id) JS_FreeCString(c, id);
     return JS_NewBool(c, r);
 }
-/* channel(op, canal, valor): op 0 parar, 1 pausar, 2 seguir, 3 volumen */
 static JSValue n_channel(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t;
     int op = (int)argnum(c, argv[0], 0), ch = argc > 1 ? (int)argnum(c, argv[1], -1) : -1;
@@ -873,7 +815,6 @@ static JSValue n_channel(JSContext *c, JSValueConst t, int argc, JSValueConst *a
     else if (op == 3) plat_channel_volume(ch, argc > 2 ? argnum(c, argv[2], 1) : 1);
     return JS_UNDEFINED;
 }
-/* pad(op, mando, a, b, c): op 0 eje a, 1 conectado, 2 vibrar (izq a, der b, c segundos) */
 static JSValue n_pad(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t;
     int op = (int)argnum(c, argv[0], 0), pad = argc > 1 ? (int)argnum(c, argv[1], 0) : 0;
@@ -887,7 +828,6 @@ static JSValue n_setPixelPerfect(JSContext *c, JSValueConst t, int argc, JSValue
     plat_set_pixel_perfect(JS_ToBool(c, argv[0]));
     return JS_UNDEFINED;
 }
-/* steam(op, a, b, c): ver steam.c. Se inicia la primera vez que el juego lo usa (la extension Steam). */
 static JSValue n_steam(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t;
     int op = (int)argnum(c, argv[0], 0);
@@ -922,7 +862,6 @@ static JSValue n_steam(JSContext *c, JSValueConst t, int argc, JSValueConst *arg
     if (s2) JS_FreeCString(c, s2);
     return r;
 }
-/* musicPlay(id, loop) */
 static JSValue n_musicPlay(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc;
     const char *id = JS_ToCString(c, argv[0]);
@@ -935,7 +874,6 @@ static JSValue n_musicStop(JSContext *c, JSValueConst t, int argc, JSValueConst 
     return JS_UNDEFINED;
 }
 
-/* fontLoad(base64) -> numero de la fuente para textRender/textWidth, o -1 */
 static JSValue n_fontLoad(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)t; (void)argc;
     const char *b64 = JS_ToCString(c, argv[0]);
@@ -962,7 +900,6 @@ static JSValue n_hrtime(JSContext *c, JSValueConst t, int argc, JSValueConst *ar
     return JS_NewFloat64(c, plat_time_ms());
 }
 
-/* quit(): cierra el juego al terminar este fotograma (accion "Salir del juego") */
 static int quit_requested = 0;
 static JSValue n_quit(JSContext *c, JSValueConst t, int argc, JSValueConst *argv) {
     (void)c; (void)t; (void)argc; (void)argv;
@@ -1031,9 +968,6 @@ static void install_natives(void) {
     JS_FreeValue(ctx, g);
 }
 
-/* tiempo limite del JavaScript: un bucle sin fin en el codigo de un juego (while (true) {} en "Codigo JavaScript")
-   ya no lo congela. Se corta a los 3 s de un fotograma (20 s al cargar el juego); tres fotogramas seguidos asi y el
-   juego se cierra con un mensaje. */
 static double js_deadline = 0;
 static int js_interrupted = 0;
 static int js_interrupt(JSContext *c, void *op) {
@@ -1068,7 +1002,6 @@ static void dispatch(const char *type, const char *key, int rep, int x, int y, i
 }
 
 #ifdef PLAYER
-/* --stdin: el proyecto llega por la entrada estandar (Source Play: el editor lo descifra en memoria y no toca el disco) */
 static char *read_stdin_all(size_t *len) {
 #ifdef _WIN32
     _setmode(_fileno(stdin), _O_BINARY);
@@ -1131,11 +1064,11 @@ int main(int argc, char **argv) {
     }
     size_t plen = 0;
     unsigned char *payload = read_payload(&plen);
-    char *proj = NULL;                      /* el proyecto (JSON): el runtime ya va en este jugador */
+    char *proj = NULL;
     size_t proj_len = 0;
     char title[128] = "Source 2D";
 #ifdef PLAYER
-    if (payload && plen && payload[0] == '{') {      /* juego exportado (normal o ligero) */
+    if (payload && plen && payload[0] == '{') {
         proj = expand_blobs((char *)payload, &plen);
         proj_len = plen; payload = NULL;
         project_title(proj, NULL, title, sizeof title);
@@ -1144,13 +1077,12 @@ int main(int argc, char **argv) {
         proj = read_stdin_all(&proj_len);
         if (proj) project_title(proj, NULL, title, sizeof title);
     }
-    /* exportado a carpeta: el motor solo, con el juego en datos/juego.source2d.json a su lado */
     static char beside[4096];
     if (!payload && !proj && !project_path && self_path()) {
 #ifdef _WIN32
         snprintf(beside, sizeof beside, "%s", self_path());
 #else
-        ssize_t bl = readlink(self_path(), beside, sizeof beside - 1);   /* /proc/self/exe -> la ruta de verdad */
+        ssize_t bl = readlink(self_path(), beside, sizeof beside - 1);
         beside[bl > 0 ? bl : 0] = 0;
 #endif
         char *sl = strrchr(beside, '/'), *bs = strrchr(beside, '\\');
@@ -1161,7 +1093,7 @@ int main(int argc, char **argv) {
             if (t) { fclose(t); project_path = beside; }
         }
     }
-    if (!payload && !proj && project_path) {           /* source2d-player <proyecto.source2d.json> */
+    if (!payload && !proj && project_path) {
         proj = read_text_file(project_path, &proj_len);
         if (proj) project_title(proj, project_path, title, sizeof title);
     }
@@ -1190,7 +1122,6 @@ int main(int argc, char **argv) {
 
     rt = JS_NewRuntime();
 #ifdef S2D_LITE
-    /* jugador ligero: sin Date, Proxy ni performance de QuickJS (gfx.js da su propio performance.now) */
     ctx = JS_NewContextRaw(rt);
     if (ctx && (JS_AddIntrinsicBaseObjects(ctx) || JS_AddIntrinsicEval(ctx) || JS_AddIntrinsicRegExp(ctx) ||
                 JS_AddIntrinsicJSON(ctx) || JS_AddIntrinsicMapSet(ctx) || JS_AddIntrinsicTypedArrays(ctx) ||
@@ -1209,8 +1140,6 @@ int main(int argc, char **argv) {
 
 #ifdef PLAYER
     if (proj) {
-        /* el proyecto se lee como datos (JSON), nunca como codigo: uno danado da un mensaje claro y uno preparado no
-           puede ejecutar nada al abrirse */
         r = JS_Eval(ctx, (const char *)runtime_js, runtime_js_len, "<runtime>", JS_EVAL_TYPE_GLOBAL);
         if (JS_IsException(r)) { report_exception(); return 1; }
         JS_FreeValue(ctx, r);
@@ -1246,7 +1175,7 @@ int main(int argc, char **argv) {
     } else
 #endif
     {
-        r = JS_Eval(ctx, (const char *)payload, plen, "<juego>", JS_EVAL_TYPE_GLOBAL);   /* juegos exportados antes (JS) */
+        r = JS_Eval(ctx, (const char *)payload, plen, "<juego>", JS_EVAL_TYPE_GLOBAL);
         free(payload);
     }
     if (JS_IsException(r)) {
@@ -1284,7 +1213,7 @@ int main(int argc, char **argv) {
             }
         }
         plat_audio_update();
-        steam_frame();                         /* avisos de Steam (solo si el juego lo usa) */
+        steam_frame();
         plat_wait_frame(frame_start, uncapped);
     }
 

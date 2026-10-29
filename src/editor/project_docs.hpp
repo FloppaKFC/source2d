@@ -1,5 +1,3 @@
-// Source 2D - documentos del proyecto: ajustes y variables globales, shaders, extensiones y plugins,
-// musica (importar y escuchar) e importacion de imagenes como sprites o conjuntos de tiles.
 #pragma once
 #include <functional>
 #include <string>
@@ -25,18 +23,16 @@ public:
     void draw(Project &proj);
 };
 
-// musica
 std::string base64Encode(const unsigned char *data, size_t len);
 std::vector<unsigned char> base64Decode(const std::string &s);
-std::string importMusic(Project &proj, const std::string &file, std::string &err);   // devuelve el id
-bool addInitialFile(Project &proj, const std::string &file, std::string &err);        // a project.files
-void musicPreview(Project &proj, const std::string &id);    // '' detiene
-bool musicPreviewing();                                     // suena la musica de un documento
+std::string importMusic(Project &proj, const std::string &file, std::string &err);
+bool addInitialFile(Project &proj, const std::string &file, std::string &err);
+void musicPreview(Project &proj, const std::string &id);
+bool musicPreviewing();
 std::string musicPlaying();
 void musicUpdate();
 void musicShutdown();
 
-// imagenes
 struct ImportImage {
     bool open = false, asTiles = false;
     std::string path, name, error;
@@ -44,7 +40,7 @@ struct ImportImage {
     std::vector<Px> px;
     ui::PixTexture tex;
     bool load(const std::string &file);
-    std::string commit(Project &proj);                       // id del sprite o del conjunto creado
+    std::string commit(Project &proj);
     void draw(Project &proj, const std::function<void(const std::string &, bool)> &done);
 };
 

@@ -1,12 +1,4 @@
 #!/bin/sh
-# Genera la carpeta Release con el motor listo para usar (un solo ejecutable por sistema, sin instaladores):
-#   Release/Linux/Source2D        editor para Linux (cualquier distribucion con glibc 2.28 o mas nueva)
-#   Release/Windows/Source2D.exe  editor para Windows
-# Los dos editores llevan dentro los jugadores de Linux y de Windows, asi que desde cualquiera se exporta para ambos.
-# Windows y Linux se compilan con zig (trae su propio mingw y glibc antiguas). Usa $ZIG, o build/toolchain/zig/zig, o el
-# zig del sistema. Linux va contra glibc 2.28 (Makefile.linux): con el gcc de este sistema pediria su glibc (la de Arch)
-# y no abriria en distribuciones mas viejas (Linux Lite, Ubuntu LTS, Mint...).
-# Uso: tools/release.sh   (desde source2d/)
 set -e
 cd "$(dirname "$0")/.."
 ZIG=${ZIG:-}
@@ -20,7 +12,6 @@ if ! "$ZIG" cc -target x86_64-windows-gnu /tmp/s2d_zigprueba.c -o /tmp/s2d_zigpr
     exit 1
 fi
 rm -f /tmp/s2d_zigprueba.c /tmp/s2d_zigprueba.exe
-# como mucho 4 a la vez: con 12 compilaciones de C++ en paralelo systemd-oomd llego a cerrar la terminal
 J=$(nproc 2>/dev/null || echo 4); [ "$J" -gt 4 ] && J=4
 echo "== cabeceras generadas (gcc del sistema)"
 make -j"$J" build/source2d-player src/gfx_js.h src/runtime_js.h src/licencias_jugador.h build/gen/instructions_json.h build/gen/presets.h build/gen/editor_fonts.h build/gen/licencias_editor.h build/gen/gfx_web_js.h

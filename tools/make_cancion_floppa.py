@@ -12,17 +12,14 @@ for bar in range(16):
     root, chord = prog[bar % 4]
     s0 = bar * 16
     last = bar == 15
-    # piano: acorde a contratiempo (como un "skank" suave); en el final, un acorde largo
     if last:
         for m in [60, 64, 67, 72]: piano.append([s0, m, 16])
     else:
         for st in (0, 6, 10):
             for m in chord: piano.append([s0 + st, m, 3])
-    # bajo (desde el compas 4): raiz y quinta
     if 4 <= bar and not last:
         for st, d in ((0, 0), (6, 7), (8, 0), (12, 12)): bass.append([s0 + st, root + d, 3])
     elif last: bass.append([s0, 36, 16])
-    # bateria: intro solo charles y bombo; luego el ritmo entero; redoble al final del puente
     if not last:
         for st in range(0, 16, 2): drums.append([s0 + st, 2, 1])
         drums.append([s0, 0, 1]); drums.append([s0 + 8, 0, 1])
@@ -34,18 +31,16 @@ for bar in range(16):
     else:
         drums.append([s0, 0, 1]); drums.append([s0, 7, 1])
 
-# melodia (chip): estrofa en los compases 4-7 y 12-14 (la misma, con otro final); notas [paso dentro del compas, nota, largo]
 estrofa = [
-    [(0, 72, 2), (2, 74, 2), (4, 76, 4), (8, 79, 4), (12, 76, 4)],          # Do
-    [(0, 76, 2), (2, 74, 2), (4, 72, 4), (8, 69, 6), (14, 72, 2)],          # La m
-    [(0, 72, 2), (2, 74, 2), (4, 77, 4), (8, 76, 2), (10, 74, 2), (12, 72, 4)],   # Fa
-    [(0, 74, 4), (4, 71, 2), (6, 74, 2), (8, 79, 8)],                       # Sol
+    [(0, 72, 2), (2, 74, 2), (4, 76, 4), (8, 79, 4), (12, 76, 4)],
+    [(0, 76, 2), (2, 74, 2), (4, 72, 4), (8, 69, 6), (14, 72, 2)],
+    [(0, 72, 2), (2, 74, 2), (4, 77, 4), (8, 76, 2), (10, 74, 2), (12, 72, 4)],
+    [(0, 74, 4), (4, 71, 2), (6, 74, 2), (8, 79, 8)],
 ]
 for k, notes in enumerate(estrofa):
     for st, m, l in notes: lead.append([(4 + k) * 16 + st, m, l])
 for k, notes in enumerate(estrofa[:3]):
     for st, m, l in notes: lead.append([(12 + k) * 16 + st, m, l])
-# puente (compases 8-11): cuerdas largas y una respuesta de la melodia una octava arriba
 for k in range(4):
     root, chord = prog[k]
     for m in chord: strings.append([(8 + k) * 16, m + 12 if m < 60 else m, 16])

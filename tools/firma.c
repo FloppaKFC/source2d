@@ -1,12 +1,3 @@
-// Source 2D - firma de anuncios y versiones (solo para quien publica; no va dentro del editor).
-//   firma nueva                  crea la clave de @floppa-1550 (la secreta queda cifrada con tu contrasena)
-//   firma publica                escribe la clave publica (la que lleva el editor) en hexadecimal
-//   firma firmar <archivo>...    deja <archivo>.firma al lado de cada uno (pide la contrasena una vez)
-//   firma verificar <archivo>    comprueba <archivo>.firma con la clave publica
-//   firma hash <archivo>         BLAKE2b de 32 bytes en hexadecimal (el que va en versiones.json)
-// La clave esta en ~/.config/source2d-firma/clave (o en S2D_FIRMA_DIR). La secreta se cifra con XChaCha20-Poly1305 y una
-// clave sacada de la contrasena con Argon2id (64 MB, 3 pasadas): sin la contrasena no sirve aunque copien el archivo.
-// Las firmas son EdDSA de Monocypher (curva 25519 con BLAKE2b), las mismas que comprueba el editor.
 #include "monocypher.h"
 #include <errno.h>
 #include <stdio.h>
@@ -55,7 +46,6 @@ static const char *keyDir(void) {
 }
 static void keyPath(char *out, size_t n) { snprintf(out, n, "%s/clave", keyDir()); }
 
-// contrasena desde la terminal, sin que se vea al escribirla
 static void askPassword(const char *prompt, char *out, size_t n) {
     FILE *tty = fopen("/dev/tty", "r+");
     if (!tty) die("hace falta una terminal para escribir la contrasena");
@@ -74,7 +64,7 @@ static void askPassword(const char *prompt, char *out, size_t n) {
 }
 
 static void deriveKey(const char *pass, const uint8_t salt[16], uint8_t key[32]) {
-    crypto_argon2_config cfg = {CRYPTO_ARGON2_ID, 65536, 3, 1};   // 64 MB
+    crypto_argon2_config cfg = {CRYPTO_ARGON2_ID, 65536, 3, 1};
     void *work = malloc((size_t)cfg.nb_blocks * 1024);
     if (!work) die("no hay memoria para Argon2 (64 MB)");
     crypto_argon2_inputs in = {(const uint8_t *)pass, salt, (uint32_t)strlen(pass), 16};
@@ -155,7 +145,7 @@ static void cmdFirmar(int argc, char **argv) {
     KeyFile k;
     if (!readKeyFile(&k)) die("todavia no tienes clave: usa 'firma nueva'");
     char pass[256];
-    const char *env = getenv("S2D_FIRMA_CONTRASENA");   // solo para las pruebas automaticas, con una clave de prueba
+    const char *env = getenv("S2D_FIRMA_CONTRASENA");
     if (env) snprintf(pass, sizeof pass, "%s", env); else askPassword("Contrasena de la clave de " AUTOR ": ", pass, sizeof pass);
     uint8_t key[32], secret[64];
     deriveKey(pass, k.salt, key);

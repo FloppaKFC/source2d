@@ -29,8 +29,6 @@ static const json *fontById(const json &doc, const std::string &id) {
     return nullptr;
 }
 
-/* ---------------- fuentes TTF con raylib (vistas del editor) ---------------- */
-// raylib rasteriza con stb_truetype a un tamano fijo: se guarda una fuente por (id, tamano)
 static std::map<std::string, Font> g_rlFonts;
 
 static Font *rlFont(const json &doc, const std::string &fontId, int size) {
@@ -61,7 +59,6 @@ static Font *rlFont(const json &doc, const std::string &fontId, int size) {
     return font.glyphCount ? &g_rlFonts[key] : nullptr;
 }
 
-/* ---------------- fuentes de pixeles ---------------- */
 static int glyphAdvance(const json &f, int gi) {
     int W = std::max(1, (int)jnum(f, "cellW", 8)), H = std::max(1, (int)jnum(f, "cellH", 12));
     if (jbool(f, "mono", false)) return W;
@@ -78,7 +75,7 @@ static int glyphAdvance(const json &f, int gi) {
 
 static int glyphIndex(const std::vector<std::string> &chars, const std::string &ch) {
     for (size_t i = 0; i < chars.size(); i++) if (chars[i] == ch) return (int)i;
-    if (ch.size() == 1) {   // sin la letra: prueba en mayusculas o minusculas
+    if (ch.size() == 1) {
         char alt = std::isupper((unsigned char)ch[0]) ? (char)std::tolower((unsigned char)ch[0]) : (char)std::toupper((unsigned char)ch[0]);
         for (size_t i = 0; i < chars.size(); i++) if (chars[i].size() == 1 && chars[i][0] == alt) return (int)i;
     }
@@ -143,7 +140,6 @@ bool renderTextImage(const json &doc, const std::string &fontId, const std::stri
     return true;
 }
 
-/* ---------------- texturas de texto para las vistas ---------------- */
 struct TextTex { ui::PixTexture tex; float scale = 1; int used = 0; };
 static std::map<std::string, TextTex> g_texts;
 static int g_frame = 0;
@@ -182,23 +178,20 @@ void releaseFontCache() {
     g_rlFonts.clear();
 }
 
-/* ---------------- crear e importar ---------------- */
 void fillGlyphsFromGameFont(json &font) {
     int W = std::max(1, (int)jnum(font, "cellW", 8)), H = std::max(1, (int)jnum(font, "cellH", 12));
     auto chars = splitChars(jstr(font, "chars"));
-    // se mide la fuente a 64 px: las letras y numeros (con los rabos de g, p, y) llenan la altura de la celda;
-    // las mayusculas con tilde pueden perder la punta si la celda es baja
     float top = 1e9f, bottom = -1e9f, wide = 0;
     int nw = 0;
     if (Font *big = rlFont(json::object(), "", 64))
         for (int i = 0; i < big->glyphCount; i++) {
             int cp = big->glyphs[i].value;
-            if (cp > 126 || !std::isalnum(cp)) continue;   // solo letras y numeros: los simbolos como | o [ son mas altos
+            if (cp > 126 || !std::isalnum(cp)) continue;
             top = std::min(top, (float)big->glyphs[i].offsetY);
             bottom = std::max(bottom, big->glyphs[i].offsetY + big->recs[i].height);
             wide += (float)big->recs[i].width; nw++;
         }
-    wide = nw ? wide / nw : 32;   // ancho medio: las letras muy anchas (M, W) se pueden salir un poco
+    wide = nw ? wide / nw : 32;
     float k = bottom > top ? std::min(H / (bottom - top), (W - 1.0f) / wide) : H / 64.0f;
     int fs = std::max(4, (int)std::floor(64 * k));
     float oy = bottom > top ? -top * fs / 64.0f : 0;
@@ -236,7 +229,6 @@ std::string importFont(Project &proj, const std::string &file, std::string &err)
     std::ifstream in(file, std::ios::binary);
     if (!in) { err = "No se pudo abrir " + file; return ""; }
     std::vector<unsigned char> data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    // cabecera de TrueType (00 01 00 00 o 'true') u OpenType ('OTTO')
     bool ok = data.size() > 12 && ((data[0] == 0 && data[1] == 1 && data[2] == 0 && data[3] == 0) || !memcmp(data.data(), "OTTO", 4) || !memcmp(data.data(), "true", 4));
     if (!ok) { err = "No parece una fuente TTF u OTF"; return ""; }
     std::string base = file.substr(file.find_last_of('/') + 1), ext = base.substr(base.find_last_of('.') + 1);
@@ -249,7 +241,6 @@ std::string importFont(Project &proj, const std::string &file, std::string &err)
     return id;
 }
 
-/* ---------------- editor de fuentes ---------------- */
 std::string FontEditor::title(Project &proj) {
     const json *f = fontById(proj.doc, fontId);
     return "Fuente: " + (f ? jstr(*f, "name") : std::string("?")) + "###font_" + fontId;
@@ -295,7 +286,7 @@ void FontEditor::setCell(Project &proj, int W, int H) {
     writeBack(proj);
     W = std::clamp(W, 2, 64); H = std::clamp(H, 2, 64);
     int oW = (int)jnum(*f, "cellW", 8), oH = (int)jnum(*f, "cellH", 12);
-    for (auto &g : (*f)["glyphs"]) {   // se conserva la esquina superior izquierda, como en los tiles
+    for (auto &g : (*f)["glyphs"]) {
         json np = json::array();
         for (int y = 0; y < H; y++) for (int x = 0; x < W; x++) {
             size_t k = (size_t)(y * oW + x);
@@ -315,7 +306,7 @@ void FontEditor::setChars(Project &proj, const std::string &chars) {
     auto oldC = splitChars(jstr(*f, "chars")), newC = splitChars(chars);
     int W = (int)jnum(*f, "cellW", 8), H = (int)jnum(*f, "cellH", 12);
     json glyphs = json::array();
-    for (auto &c : newC) {   // cada letra conserva su dibujo; las nuevas empiezan vacias
+    for (auto &c : newC) {
         auto it = std::find(oldC.begin(), oldC.end(), c);
         size_t oi = (size_t)(it - oldC.begin());
         if (it != oldC.end() && oi < (*f)["glyphs"].size()) glyphs.push_back((*f)["glyphs"][oi]);
@@ -358,7 +349,7 @@ void FontEditor::draw(Project &proj) {
         if (ImGui::IsWindowAppearing() || ImGui::GetActiveID() != ImGui::GetID("##chars")) snprintf(chbuf, sizeof chbuf, "%s", jstr(*f, "chars").c_str());
         ImGui::SetNextItemWidth(-1);
         if (ImGui::InputText("##chars", chbuf, sizeof chbuf, ImGuiInputTextFlags_EnterReturnsTrue)) setChars(proj, chbuf);
-        if (ImGui::IsItemHovered() && ImGui::GetActiveID() != ImGui::GetID("##chars")) {   // la lista entera, que en el campo no cabe
+        if (ImGui::IsItemHovered() && ImGui::GetActiveID() != ImGui::GetID("##chars")) {
             ImGui::BeginTooltip(); ImGui::PushTextWrapPos(420); ImGui::TextUnformatted(chbuf); ImGui::PopTextWrapPos(); ImGui::EndTooltip();
         }
         ImGui::TextDisabled("Escribe los caracteres de la fuente y pulsa Enter.");

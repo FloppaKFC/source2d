@@ -5,7 +5,6 @@ import lzma
 import struct
 import sys
 
-
 def x86_encode(d):
     """llamadas y saltos relativos (E8/E9 rel32) a direcciones absolutas; lo deshace lz_x86_decode"""
     b, i, n = bytearray(d), 0, len(d)
@@ -13,7 +12,7 @@ def x86_encode(d):
         if (b[i] & 0xFE) != 0xE8:
             i += 1
             continue
-        if b[i + 4] not in (0, 0xFF):     # se salta igual: el recorrido no depende de bytes que el filtro cambia
+        if b[i + 4] not in (0, 0xFF):
             i += 5
             continue
         v = (struct.unpack_from('<I', b, i + 1)[0] + i + 5) & 0x1FFFFFF
@@ -22,7 +21,6 @@ def x86_encode(d):
         struct.pack_into('<I', b, i + 1, v)
         i += 5
     return bytes(b)
-
 
 def x86_decode(d):
     """lo mismo que lz_x86_decode (src/lzdec.h): se usa para comprobar que el filtro se deshace bien"""
@@ -39,9 +37,7 @@ def x86_decode(d):
         i += 5
     return bytes(b)
 
-
 LC, LP, PB = 3, 0, 0
-
 
 def pack(d):
     f = dict(id=lzma.FILTER_LZMA1, preset=9 | lzma.PRESET_EXTREME, lc=LC, lp=LP, pb=PB, dict_size=1 << 24, nice_len=273)
@@ -52,5 +48,3 @@ def pack(d):
     if lzma.decompress(z, format=lzma.FORMAT_RAW, filters=[f]) != x:
         sys.exit('lzpack.py: LZMA no devuelve lo mismo')
     return z, LC + LP * 9 + PB * 45 + 256
-
-

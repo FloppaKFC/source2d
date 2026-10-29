@@ -25,7 +25,6 @@ namespace fs = std::filesystem;
 
 namespace sys {
 #ifdef _WIN32
-// linea de ordenes de Windows: cada argumento entre comillas (con las comillas internas escapadas)
 static std::wstring cmdLine(const std::vector<std::string> &args) {
     std::string s;
     for (auto &a : args) {
@@ -137,7 +136,7 @@ bool spawn(const std::vector<std::string> &args, Proc *out, bool) {
     return true;
 }
 bool spawnFeed(const std::vector<std::string> &args, const std::string &input, Proc *out) {
-    static bool sigOnce = (signal(SIGPIPE, SIG_IGN), true);   // si el juego se cierra antes de leerlo todo
+    static bool sigOnce = (signal(SIGPIPE, SIG_IGN), true);
     (void)sigOnce;
     int fd[2];
     if (pipe2(fd, O_CLOEXEC) != 0) return false;
@@ -197,7 +196,7 @@ bool writeDurable(const std::string &path, const std::string &data) {
     bool ok = fwrite(data.data(), 1, data.size(), f) == data.size() && fflush(f) == 0 && fsync(fileno(f)) == 0;
     fclose(f);
     if (!ok || rename(tmp.c_str(), path.c_str()) != 0) return false;
-    std::string dir = std::filesystem::path(path).parent_path().string();   // tambien la carpeta (el cambio de nombre)
+    std::string dir = std::filesystem::path(path).parent_path().string();
     int d = open(dir.empty() ? "." : dir.c_str(), O_RDONLY);
     if (d >= 0) { fsync(d); close(d); }
     return true;
@@ -220,4 +219,4 @@ time_t fileMTime(const std::string &path) {
     struct stat st;
     return stat(path.c_str(), &st) == 0 ? st.st_mtime : 0;
 }
-}  // namespace sys
+}

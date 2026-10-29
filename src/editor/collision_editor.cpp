@@ -4,14 +4,14 @@
 #include <map>
 
 namespace {
-struct DragState { int what = -1; ImVec2 grab{0, 0}; json start; };   // what: 0-3 esquinas, 4 mover, 10+i punto i
+struct DragState { int what = -1; ImVec2 grab{0, 0}; json start; };
 std::map<ImGuiID, DragState> g_drag;
 
-float r2(float v) { return std::round(v * 2) / 2; }   // medio pixel
+float r2(float v) { return std::round(v * 2) / 2; }
 json defaultMask(const std::string &shape, int sw, int sh) {
     float w = (float)sw, h = (float)sh;
     if (shape == "square" || shape == "circle") { float s = std::min(w, h); return {{"shape", shape}, {"x", r2((w - s) / 2)}, {"y", r2((h - s) / 2)}, {"w", s}, {"h", s}}; }
-    if (shape == "poly") {   // un rombo para empezar: se arrastran los puntos y con clic se anaden
+    if (shape == "poly") {
         return {{"shape", "poly"}, {"points", json::array({json::array({r2(w / 2), 0}), json::array({w, r2(h / 2)}), json::array({r2(w / 2), h}), json::array({0, r2(h / 2)})})}};
     }
     return {{"shape", shape}, {"x", 0}, {"y", 0}, {"w", w}, {"h", h}};
@@ -43,7 +43,6 @@ bool collisionEditor(const char *id, json &mask, ui::PixTexture *tex, int sw, in
             changed = true;
         }
     }
-    // lienzo: el dibujo ampliado, la forma encima y sus asas
     float k = std::max(1.0f, std::floor(std::min(maxSize / std::max(1, sw), maxSize / std::max(1, sh))));
     if (k * std::max(sw, sh) > maxSize) k = maxSize / std::max(sw, sh);
     float pad = 24;
@@ -78,7 +77,7 @@ bool collisionEditor(const char *id, json &mask, ui::PixTexture *tex, int sw, in
         for (int i = 0; i < (int)sp.size(); i++) dl->AddCircleFilled(sp[i], i == over || D.what == 10 + i ? 6.5f : 5, i == over ? ui::kPrimaryLight : handle);
         if (hov && ImGui::IsMouseClicked(0)) {
             if (over >= 0) D.what = 10 + over;
-            else {   // punto nuevo en el lado mas cercano
+            else {
                 int best = (int)pts.size(); float bd = 1e18f;
                 for (int i = 0; i < (int)sp.size(); i++) {
                     ImVec2 p0 = sp[i], p1 = sp[(i + 1) % sp.size()];
@@ -124,10 +123,10 @@ bool collisionEditor(const char *id, json &mask, ui::PixTexture *tex, int sw, in
         if (D.what >= 0 && D.what <= 4 && ImGui::IsMouseDown(0)) {
             float nx0 = x0, ny0 = y0, nx1 = x1, ny1 = y1, qx = r2(mx), qy = r2(my);
             if (D.what == 4) { float w = x1 - x0, h = y1 - y0; nx0 = r2(mx - D.grab.x); ny0 = r2(my - D.grab.y); nx1 = nx0 + w; ny1 = ny0 + h; }
-            else {   // la esquina sigue al raton; la contraria se queda quieta
+            else {
                 if (D.what == 0 || D.what == 3) nx0 = std::min(qx, x1 - 1); else nx1 = std::max(qx, x0 + 1);
                 if (D.what == 0 || D.what == 1) ny0 = std::min(qy, y1 - 1); else ny1 = std::max(qy, y0 + 1);
-                if (shape == "square" || shape == "circle") {   // lados iguales: manda el mas largo
+                if (shape == "square" || shape == "circle") {
                     float s = std::max(nx1 - nx0, ny1 - ny0);
                     if (D.what == 0 || D.what == 3) nx0 = nx1 - s; else nx1 = nx0 + s;
                     if (D.what == 0 || D.what == 1) ny0 = ny1 - s; else ny1 = ny0 + s;
@@ -139,7 +138,6 @@ bool collisionEditor(const char *id, json &mask, ui::PixTexture *tex, int sw, in
         }
         if (hov && over < 0) ImGui::SetTooltip("Arrastra las esquinas para cambiar el tamaño; desde dentro, para moverla");
     }
-    // numeros
     if (!shape.empty() && shape != "poly") {
         float v[4] = {(float)jnum(mask, "x", 0), (float)jnum(mask, "y", 0), (float)jnum(mask, "w", 0), (float)jnum(mask, "h", 0)};
         ImGui::SetNextItemWidth(std::min(320.0f, ImGui::GetContentRegionAvail().x));

@@ -1,5 +1,3 @@
-// Source 2D - editor nativo (un solo ejecutable, sin dependencias: raylib estatico + Dear ImGui).
-// Uso: source2d [proyecto.source2d.json] [--script guion.txt]
 #include "s2d_fallback.h"
 #include <algorithm>
 #include <cmath>
@@ -52,76 +50,73 @@
 
 namespace fs = std::filesystem;
 
-/* ---------------- estado de la aplicacion ---------------- */
 struct App {
     Project proj;
     bool hasProject = false;
     std::vector<std::unique_ptr<SpriteEditor>> sprites;
     std::vector<std::unique_ptr<ObjectEditor>> objects;
     std::vector<std::unique_ptr<SceneEditor>> scenes;
-    std::vector<std::unique_ptr<EventsEditor>> sheets;   // una hoja por escena y la de eventos comunes
+    std::vector<std::unique_ptr<EventsEditor>> sheets;
     std::vector<std::unique_ptr<TilesetEditor>> tilesets;
     std::vector<std::unique_ptr<FontEditor>> fonts;
     std::unique_ptr<SettingsEditor> settings;
     std::unique_ptr<LayersEditor> layersDoc;
     std::unique_ptr<AutotilesEditor> autotiles;
-    std::vector<std::unique_ptr<sound::Editor>> sounds;   // Source Sound dentro del proyecto (uno por sonido)
+    std::vector<std::unique_ptr<sound::Editor>> sounds;
     std::unique_ptr<ShadersEditor> shaders;
     std::unique_ptr<ExtensionsEditor> extensions;
     ImportImage importer;
-    std::string importTileObj;                            // objeto Tile que recibe el conjunto importado
+    std::string importTileObj;
     std::string pendingDeleteTileset, pendingDeleteMusic, pendingDeleteFont, pendingDeleteProject, deletingProject;
-    bool scrollEventsToEnd = false, scriptCommon = false;   // guion: ev.* sobre los eventos comunes
+    bool scrollEventsToEnd = false, scriptCommon = false;
     bool showNewObject = false;
     std::string pendingDeleteObj, pendingDeleteScene;
     ui::FileDialog fileDlg;
     std::string toast; double toastUntil = 0; bool toastErr = false;
     std::vector<std::string> recent;
     bool askClose = false, quit = false, wantLayout = true, openFirstScene = false;
-    bool vulkan = false;          // version experimental "(Vulkan)": los juegos se dibujan con Vulkan
+    bool vulkan = false;
     bool showExperimental = false;
-    bool showTree = false, focusWelcome = false;         // panel del proyecto (cajon por encima de todo) abierto, ir a Inicio
-    bool inPanel = false, closePanel = false;            // abrir algo desde el panel lo cierra
-    ImVec2 treeBtnMin, treeBtnMax;                       // boton que abre y cierra el panel
-    bool eventsFirst = false;                             // al abrir: la hoja de eventos delante (Ver por dentro)
-    int focusEventsIn = 0;                                // fotogramas que faltan para ponerla delante (tras rehacer los paneles)
-    std::vector<std::string> tabOrder; std::string activeTab;   // fila de pestanas
+    bool showTree = false, focusWelcome = false;
+    bool inPanel = false, closePanel = false;
+    ImVec2 treeBtnMin, treeBtnMax;
+    bool eventsFirst = false;
+    int focusEventsIn = 0;
+    std::vector<std::string> tabOrder; std::string activeTab;
     std::map<std::string, ui::PixTexture> thumbs;
     std::map<std::string, size_t> thumbHash;
     std::vector<sys::Proc> children;
     std::string tmpDir;
     char newName[96] = "Mi juego";
-    int newRes = 0, newW = 1280, newH = 720;       // resolucion del proyecto nuevo (0-2 hechas, 3 a mano)
-    bool liteExport = true;               // Publicar: exportacion ligera (comprimida) o normal
-    bool showExport = false;              // ventana Exportar
-    bool exportFolder = false;            // exportar a una carpeta (motor + datos/juego.source2d.json)
-    int exportKind = 0;                   // 0 ligera, 1 pesada, 2 optimizada
+    int newRes = 0, newW = 1280, newH = 720;
+    bool liteExport = true;
+    bool showExport = false;
+    bool exportFolder = false;
+    int exportKind = 0;
     bool exWin = true, exLinux = true, exWeb = false, exAndroid = false, exSource = false;
     std::string exportDir;
-    int homeSection = 0;                                  // pagina de inicio: 0 Crear, 1 Juegos, 2 Plantillas, 3 Escuela, 5 Noticias
-    std::string pendingLink;                              // enlace de una noticia: se confirma antes de abrirlo
-    double lastAutosave = 0;                              // guardado automatico (cada Opciones > segundos)
-    double lastRecovery = 0;                              // experimental: copia de recuperacion
+    int homeSection = 0;
+    std::string pendingLink;
+    double lastAutosave = 0;
+    double lastRecovery = 0;
     bool showOptions = false, showVersions = false, scriptVersions = false;
-    std::vector<std::string> recoveries;                  // al arrancar: lo que quedo de un cierre de golpe
+    std::vector<std::string> recoveries;
     bool askNew = false, askSwitch = false;
-    std::function<void()> pendingSwitch;                   // lo que se hara tras confirmar los cambios sin guardar
-    bool askTrust = false, trustHasCode = false, scriptTrustCheck = false;   // (guion: "openajeno" comprueba la confianza)
-    bool showLicenses = false;                            // Ayuda > Licencias de terceros
-    // trabajar juntos (collab.hpp): ventana, pestana (0 compartir, 1 unirse), modo de conexion y datos para entrar
+    std::function<void()> pendingSwitch;
+    bool askTrust = false, trustHasCode = false, scriptTrustCheck = false;
+    bool showLicenses = false;
     bool showCollab = false; int collabTab = 0, collabMode = 0, scriptWaitTries = 0;
     char joinAddr[128] = "", joinCode[16] = "";
     std::string collabMsg; bool collabMsgErr = false;
-    std::string scriptPresDoc; float scriptPresX = 0, scriptPresY = 0;   // guion: presencia fija (colab.pres)
-    std::string pendingTrust;                             // proyecto ajeno a la espera de que el usuario confie en el
+    std::string scriptPresDoc; float scriptPresX = 0, scriptPresY = 0;
+    std::string pendingTrust;
     std::string forgetRecent;
     bool showNewSprite = false; char nsName[64] = "Sprite"; int nsW = 16, nsH = 16;
     std::string pendingDelete;
     ImGuiID dockCenter = 0;
-    // pruebas automaticas
     std::vector<std::string> script; size_t scriptPos = 0; int scriptWait = 0, scriptRetry = 0; std::string shotPath;
-    int mouseUpIn = 0;                                    // guion: fotogramas hasta soltar el boton tras "click"
-    int perfFrames = 0, perfN = 0; double perfStart = 0, perfMax = 0, perfLast = 0;   // guion: "perf N" mide N fotogramas
+    int mouseUpIn = 0;
+    int perfFrames = 0, perfN = 0; double perfStart = 0, perfMax = 0, perfLast = 0;
     int fails = 0;
 } app;
 
@@ -130,17 +125,16 @@ static void notify(const std::string &msg, bool err = false) {
     fprintf(err ? stderr : stdout, "Source 2D: %s\n", msg.c_str());
 }
 
-/* ---------------- recientes ---------------- */
 static std::string recentFile() { return ui::configDir() + "/recientes.txt"; }
 static void loadRecent() {
     app.recent.clear();
-    if (!app.script.empty() && !getenv("S2D_PRUEBA_RECIENTES")) return;   // las pruebas usan un HOME propio
+    if (!app.script.empty() && !getenv("S2D_PRUEBA_RECIENTES")) return;
     std::ifstream in(recentFile());
     std::string l;
     while (std::getline(in, l)) if (!l.empty() && fs::exists(l)) app.recent.push_back(l);
 }
 static void pushRecent(const std::string &p) {
-    if (!app.script.empty()) return;            // las pruebas automaticas no tocan la configuracion del usuario
+    if (!app.script.empty()) return;
     std::string abs = fs::absolute(p).string();
     app.recent.erase(std::remove(app.recent.begin(), app.recent.end(), abs), app.recent.end());
     app.recent.insert(app.recent.begin(), abs);
@@ -149,7 +143,6 @@ static void pushRecent(const std::string &p) {
     for (auto &r : app.recent) out << r << "\n";
 }
 
-/* ---------------- proyecto ---------------- */
 static void syncEditors() {
     for (auto &e : app.sprites) {
         if (!e->dirtyForProject) continue;
@@ -158,10 +151,6 @@ static void syncEditors() {
     }
 }
 
-/* ---------------- proyectos de confianza ----------------
-   Un proyecto lleva eventos y JavaScript que al probarlo o exportarlo corren en el jugador, y el jugador puede leer,
-   escribir y borrar archivos (__native.fileWrite...). Por eso, antes de abrir uno que no es del usuario (fuera de la
-   carpeta de proyectos, nunca abierto ni guardado aqui) se pide confirmacion. */
 static std::string projectsDir();
 static std::string trustedFile() { return ui::configDir() + "/confiables.txt"; }
 static std::string normPath(const std::string &p) {
@@ -183,7 +172,6 @@ static void addTrusted(const std::string &file) {
     std::ofstream out(trustedFile(), std::ios::app);
     out << normPath(file) << "\n";
 }
-// true si el proyecto trae codigo JavaScript a la vista (extensiones, plugins o acciones "Codigo JavaScript")
 static bool projectHasCode(const json &doc) {
     for (const char *k : {"extensions", "plugins"})
         if (doc.contains(k) && doc[k].is_array() && !doc[k].empty()) return true;
@@ -204,7 +192,7 @@ static std::string newProjectPath(const std::string &name);
 static void refreshProjectList();
 static void askLockedProject(const std::string &file);
 static void openProject(std::string file, bool trusted = false) {
-    {   // proyecto cerrado de Source Play (original.s2dcerrado): pide la clave de su creador
+    {
         std::ifstream in(fs::u8path(file), std::ios::binary);
         char head[8] = {0};
         if (in.read(head, 8) && cerrado::isLocked(std::string(head, 8))) { askLockedProject(file); return; }
@@ -220,7 +208,7 @@ static void openProject(std::string file, bool trusted = false) {
     addTrusted(file);
     app.proj = std::move(p);
     app.hasProject = true;
-    if (fs::path(file).extension() == ".source2d") {   // recibido de otro Source 2D: pasa a ser uno de tus proyectos
+    if (fs::path(file).extension() == ".source2d") {
         std::string dst = newProjectPath(app.proj.name());
         std::error_code ec;
         fs::create_directories(fs::path(dst).parent_path(), ec);
@@ -240,7 +228,6 @@ static void openProject(std::string file, bool trusted = false) {
     notify("Proyecto abierto: " + app.proj.name());
 }
 
-// cerrar el proyecto y volver a la pagina de inicio (si hay cambios sin guardar, pregunta antes)
 static void guardSwitch(std::function<void()> f);
 static void refreshProjectList();
 static void closeProject() {
@@ -261,7 +248,6 @@ static void closeProject() {
 
 static void saveVersion(const std::string &kind);
 static void clearRecovery();
-// invitado en una sesion sin permiso de copias: el proyecto es del anfitrion, no se guarda ni se exporta aqui
 static bool guestLocked() { return collab::role() == collab::Role::Client && !collab::allowCopies(); }
 static bool guestBlocked() {
     if (!guestLocked()) return false;
@@ -298,9 +284,7 @@ static void openDialog() {
     std::string start = app.hasProject && !app.proj.path.empty() ? fs::path(app.proj.path).parent_path().string() : ui::homeDir();
     app.fileDlg.show(ui::FileDialog::Open, "Abrir proyecto", ".json|.source2d|.s2dcerrado", start, "", [](const std::string &f) { openProject(f); });
 }
-// Exportar > Solo para Source 2D: el proyecto entero en un .source2d (el mismo JSON) para pasarlo a otro Source 2D
-// (comprimido como la exportacion ligera; en segundo plano, que un proyecto grande tarda unos segundos)
-static std::future<std::string> g_sourceExport;   // "" si salio bien, si no el error
+static std::future<std::string> g_sourceExport;
 static std::string g_sourceExportFile;
 static void exportSourceGame(const std::string &f) {
     if (guestBlocked()) return;
@@ -319,7 +303,7 @@ static void exportSourceGame(const std::string &f) {
         return "";
     });
 }
-static bool sourceExportTick(bool wait = false) {   // true mientras siga
+static bool sourceExportTick(bool wait = false) {
     if (!g_sourceExport.valid()) return false;
     if (!wait && g_sourceExport.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return true;
     std::string err = g_sourceExport.get();
@@ -340,8 +324,6 @@ static void newProject(const std::string &name) {
     notify("Proyecto nuevo. Guárdalo con Ctrl+S");
 }
 
-/* ---------------- jugador incrustado: probar y exportar ---------------- */
-// jugador de un sistema ("linux" o "windows") descomprimido de los que lleva el editor a la carpeta temporal ('' si no lo lleva)
 static std::string playerFor(const std::string &os) {
     if (app.tmpDir.empty()) app.tmpDir = sys::makeTempDir();
     if (app.tmpDir.empty()) return "";
@@ -350,7 +332,7 @@ static std::string playerFor(const std::string &os) {
     std::error_code ec;
     unsigned long want = exporter::playerSize(os);
     if (!want) return "";
-    if (!fs::exists(p) || fs::file_size(p, ec) != want) {   // si una escritura anterior fallo, se vuelve a escribir
+    if (!fs::exists(p) || fs::file_size(p, ec) != want) {
         std::vector<unsigned char> d;
         if (!exporter::unpackPlayer(os, d)) return "";
         std::ofstream out(p, std::ios::binary);
@@ -366,7 +348,7 @@ static const char *kHostOS = "windows";
 #else
 static const char *kHostOS = "linux";
 #endif
-static std::string playerPath() { return playerFor(kHostOS); }   // el que funciona en este sistema
+static std::string playerPath() { return playerFor(kHostOS); }
 
 static std::string writeTempProject(const std::string &firstScene = "") {
     syncEditors();
@@ -374,7 +356,7 @@ static std::string writeTempProject(const std::string &firstScene = "") {
     if (pl.empty()) return "";
     std::string f = app.tmpDir + "/prueba.source2d.json";
     json doc = app.proj.doc;
-    if (!firstScene.empty() && doc.contains("scenes")) {      // probar desde una escena: se pone primera
+    if (!firstScene.empty() && doc.contains("scenes")) {
         json &scs = doc["scenes"];
         for (size_t i = 0; i < scs.size(); i++) if (jstr(scs[i], "id") == firstScene) { json s = scs[i]; scs.erase(scs.begin() + i); scs.insert(scs.begin(), s); break; }
     }
@@ -383,9 +365,7 @@ static std::string writeTempProject(const std::string &firstScene = "") {
     return f;
 }
 
-// juega un proyecto que no esta abierto (ejemplos, Source Play): le llega al jugador por la entrada estandar, sin
-// escribirlo en el disco (los juegos cerrados de Source Play se descifran solo en memoria)
-static void playDoc(const json &doc, const std::string &tienda = "") {   // tienda: id de un juego de Source Play (jugador estricto)
+static void playDoc(const json &doc, const std::string &tienda = "") {
     std::string pl = playerPath();
     if (pl.empty()) { notify("No se pudo preparar la prueba", true); return; }
     std::vector<std::string> args = {pl};
@@ -397,7 +377,6 @@ static void playDoc(const json &doc, const std::string &tienda = "") {   // tien
     else notify("No se pudo ejecutar el jugador", true);
 }
 
-// antes de jugar: condiciones y acciones que usan objetos borrados (el juego las ignoraria sin decir nada)
 static void checkProjectProblems() {
     std::set<std::string> ids;
     for (auto &o : app.proj.doc["objects"]) ids.insert(jstr(o, "id"));
@@ -426,7 +405,7 @@ static void checkProjectProblems() {
 static void playProject(const std::string &firstScene = "") {
     checkProjectProblems();
     school::note("preview");
-    if (guestLocked()) {   // proyecto de otra persona: llega al jugador por memoria, sin copia en el disco
+    if (guestLocked()) {
         syncEditors();
         json doc = app.proj.doc;
         if (!firstScene.empty() && doc.contains("scenes")) {
@@ -444,7 +423,6 @@ static void playProject(const std::string &firstScene = "") {
     }
     std::string pl = playerPath(), f = writeTempProject(firstScene);
     if (pl.empty() || f.empty()) { notify("No se pudo preparar la prueba", true); return; }
-    // vista previa con el depurador: F3 panel, F6 pausa, F7 un fotograma
     sys::Proc pr;
     std::vector<std::string> args = {pl, "--debug"};
     if (app.vulkan) args.push_back("--vulkan");
@@ -453,8 +431,6 @@ static void playProject(const std::string &firstScene = "") {
     else notify("No se pudo ejecutar el jugador", true);
 }
 
-// exporta un unico ejecutable para Linux o Windows (ver exporter.hpp): normal o ligera (todo comprimido). Va en
-// segundo plano: comprimir un proyecto grande tarda unos segundos y el editor sigue respondiendo.
 struct ExportJob { std::future<std::string> done; std::string out; };
 static std::vector<ExportJob> g_exports;
 static json optimizedDoc(json doc);
@@ -465,7 +441,7 @@ static void exportGame(const std::string &out, const std::string &os, bool lite,
     notify("Exportando " + fs::path(out).filename().string() + "...");
     school::note("export");
     json edoc = optimize ? optimizedDoc(app.proj.doc) : app.proj.doc;
-    if (app.vulkan && os != "html") edoc["settings"]["renderer"] = "vulkan";   // el juego exportado arranca con Vulkan
+    if (app.vulkan && os != "html") edoc["settings"]["renderer"] = "vulkan";
     g_exports.push_back({std::async(std::launch::async, [doc = std::move(edoc), out, os, lite, folder] {
         std::string err, info;
         if (folder) {
@@ -495,7 +471,6 @@ static void reapChildren() {
     app.children.erase(std::remove_if(app.children.begin(), app.children.end(), [](sys::Proc &p) { return sys::finished(p); }), app.children.end());
 }
 
-/* ---------------- sprites del proyecto ---------------- */
 static std::string newSprite(const std::string &name, int w, int h);
 static void openStudio();
 static void openedFromPanel() { if (app.inPanel) app.closePanel = true; }
@@ -523,7 +498,7 @@ static void setupObjectEditor(ObjectEditor &e) {
     e.onNewSprite = [](const std::string &nm, int w, int h) { return newSprite(nm, w, h); };
     e.onOpenTileset = [](const std::string &tid) { openTileset(tid); };
     e.onImportTiles = [](const std::string &oid) { app.importTileObj = oid; importImageDialog(true); };
-    e.onSpriteChanged = [](const std::string &sid) {   // sus frames cambiaron fuera de Source Sprite: se recargan
+    e.onSpriteChanged = [](const std::string &sid) {
         if (json *sp = app.proj.spriteById(sid)) for (auto &se : app.sprites) if (se->spriteId == sid) se->load(*sp);
     };    e.onStatus = [](const std::string &m) { notify(m); };
 }
@@ -558,7 +533,6 @@ static void openScene(const std::string &id) {
     app.scenes.push_back(std::move(e));
 }
 
-// escena con la que se esta trabajando: la de la ultima hoja de eventos o escena usada, o la primera
 static std::string currentScene() {
     const json &scs = app.proj.doc["scenes"];
     auto exists = [&](const std::string &id) { for (auto &sc : scs) if (jstr(sc, "id") == id) return true; return false; };
@@ -568,7 +542,6 @@ static std::string currentScene() {
     return id;
 }
 
-// hoja de eventos de una escena ("" = eventos comunes)
 static EventsEditor &openEventsFor(const std::string &sceneId, bool focus = true) {
     openedFromPanel();
     for (auto &e : app.sheets) if (e->sceneId == sceneId) { e->open = true; if (focus) e->focusMe = true; return *e; }
@@ -661,14 +634,9 @@ static ui::PixTexture &thumbFor(json &sp) {
     return tex;
 }
 
-/* ---------------- paneles ---------------- */
-/* gestor del proyecto: un cajon que se abre por encima del editor (no le quita sitio) y se cierra al hacer clic fuera
-   o al abrir algo desde el */
 static int g_drawerOpenedAt = -1;
 static bool g_drawerWasOpen = false;
 static void closedProjectPanel() { g_drawerWasOpen = false; }
-// trabajar juntos: un punto del color de cada persona que tiene abierto ese documento ("sprite:<id>", "scene:<id>",
-// "events:<id de escena>"), alineados a la derecha que termina en 'right'; con el raton encima, sus nombres
 static void peerDots(const std::string &key, ImVec2 right, float r = 4.5f) {
     std::vector<const collab::Peer *> here;
     for (auto &p : collab::peers()) if (p.doc == key) here.push_back(&p);
@@ -756,7 +724,6 @@ static void drawProjectPanel() {
             std::string id = jstr(scs[i], "id"), nm = jstr(scs[i], "name", "Escena");
             ImGui::PushID(id.c_str());
             bool isOpen = std::any_of(app.scenes.begin(), app.scenes.end(), [&](auto &e) { return e->sceneId == id; });
-            // con su vista previa (la primera pantalla, como la ve el juego)
             ImVec2 p = ImGui::GetCursorScreenPos();
             if (ImGui::Selectable("##scn", isOpen, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 58)) && ImGui::IsMouseDoubleClicked(0)) openScene(id);
             {
@@ -778,7 +745,6 @@ static void drawProjectPanel() {
                 if (ImGui::MenuItem("Duplicar")) {
                     json c = scs[i]; c["id"] = makeUid("sc"); c["name"] = nm + " copia";
                     if (c.contains("instances")) for (auto &it : c["instances"]) it["id"] = makeUid("i");
-                    // sus objetos se copian con id nuevo y la copia (instancias y eventos) usa esos ids
                     std::map<std::string, std::string> ren;
                     json &objs = app.proj.doc["objects"];
                     for (size_t k = 0, n = objs.size(); k < n; k++) if (jstr(objs[k], "scene") == id) {
@@ -841,7 +807,6 @@ static void drawProjectPanel() {
         ImGui::TextDisabled("%d evento(s) en todas las escenas", nc);
     }
     if (ImGui::CollapsingHeader("Autotiles")) {
-        // los mapas de tiles ahora son objetos Tile (se pintan en la escena); aqui se crean y prueban los autotiles
         if (ui::primaryButton("+ Nuevo autotile", ImVec2(-1, 0))) { openDoc(app.autotiles); app.autotiles->cur = createAutotile(app.proj); app.autotiles->test.clear(); }
         json &ats = projectAutotiles(app.proj);
         for (size_t i = 0; i < ats.size(); i++) {
@@ -942,8 +907,6 @@ static void drawProjectPanel() {
         if (mus.empty()) ImGui::TextDisabled("Sin audio. Úsalo con la acción \"Reproducir audio\".");
     }
     if (ImGui::CollapsingHeader("Archivos iniciales")) {
-        // archivos que viajan dentro del juego (por ejemplo, niveles en .json); los eventos los leen con
-        // "Lista de archivos iniciales" y "Leer un archivo inicial"
         if (ui::primaryButton("Añadir archivo...", ImVec2(-1, 0)))
             app.fileDlg.show(ui::FileDialog::Open, "Añadir archivo inicial", ".json|.txt|.csv|.png|.jpg|.mp3|.ogg|.wav", ui::homeDir(), "", [](const std::string &f) {
                 std::string err;
@@ -977,7 +940,6 @@ static void drawProjectPanel() {
     }
     ImGui::End();
     app.inPanel = false;
-    // clic fuera (sin arrastrar nada desde el panel ni con un menu o ventana emergente abiertos): se cierra
     bool popup = ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
     bool onButton = ImGui::IsMouseHoveringRect(app.treeBtnMin, app.treeBtnMax, false);
     if (ImGui::GetFrameCount() != openedAt && !hovered && !onButton && !popup && !ImGui::GetDragDropPayload() &&
@@ -986,18 +948,13 @@ static void drawProjectPanel() {
     if (app.closePanel) { app.showTree = false; app.closePanel = false; wasOpen = false; }
 }
 
-/* ---------------- pagina de inicio (como la HomePage de GDevelop) ---------------- */
-// Menu lateral: "Crear" (tus proyectos, que viven en la carpeta de proyectos) y "Prueba" (juegos completos de ejemplo).
-// La misma pagina se ve antes de abrir un proyecto y en la pestana Inicio.
-
-/* ---------------- ajustes del editor: carpeta de proyectos y guardado automatico ---------------- */
 struct EditorPrefs {
     std::string projectsDir; bool autosave = true; std::string name; int color = 0;
-    int autosaveSecs = 30, keepVersions = 20;     // cada cuanto se guarda solo y cuantas versiones se guardan
-    bool animations = true;                       // animaciones suaves del editor
-    bool safeSave = false;                        // experimental: recuperacion si se apaga el equipo
-    std::string lang;                             // idioma del editor ("" = Espanol)
-    bool news = true;                             // buscar noticias y actualizaciones (Inicio > Noticias)
+    int autosaveSecs = 30, keepVersions = 20;
+    bool animations = true;
+    bool safeSave = false;
+    std::string lang;
+    bool news = true;
 };
 static EditorPrefs &prefs() {
     static EditorPrefs p;
@@ -1015,9 +972,8 @@ static EditorPrefs &prefs() {
         }
         if (p.name.empty()) p.name = collab::defaultName();
         if (p.projectsDir.empty()) p.projectsDir = ui::documentsDir() + "/Source 2D";
-        // las pruebas automaticas usan una carpeta temporal y no tocan los Documentos del usuario
         if (!app.script.empty()) p.projectsDir = (fs::temp_directory_path() / ("source2d-pruebas-" + std::to_string(sys::processId()))).string();
-        if (!app.script.empty() && getenv("S2D_PRUEBA_PROYECTOS")) p.projectsDir = getenv("S2D_PRUEBA_PROYECTOS");   // carpeta elegida por la prueba
+        if (!app.script.empty() && getenv("S2D_PRUEBA_PROYECTOS")) p.projectsDir = getenv("S2D_PRUEBA_PROYECTOS");
     }
     return p;
 }
@@ -1029,7 +985,6 @@ static void savePrefs() {
                                                              {"animaciones", prefs().animations}, {"guardadoSeguro", prefs().safeSave},
                                                              {"idioma", prefs().lang}, {"buscarNoticias", prefs().news}}.dump(1);
 }
-// la carpeta se crea sola la primera vez que hace falta
 static std::string projectsDir() {
     std::error_code ec;
     fs::create_directories(prefs().projectsDir, ec);
@@ -1040,13 +995,11 @@ static std::string safeFileName(std::string n) {
     while (!n.empty() && (n.back() == ' ' || n.back() == '.')) n.pop_back();
     return n.empty() ? "Mi juego" : n;
 }
-// cada proyecto en su carpeta: <carpeta de proyectos>/<nombre>/<nombre>.source2d.json (sin pisar uno que ya exista)
 static std::string newProjectPath(const std::string &name) {
     std::string base = safeFileName(name), dir = projectsDir() + "/" + base;
     for (int k = 2; fs::exists(dir); k++) dir = projectsDir() + "/" + base + " " + std::to_string(k);
     return dir + "/" + fs::path(dir).filename().string() + ".source2d.json";
 }
-// proyectos de la carpeta (y los recientes de otros sitios), del mas nuevo al mas viejo; se vuelve a mirar cada 2 s
 static bool g_projListStale = true;
 static const std::vector<std::string> &projectList() {
     static std::vector<std::string> list;
@@ -1074,23 +1027,16 @@ static const std::vector<std::string> &projectList() {
 static void refreshProjectList() { g_projListStale = true; }
 
 static void focusScene();
-extern bool rlImGuiScriptMouse, rlImGuiScriptDown;   // rlImGui.cpp: raton manejado por el guion de pruebas
+extern bool rlImGuiScriptMouse, rlImGuiScriptDown;
 extern float rlImGuiScriptX, rlImGuiScriptY;
 
-/* Juegos de prueba: proyectos completos para jugarlos y ver por dentro como estan hechos. Para anadir uno:
-   genera su .source2d.json, anadelo a TEMPLATES en el Makefile (y a Makefile.win) y anadelo aqui. */
 struct ExampleGame { const char *name, *desc, *level; std::vector<const char *> tags; json doc; bool tpl = false; };
 
-// carpeta del editor: la real aunque el editor comprimido se abra desde memoria o desde una copia temporal (el lanzador
-// de src/stub.c la deja en S2D_EXE_DIR)
-// ---------------- versiones (como el lanzador de Minecraft) ----------------
-// Cada version del editor que se abre se copia en <config>/versiones/<version>/. En la pagina de inicio se elige cual
-// abrir; los proyectos guardan con que version se hicieron y avisan si se abren en una mas vieja.
 static std::string versionsDir() { return ui::configDir() + "/versiones"; }
 static std::string selfExe() { const char *e = getenv("S2D_EXE"); return e && *e ? e : ""; }
 static void installThisVersion() {
     std::string me = selfExe();
-    if (me.empty()) return;                                   // sin comprimir (compilado a mano): no se instala
+    if (me.empty()) return;
     std::error_code ec;
     fs::path dst = fs::path(versionsDir()) / S2D_VERSION / fs::path(me).filename();
     if (fs::exists(dst, ec) && fs::file_size(dst, ec) == fs::file_size(me, ec)) return;
@@ -1116,7 +1062,6 @@ static std::vector<InstalledVersion> installedVersions() {
     return out;
 }
 
-// abre otra version (o esta misma en otro modo) y cierra esta, preguntando si hay cambios sin guardar
 static void launchVersion(const std::string &exe, bool vk) {
     std::string e = exe.empty() ? selfExe() : exe;
     if (e.empty()) { notify("Esta copia del editor no puede abrir otra versión (no está comprimida)", true); return; }
@@ -1139,8 +1084,6 @@ static std::string exeDir() {
     return d;
 }
 
-// Los juegos de prueba no van dentro del editor: solo los examples_*.source2d.json de la raiz del codigo (el editor de
-// pruebas esta en build/). Ya no se lee ninguna carpeta Ejemplos. Los que no estan no salen en la pagina de inicio.
 static json exampleDoc(const char *file, const char *devFile) {
     (void)file;
     std::string dir = exeDir();
@@ -1158,7 +1101,6 @@ static std::vector<ExampleGame> &exampleGames() {
         g.push_back({"Project Ry-mik", "",
                      "Avanzado", {"Juego de ritmo", "Archivos iniciales y JSON", "Editor de niveles", "Shaders CRT y brillo", "Funciones de eventos"},
                      exampleDoc("Project Ry-mik.source2d.json", "examples_rymik.source2d.json")});
-        // plantillas (tools/make_templates.py): solo "Ver por dentro"; cada evento lleva su comentario
         struct Tpl { const char *name, *desc, *file, *dev; std::vector<const char *> tags; };
         static const Tpl tpls[] = {
             {"Plataformas", "", "Plantilla Plataformas.source2d.json", "examples_tpl_plataformas.source2d.json", {"Plataformero", "Colisiones", "Cámara"}},
@@ -1170,7 +1112,6 @@ static std::vector<ExampleGame> &exampleGames() {
     return g;
 }
 
-// proyecto nuevo guardado ya en la carpeta de proyectos (asi el guardado automatico funciona desde el principio)
 static void createProject(const std::string &name, int w = 960, int h = 540) {
     newProject(name);
     app.proj.doc["settings"]["width"] = w; app.proj.doc["settings"]["height"] = h;
@@ -1181,7 +1122,6 @@ static void createProject(const std::string &name, int w = 960, int h = 540) {
     saveProject(f);
 }
 
-// cambiar de proyecto con cambios sin guardar pide confirmacion
 static void guardSwitch(std::function<void()> f) {
     if (app.hasProject && app.proj.dirty && !guestLocked()) { app.pendingSwitch = std::move(f); app.askSwitch = true; }
     else f();
@@ -1207,7 +1147,6 @@ static void sectionTitle(const char *t, float size) {
     ImGui::PopFont();
 }
 
-// boton con texto en negrita; primary = relleno morado, si no, contorno (como los RaisedButton/FlatButton de GDevelop)
 static bool homeButton(const char *label, bool primary, float h = 34) {
     ImFont *bold = ui::boldFont();
     float fs = ImGui::GetFontSize(), w = bold->CalcTextSizeA(fs, FLT_MAX, 0, label).x + 32;
@@ -1233,13 +1172,12 @@ static void thumbImage(ImDrawList *dl, ui::PixTexture *tx, ImVec2 a, ImVec2 b, I
     else ui::drawIcon(dl, ui::Icon::Scene, ImVec2((a.x + b.x) / 2, (a.y + b.y) / 2), 28, ui::kText2);
 }
 
-// tarjeta de proyecto (GameDashboardCard): miniatura, ultima edicion, nombre, ruta y botones
 static void projectCard(const std::string &path, bool current, const std::string &extra = "") {
     const float pad = 16, w = ImGui::GetContentRegionAvail().x;
     float tw = std::clamp(w / 4, 130.0f, 245.0f), th = tw * 9 / 16, h = th + pad * 2;
     ImVec2 p = ImGui::GetCursorScreenPos(), e(p.x + w, p.y + h);
     ImGui::PushID(current ? "##actual" : path.c_str());
-    ImGui::SetNextItemAllowOverlap();   // los botones de la tarjeta (Abrir...) van encima y se quedan el clic
+    ImGui::SetNextItemAllowOverlap();
     ImGui::InvisibleButton("##card", ImVec2(w, h));
     bool hov = ImGui::IsItemHovered(), dbl = hov && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
     ImDrawList *dl = ImGui::GetWindowDrawList();
@@ -1257,7 +1195,6 @@ static void projectCard(const std::string &path, bool current, const std::string
     dl->AddText(ImVec2(x, y + fs + 36), ui::kDim, where.c_str());
     if (!extra.empty()) dl->AddText(ui::boldFont(), fs, ImVec2(x, y + fs + 60), IM_COL32(120, 210, 140, 255), extra.c_str());
     ImGui::PopClipRect();
-    // botones abajo a la derecha
     const char *main = current ? "Seguir editando" : "Abrir";
     float bw = homeButtonWidth(main), bx = e.x - pad - bw, by = e.y - pad - 34;
     if (current) {
@@ -1271,7 +1208,7 @@ static void projectCard(const std::string &path, bool current, const std::string
     }
     ImGui::SetCursorScreenPos(ImVec2(bx, by));
     bool open = homeButton(main, true) || dbl;
-    if (!current) {   // borrar el proyecto (pide confirmacion)
+    if (!current) {
         ImGui::SetCursorScreenPos(ImVec2(bx - 8 - 34, by));
         if (ui::iconButton("##del", ui::Icon::Delete, false, "Borrar el proyecto", 34)) app.pendingDeleteProject = path;
     }
@@ -1289,10 +1226,6 @@ static void projectCard(const std::string &path, bool current, const std::string
     ImGui::PopID();
 }
 
-// cada 30 s, si hay cambios y el proyecto tiene archivo, se guarda solo
-/* ---------------- versiones del proyecto ----------------
-   Cada guardado (a mano o automatico) deja una copia con fecha en <carpeta del proyecto>/.versiones/<nombre>/; se
-   guardan las ultimas N (Opciones). Archivo > Versiones del proyecto las muestra y abre la que elijas. */
 static std::string versionsFolder(const std::string &projPath) {
     fs::path p = projPath;
     std::string stem = p.filename().string();
@@ -1334,10 +1267,6 @@ static std::vector<ProjVersion> projectVersions() {
     return out;
 }
 
-/* ---------------- recuperacion (experimental): si se va la luz ----------------
-   Con "guardado a prueba de apagones", cada pocos segundos lo que hay sin guardar se escribe (forzado al disco) en
-   <config>/recuperacion/. Al cerrar bien o al guardar se borra; si al abrir el editor sigue ahi, el editor se cerro
-   de golpe y ofrece recuperarlo. */
 static std::string recoveryDir() { return ui::configDir() + "/recuperacion"; }
 static std::string recoveryFile() { return recoveryDir() + "/" + (jstr(app.proj.doc, "id").empty() ? "sin-id" : jstr(app.proj.doc, "id")) + ".json"; }
 static void clearRecovery() { std::error_code ec; if (app.hasProject) fs::remove(recoveryFile(), ec); }
@@ -1372,7 +1301,6 @@ static void openNewProjectDialog() {
 
 static void drawCreateSection() {
     sectionTitle("Crear", 30);
-    // carpeta de proyectos y guardado automatico
     if (ImGui::SmallButton("Carpeta de proyectos"))
         app.fileDlg.show(ui::FileDialog::Folder, "Carpeta de los proyectos", "", projectsDir(), "", [](const std::string &d) {
             prefs().projectsDir = d; savePrefs(); refreshProjectList(); notify("Los proyectos nuevos se guardarán en " + d);
@@ -1382,7 +1310,6 @@ static void drawCreateSection() {
     if (ImGui::SmallButton("Opciones")) app.showOptions = true;
     ImGui::Dummy(ImVec2(0, 10));
 
-    // cabecera de "Mis proyectos" con los botones a la derecha
     float avail = ImGui::GetContentRegionAvail().x, y0 = ImGui::GetCursorPosY();
     sectionTitle("Mis proyectos", 21);
     const char *imp = "Abrir un proyecto…", *cre = "+ Crear un proyecto", *spr = "Abrir Source Sprite", *jn = "Unirse a una sesión";
@@ -1416,13 +1343,12 @@ static void drawCreateSection() {
     }
 }
 
-// "Ver por dentro": abre una copia del juego como proyecto nuevo (sin guardar) con la hoja de eventos delante
 static void openExampleCopy(int i) {
     guardSwitch([i] {
         ExampleGame &g = exampleGames()[i];
         newProject(g.name);
         app.proj.doc = g.doc;
-        migrateSceneTilemaps(app.proj.doc);   // los juegos de prueba traen mapas de tiles de escena
+        migrateSceneTilemaps(app.proj.doc);
         app.proj.doc["id"] = makeUid("p");
         app.proj.doc["name"] = std::string(g.name) + " (mi versión)";
         app.proj.rev++;
@@ -1437,14 +1363,12 @@ static void openExampleCopy(int i) {
     });
 }
 
-// tarjeta de un juego de prueba: miniatura grande, etiquetas, descripcion, cifras y botones
 static void exampleCard(int i, float w) {
     ExampleGame &g = exampleGames()[i];
     const float pad = 18, th = (w - pad * 2) * 9 / 16;
     float fs = ImGui::GetFontSize();
     ImDrawList *dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
-    // alto: miniatura + titulo + etiquetas + descripcion (envuelta) + cifras + botones
     float textW = w - pad * 2;
     (void)textW;
     float h = pad + th + 14 + 26 + 30 + fs + 18 + 38 + pad;
@@ -1454,13 +1378,12 @@ static void exampleCard(int i, float w) {
     thumbImage(dl, docThumb(std::string("ej:") + g.name, g.doc, 0, false), ImVec2(p.x + pad, p.y + pad), ImVec2(e.x - pad, p.y + pad + th));
     float y = p.y + pad + th + 14;
     dl->AddText(ui::boldFont(), 22, ImVec2(p.x + pad, y), ui::kText, g.name);
-    // nivel a la derecha del titulo
     ImVec2 ls = ui::boldFont()->CalcTextSizeA(fs - 1, FLT_MAX, 0, g.level);
     dl->AddRectFilled(ImVec2(e.x - pad - ls.x - 16, y + 2), ImVec2(e.x - pad, y + 24), IM_COL32(176, 122, 42, 60), 11);
     dl->AddText(ui::boldFont(), fs - 1, ImVec2(e.x - pad - ls.x - 8, y + 13 - ls.y / 2), IM_COL32(230, 180, 90, 255), g.level);
     y += 34;
     float x = p.x + pad;
-    for (const char *t : g.tags) {   // etiquetas
+    for (const char *t : g.tags) {
         ImVec2 ts = ImGui::GetFont()->CalcTextSizeA(fs - 2, FLT_MAX, 0, t);
         if (x + ts.x + 16 > e.x - pad) break;
         dl->AddRectFilled(ImVec2(x, y), ImVec2(x + ts.x + 16, y + 22), ui::kPanel2, 11);
@@ -1481,8 +1404,6 @@ static void exampleCard(int i, float w) {
     if (!g.tpl) {
         if (homeButton("    Jugar", true, 38)) playDoc(g.doc);
         ui::drawIcon(dl, ui::Icon::Play, ImVec2(ImGui::GetItemRectMin().x + 20, ImGui::GetItemRectMin().y + 19), 12, ui::kText);
-        // posicion explicita: con SameLine, en la tarjeta de la derecha (que ya va en la misma linea que la de la izquierda)
-        // el boton subia a la altura del principio de la tarjeta
         ImGui::SetCursorScreenPos(ImVec2(ImGui::GetItemRectMax().x + 10, y));
     }
     if (homeButton("Ver por dentro", g.tpl, 38)) openExampleCopy(i);
@@ -1501,7 +1422,7 @@ static void drawTestsSection(bool templates) {
     float w = std::min(620.0f, (avail - gap * (cols - 1)) / cols);
     int k = 0;
     for (int i = 0; i < (int)exampleGames().size(); i++) {
-        if (exampleGames()[i].doc.empty() || exampleGames()[i].tpl != templates) continue;      // no esta junto al editor
+        if (exampleGames()[i].doc.empty() || exampleGames()[i].tpl != templates) continue;
         if (k++ % cols) ImGui::SameLine(0, gap);
         ImGui::BeginGroup();
         exampleCard(i, w);
@@ -1515,39 +1436,33 @@ static void drawTestsSection(bool templates) {
 }
 
 static std::string fechaBonita(const std::string &f);
-/* ---------------- Source Play: la tienda de juegos (tienda.hpp, envio.hpp, cerrado.hpp) ----------------
-   Descargar, jugar y ver por dentro los juegos aprobados; publicar el propio (con GitHub) y seguir los envios. */
 static const Texture2D *newsImage(const std::string &path);
 static const char *const kCategorias[] = {"Plataformas", "Aventura", "Acción", "Puzles", "Ritmo", "Carreras", "Deportes", "Arcade", "Terror", "Otros"};
 constexpr int kNumCategorias = sizeof kCategorias / sizeof kCategorias[0];
 struct SourcePlayUI {
     char buscar[96] = "";
-    int categoria = 0;                                    // 0 = todas; si no, indice + 1 de categorias()
-    // Publicar en Source Play
+    int categoria = 0;
     bool showPublish = false, abierto = true, normas = false, aCarpeta = false;
     char nombre[80] = "", descripcion[600] = "", clave[128] = "", clave2[128] = "";
     int cat = 0;
-    std::future<std::string> armando;                     // el paquete se arma en segundo plano ("" = bien)
+    std::future<std::string> armando;
     envio::Paquete paquete;
     std::string carpeta, msg;
     bool msgErr = false;
-    std::string proyecto;                                 // id del proyecto de los campos de arriba
-    std::string portada, portadaArchivo;                  // miniatura elegida (PNG ya preparado) y de que archivo salio
-    // Ver por dentro de un juego cerrado
+    std::string proyecto;
+    std::string portada, portadaArchivo;
     bool showFuente = false;
-    std::string fuenteId, fuenteNombre, fuenteErr, fuenteArchivo;   // fuenteArchivo: un .s2dcerrado abierto desde el disco
+    std::string fuenteId, fuenteNombre, fuenteErr, fuenteArchivo;
     char fuenteClave[128] = "";
     std::future<std::string> abriendo;
     json fuenteDoc;
-    // cuentas: perfil abierto, ventana de la cuenta y comunidad
     bool showPerfil = false, showCuenta = false, showComunidad = false;
     std::string perfilLogin;
-    int perfilTab = 0;                                    // 0 juegos, 1 seguidores, 2 siguiendo
+    int perfilTab = 0;
     ImVec2 tabPos[3];
     char buscarGente[64] = "";
-    // denunciar un juego o una cuenta
     bool showDenuncia = false, denunciaCuenta = false;
-    std::string denunciaId, denunciaNombre, denunciaTipo = "juego";   // juego, sprites o sonidos
+    std::string denunciaId, denunciaNombre, denunciaTipo = "juego";
     int denunciaMotivo = 0;
     char denunciaTexto[800] = "";
 };
@@ -1555,7 +1470,6 @@ static SourcePlayUI g_sp;
 
 static const char *badgeName(int ins) { return ins == 3 ? "Creador de Source 2D" : ins == 2 ? "Admin de Source 2D" : ins == 1 ? "Cuenta verificada" : ""; }
 static ImVec4 badgeColor(int ins) { return ins == 3 ? ImVec4(0.78f, 0.55f, 1, 1) : ins == 2 ? ImVec4(0.95f, 0.69f, 0.18f, 1) : ImVec4(0.36f, 0.6f, 1, 1); }
-// insignia junto a un nombre: circulo azul con palomita (verificada), dorado con aro (admin) o morado con estrella (creador)
 static void drawBadge(int ins) {
     if (!ins) return;
     ImGui::SameLine(0, 6);
@@ -1566,7 +1480,6 @@ static void drawBadge(int ins) {
         ImU32 col = IM_COL32(0x8B, 0x5C, 0xF6, 255);
         dl->AddCircle(c, r + 2.0f, IM_COL32(0xC9, 0xB6, 0xFC, 255), 20, 1.5f);
         dl->AddCircleFilled(c, r, col, 20);
-        // estrella de 5 puntas: el centro y un triangulo por punta
         ImVec2 pt[10];
         for (int i = 0; i < 10; i++) {
             float a = -1.5708f + i * 0.6283f, rr = i % 2 ? r * 0.3f : r * 0.72f;
@@ -1580,7 +1493,7 @@ static void drawBadge(int ins) {
         return;
     }
     ImU32 col = ins == 2 ? IM_COL32(0xF2, 0xB1, 0x2D, 255) : IM_COL32(0x3B, 0x8B, 0xF6, 255);
-    if (ins == 2) dl->AddCircle(c, r + 2.0f, col, 20, 1.5f);   // admin: con aro
+    if (ins == 2) dl->AddCircle(c, r + 2.0f, col, 20, 1.5f);
     dl->AddCircleFilled(c, r, col, 20);
     float t = std::max(1.5f, r * 0.28f);
     dl->AddLine(ImVec2(c.x - r * 0.45f, c.y + r * 0.02f), ImVec2(c.x - r * 0.1f, c.y + r * 0.38f), IM_COL32_WHITE, t);
@@ -1594,7 +1507,6 @@ static void openPerfil(const std::string &login) {
     envio::pedirPerfil(login);
     envio::pedirRegistrados();
 }
-// nombre de una cuenta que abre su perfil, con su insignia detras
 static void authorLink(const std::string &login) {
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kSecondary), "%s", login.c_str());
     if (ImGui::IsItemHovered()) {
@@ -1615,7 +1527,6 @@ static std::string slugOf(const std::string &s) {
             else if (!o.empty() && o.back() != '-') o += '-';
             continue;
         }
-        // vocales con tilde, ñ y ü (UTF-8 de 2 bytes) -> sin tilde
         if (i + 1 < s.size()) {
             static const char *from[] = {"á", "é", "í", "ó", "ú", "ñ", "ü", "Á", "É", "Í", "Ó", "Ú", "Ñ", "Ü"}, *to = "aeiounuaeiounu";
             for (int k = 0; k < 14; k++) if (s.compare(i, 2, from[k]) == 0) { o += to[k]; break; }
@@ -1629,7 +1540,6 @@ static std::string slugOf(const std::string &s) {
 }
 static void wipeBuf(char *b, size_t n) { volatile char *p = b; for (size_t i = 0; i < n; i++) p[i] = 0; }
 
-// abre una copia de un proyecto (ver por dentro) y la guarda en los proyectos de esta persona
 static void openDocCopy(json doc, const std::string &name) {
     guardSwitch([doc, name] {
         newProject(name);
@@ -1650,10 +1560,9 @@ static void openDocCopy(json doc, const std::string &name) {
 static void playInstalled(const std::string &id) {
     json doc; std::string err;
     if (!tienda::leer(id, doc, err)) { notify(err, true); return; }
-    playDoc(doc, id);   // por la entrada estandar (el juego descifrado no toca el disco) y con el jugador estricto
+    playDoc(doc, id);
 }
 
-// tarjeta de un juego de la tienda
 static void sourcePlayCard(const tienda::Juego &j, float w) {
     ImGui::PushID(j.id.c_str());
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ui::kPanel);
@@ -1669,7 +1578,6 @@ static void sourcePlayCard(const tienda::Juego &j, float w) {
         ui::drawIcon(dl, ui::Icon::Gamepad, ImVec2(p.x + iw / 2, p.y + ih / 2), 40, ui::kDim);
         ImGui::Dummy(ImVec2(iw, ih));
     }
-    // etiquetas sobre la portada: Destacado y Favorito
     float tx = p.x + 8;
     for (int e = 0; e < 2; e++) {
         bool on = e == 0 ? j.destacado : tienda::favorito(j.id);
@@ -1740,12 +1648,11 @@ static void sourcePlayCard(const tienda::Juego &j, float w) {
     ImGui::PopID();
 }
 
-// "Publicar en Source Play" del proyecto abierto (desde Exportar o desde Source Play)
 static void openPublish() {
     if (!app.hasProject) { notify("Abre el proyecto de tu juego para publicarlo", true); return; }
     if (guestBlocked()) return;
     g_sp.showPublish = true; g_sp.msg.clear();
-    if (!g_sp.nombre[0] || g_sp.proyecto != jstr(app.proj.doc, "id")) {   // otro proyecto: empieza con su nombre
+    if (!g_sp.nombre[0] || g_sp.proyecto != jstr(app.proj.doc, "id")) {
         snprintf(g_sp.nombre, sizeof g_sp.nombre, "%s", app.proj.name().c_str());
         g_sp.descripcion[0] = 0; g_sp.portada.clear(); g_sp.portadaArchivo.clear();
         g_sp.proyecto = jstr(app.proj.doc, "id");
@@ -1789,14 +1696,13 @@ static void drawSourcePlaySection() {
     float avail = ImGui::GetContentRegionAvail().x, gap = 20;
     int cols = std::max(1, std::min(3, (int)((avail + gap) / (360 + gap))));
     float w = std::min(460.0f, (avail - gap * (cols - 1)) / cols);
-    // los que pasan la busqueda y la categoria
     std::vector<const tienda::Juego *> vis;
     for (auto &j : tienda::juegos()) {
         if (g_sp.categoria && j.categoria != cats[g_sp.categoria - 1]) continue;
         if (!containsNoCase(j.nombre, g_sp.buscar) && !containsNoCase(j.autor, g_sp.buscar) && !containsNoCase(j.descripcion, g_sp.buscar)) continue;
         vis.push_back(&j);
     }
-    int fila = 0;   // un mismo juego puede salir en varias filas (Destacados, favoritos, todos): cada fila su propio id
+    int fila = 0;
     auto grid = [&](const std::vector<const tienda::Juego *> &list) {
         ImGui::PushID(fila++);
         int k = 0;
@@ -1809,7 +1715,6 @@ static void drawSourcePlaySection() {
         ImGui::PopID();
         ImGui::Dummy(ImVec2(0, 10));
     };
-    // arriba: Destacados (los elige Source Play) y los favoritos de esta persona
     std::vector<const tienda::Juego *> dest, favs;
     for (auto *j : vis) { if (j->destacado) dest.push_back(j); if (tienda::favorito(j->id)) favs.push_back(j); }
     if (!dest.empty()) { sectionTitle("Destacados", 22); grid(dest); }
@@ -1827,7 +1732,6 @@ static void drawSourcePlaySection() {
         grid(vis);
     }
     if (vis.empty() && !tienda::juegos().empty()) ImGui::TextDisabled("Ningún juego coincide con la búsqueda.");
-    // descargados que ya no estan en el catalogo
     auto viejos = tienda::instaladosSinCatalogo();
     if (!viejos.empty()) {
         ImGui::Dummy(ImVec2(0, 10));
@@ -1843,7 +1747,6 @@ static void drawSourcePlaySection() {
             ImGui::PopID();
         }
     }
-    // mis envios
     envio::mirarMios();
     if (envio::conectado() && !envio::mios().empty()) {
         ImGui::Dummy(ImVec2(0, 10));
@@ -1856,7 +1759,6 @@ static void drawSourcePlaySection() {
             if (!m.motivo.empty()) { ImGui::SameLine(); ImGui::TextDisabled("(%s)", m.motivo.c_str()); }
         }
     }
-    // los juegos de ejemplo que trae el editor
     int ej = 0;
     for (auto &g : exampleGames()) if (!g.doc.empty() && !g.tpl) ej++;
     if (ej) {
@@ -1874,7 +1776,6 @@ static void drawSourcePlaySection() {
     }
 }
 
-// miniatura propia del juego: una imagen recortada al centro a 16:9 y escalada a 768x432 (PNG)
 static bool loadPortada(const std::string &file, std::string &err) {
     Image im = LoadImage(file.c_str());
     if (!im.data) { err = "No se pudo abrir la imagen (usa PNG o JPG)"; return false; }
@@ -1892,7 +1793,7 @@ static bool loadPortada(const std::string &file, std::string &err) {
     g_sp.portadaArchivo = file;
     return true;
 }
-static const Texture2D *portadaTexture() {   // la miniatura elegida, como textura para verla en la ventana
+static const Texture2D *portadaTexture() {
     static Texture2D tex{};
     static std::string key;
     if (g_sp.portada.empty()) return nullptr;
@@ -1907,8 +1808,6 @@ static const Texture2D *portadaTexture() {   // la miniatura elegida, como textu
     return tex.id ? &tex : nullptr;
 }
 
-// arma el paquete del envio: info.json, portada.png y el juego (abierto: .source2d; cerrado: copia para jugar +
-// proyecto original con la clave). Lo pesado (LZMA, Argon2) va en segundo plano.
 static void startPackage(bool toFolder) {
     std::string err;
     std::string nombre = g_sp.nombre;
@@ -1925,7 +1824,6 @@ static void startPackage(bool toFolder) {
     doc["engine"] = S2D_VERSION; doc["engineNum"] = S2D_VERSION_NUM;
     std::string autor = envio::conectado() ? envio::usuario() : prefs().name.empty() ? "anónimo" : prefs().name;
     std::string id = slugOf(autor + "-" + nombre);
-    // portada: la miniatura que eligio el creador o, si no, la primera pantalla del juego
     std::string portada = g_sp.portada;
     if (portada.empty()) {
         std::vector<Px> px;
@@ -1965,7 +1863,6 @@ static void startPackage(bool toFolder) {
     });
 }
 
-// entrar con GitHub: boton, codigo que hay que escribir en github.com y estado de la cuenta
 static void drawGithubLogin(const char *why) {
     if (envio::conectado()) {
         ImGui::AlignTextToFramePadding();
@@ -1993,7 +1890,6 @@ static void drawGithubLogin(const char *why) {
     if (!ec.empty()) ImGui::TextColored(ImVec4(1, 0.55f, 0.5f, 1), "%s", ec.c_str());
 }
 
-// una cuenta en una lista (comunidad, seguidores...): su nombre (abre el perfil), insignia, un dato y Seguir / Siguiendo
 static void personRow(const std::string &login, const std::string &dato = "") {
     ImGui::PushID(login.c_str());
     ImGui::AlignTextToFramePadding();
@@ -2017,7 +1913,6 @@ static void drawPerfil() {
     const envio::Perfil *pf = envio::perfil(login);
     int ins = tienda::insignia(login);
     ImDrawList *dl = ImGui::GetWindowDrawList();
-    // foto, nombre, insignia y fechas
     const float av = 96;
     ImVec2 p = ImGui::GetCursorScreenPos();
     const Texture2D *tex = pf ? newsImage(pf->avatar) : nullptr;
@@ -2044,7 +1939,6 @@ static void drawPerfil() {
     else if (pf->error) ImGui::TextColored(ImVec4(1, 0.55f, 0.5f, 1), "No se pudo cargar el perfil (¿hay internet?)");
     if (pf && !pf->bio.empty()) { ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 600); ImGui::TextUnformatted(pf->bio.c_str()); ImGui::PopTextWrapPos(); }
     ImGui::Dummy(ImVec2(0, 4));
-    // seguir
     if (envio::conectado() && login != envio::usuario()) {
         bool sigo = pf && pf->sigo == 1;
         if (pf && pf->sigo < 0) ImGui::BeginDisabled();
@@ -2054,7 +1948,6 @@ static void drawPerfil() {
     } else if (!envio::conectado()) {
         if (ImGui::Button("Entra con GitHub para seguir")) { g_sp.showCuenta = true; ImGui::CloseCurrentPopup(); }
     }
-    // pestanas: juegos, seguidores, siguiendo
     auto juegos = tienda::juegosDe(login);
     std::string tabs[3] = {std::to_string(juegos.size()) + (juegos.size() == 1 ? " juego" : " juegos"),
                            (pf && pf->seguidores >= 0 ? std::to_string(pf->seguidores) : "-") + " seguidores",
@@ -2064,10 +1957,9 @@ static void drawPerfil() {
         if (t) ImGui::SameLine(0, 18);
         bool sel = g_sp.perfilTab == t;
         ImGui::PushFont(sel ? ui::boldFont() : ImGui::GetFont(), 0);
-        // DontClosePopups: un Selectable dentro de una ventana emergente la cierra al pulsarlo
         if (ImGui::Selectable((tabs[t] + "##pt" + std::to_string(t)).c_str(), sel, ImGuiSelectableFlags_DontClosePopups, ImGui::CalcTextSize(tabs[t].c_str()))) g_sp.perfilTab = t;
         ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
-        g_sp.tabPos[t] = ImVec2((a.x + b.x) / 2, (a.y + b.y) / 2);   // para las pruebas (sp.pestana)
+        g_sp.tabPos[t] = ImVec2((a.x + b.x) / 2, (a.y + b.y) / 2);
         ImGui::PopFont();
     }
     ImGui::Separator();
@@ -2111,7 +2003,6 @@ static void drawPerfil() {
     ImGui::EndPopup();
 }
 
-// denuncia: motivo y detalles; llega como incidencia a source2d-envios (Controladores/Source-Play.sh > Denuncias)
 static void drawDenuncia() {
     static const char *const motivosJuego[] = {"Copia el trabajo de otra persona", "Contenido inapropiado", "Hace cosas raras en mi PC",
                                                "No funciona o engaña", "Otro motivo"};
@@ -2191,7 +2082,6 @@ static void askLockedProject(const std::string &file) {
     g_sp.fuenteNombre = fp.stem().u8string() == "original" && fp.has_parent_path() ? fp.parent_path().filename().u8string() : fp.stem().u8string();
 }
 static void drawSourcePlayDialogs() {
-    // el paquete termino de armarse: se guarda en la carpeta o se envia
     if (g_sp.armando.valid() && g_sp.armando.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
         std::string err = g_sp.armando.get();
         if (!err.empty()) { g_sp.msg = err; g_sp.msgErr = true; }
@@ -2218,7 +2108,6 @@ static void drawSourcePlayDialogs() {
         ImGui::SetNextItemWidth(200); ImGui::Combo("##spcat", &g_sp.cat, kCategorias, kNumCategorias);
         ImGui::TextUnformatted("Descripción");
         ImGui::InputTextMultiline("##spdesc", g_sp.descripcion, sizeof g_sp.descripcion, ImVec2(570, 80));
-        // miniatura: una imagen propia o la primera pantalla del juego
         const Texture2D *pt = portadaTexture();
         ui::PixTexture *th = pt ? nullptr : docThumb("sourceplay", app.proj.doc, app.proj.rev, false);
         if (pt) ImGui::Image((ImTextureID)(intptr_t)pt->id, ImVec2(192, 108));
@@ -2228,7 +2117,7 @@ static void drawSourcePlayDialogs() {
         ImGui::TextUnformatted("Miniatura");
         ImGui::TextDisabled(pt ? "Tu imagen (recortada a 16:9)." : "La primera pantalla del juego.");
         if (ImGui::Button("Elegir imagen...")) {
-            ImGui::CloseCurrentPopup();   // el selector de archivos va encima; al elegir vuelve esta ventana
+            ImGui::CloseCurrentPopup();
             app.fileDlg.show(ui::FileDialog::Open, "Miniatura del juego", ".png|.jpg|.jpeg|.bmp", ui::homeDir(), "", [](const std::string &f) {
                 std::string err;
                 if (!loadPortada(f, err)) { g_sp.msg = err; g_sp.msgErr = true; }
@@ -2281,7 +2170,6 @@ static void drawSourcePlayDialogs() {
         ImGui::EndPopup();
     }
 
-    // ver por dentro un juego cerrado: clave del creador
     if (g_sp.abriendo.valid() && g_sp.abriendo.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
         std::string err = g_sp.abriendo.get();
         if (err.empty()) {
@@ -2332,8 +2220,6 @@ static void drawSourcePlayDialogs() {
     }
 }
 
-// Escuela: aprender con las plantillas. Cada una es un juego pequeno y completo con un comentario en cada evento;
-// "Abrir y aprender" abre una copia en la hoja de eventos para leerla, probarla y cambiarla
 static void drawTemplateLessons() {
     static const struct { const char *name, *learn, *try_; } info[] = {
         {"Plataformas", "Gravedad y salto, colisiones con el suelo, monedas y la cámara que sigue al jugador.",
@@ -2376,18 +2262,14 @@ static void drawTemplateLessons() {
     }
 }
 
-static std::string creationsDir(const char *sub);   // <carpeta de proyectos>/Sprites o /Sonidos
+static std::string creationsDir(const char *sub);
 static void refreshCreations();
 
-/* ---------------- Source Sprite: el editor de sprites solo, sin proyecto ----------------
-   Se abre desde la pagina de inicio. Abre imagenes (.png, .gif animado, .bmp, .jpg, .tga, .qoi) o .s2dsprite (capas y
-   frames editables), guarda en .s2dsprite y exporta a imagen, hoja de sprites (con su JSON al estilo Aseprite), un
-   archivo por frame o GIF animado. Si hay un proyecto abierto, el sprite se puede anadir a el. */
 struct SpriteStudio {
     bool on = false, askNew = false, askExport = false, askLeave = false;
     std::unique_ptr<SpriteEditor> ed;
-    Project proj;                       // proyecto de usar y tirar (el editor guarda ahi la paleta)
-    std::string path;                   // .s2dsprite actual ("" si nunca se guardo)
+    Project proj;
+    std::string path;
     bool dirty = false;
     int nw = 32, nh = 32, fmt = 0, layout = 1;
     bool withJson = true;
@@ -2407,7 +2289,7 @@ static void openStudio() {
     S.proj.doc = json::object();
     savePaletteTo(S.proj.doc);
     S.on = true;
-    app.homeSection = 4;   // al volver, a la lista de sprites
+    app.homeSection = 4;
 }
 static bool studioLoad(const std::string &f) {
     auto &S = g_studio;
@@ -2439,8 +2321,6 @@ static const char *kStudioExt[] = {".png", ".gif", ".bmp", ".tga", ".qoi", ".jpg
 static const char *kStudioLayouts[] = {"Solo el frame actual", "Hoja horizontal (un frame al lado del otro)", "Hoja vertical",
                                        "Hoja en cuadrícula", "Un archivo por frame"};
 
-/* ---------------- Source Sound ---------------- */
-// suelto (desde Inicio, como Source Sprite) o dentro del proyecto (Musica y sonidos > Crear con Source Sound)
 struct SoundStudio { bool on = false; std::unique_ptr<sound::Editor> ed; };
 static SoundStudio g_sound;
 static void setupSoundEditor(sound::Editor &e) {
@@ -2453,9 +2333,8 @@ static void openSoundStudio() {
     if (!g_sound.ed) { g_sound.ed = std::make_unique<sound::Editor>(); g_sound.ed->song = sound::newSong("Mi canción"); setupSoundEditor(*g_sound.ed); }
     sound::clipStop();
     g_sound.on = true;
-    app.homeSection = 6;   // al volver, a la lista de sonidos
+    app.homeSection = 6;
 }
-// el sonido de "Musica y sonidos" en su documento (si no tiene cancion, uno nuevo)
 static void openSound(const std::string &musicId) {
     openedFromPanel();
     for (auto &e : app.sounds) if (e->musicId == musicId) { e->focusMe = true; return; }
@@ -2473,7 +2352,6 @@ static std::string newProjectSound(bool sfx) {
     json song = sound::newSong(sfx ? "Efecto " + std::to_string(app.proj.doc["music"].size() + 1) : "Música " + std::to_string(app.proj.doc["music"].size() + 1), sfx);
     return sound::saveToProject(app.proj, song, "");
 }
-// la Cancion de Floppa (src/editor/presets/cancion_floppa.s2dsound, tools/make_cancion_floppa.py) en el proyecto
 static void addFloppaSong() {
     json song = json::parse(std::string((const char *)preset_cancion, preset_cancion_len), nullptr, false);
     if (!song.is_object()) return;
@@ -2544,7 +2422,6 @@ static void drawStudio() {
     ImGui::SetNextWindowSize(vp->WorkSize);
     ImGui::Begin("##studio", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                                       ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-    // barra superior
     if (ui::iconButton("st_home", ui::Icon::Home, false, "Volver a tus sprites", 30)) { if (S.dirty) S.askLeave = true; else S.on = false; }
     ImGui::SameLine();
     ImGui::AlignTextToFramePadding();
@@ -2582,7 +2459,6 @@ static void drawStudio() {
     ImGui::Separator();
     S.ed->drawBody(S.proj);
 
-    // dialogos
     if (S.askNew) { ImGui::OpenPopup("Nuevo sprite##studio"); S.askNew = false; }
     if (ui::beginModal("Nuevo sprite##studio", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::TextUnformatted("Tamaño del lienzo");
@@ -2641,9 +2517,6 @@ static void drawStudio() {
     ImGui::End();
 }
 
-/* ---------------- Inicio > Source Sprite y Source Sound: tus creaciones ----------------
-   Los sprites (.s2dsprite o .s2sprite) y los sonidos (.s2dsound o .s2sound) se guardan por defecto en
-   <carpeta de proyectos>/Sprites y /Sonidos. Cada apartado los muestra y los abre en su editor. */
 static std::string creationsDir(const char *sub) {
     std::string d = projectsDir() + "/" + sub;
     std::error_code ec;
@@ -2658,8 +2531,7 @@ static std::string lowerExtOf(const std::string &f) {
 static bool isSpriteFile(const std::string &f) { std::string e = lowerExtOf(f); return e == ".s2dsprite" || e == ".s2sprite"; }
 static bool isSoundFile(const std::string &f) { std::string e = lowerExtOf(f); return e == ".s2dsound" || e == ".s2sound"; }
 struct Creation { std::string path, name; long long bytes = 0; fs::file_time_type mtime; };
-// del mas nuevo al mas viejo; se vuelve a mirar cada 2 s
-static int g_creationsGen = 0;          // sube al guardar uno: la lista se vuelve a leer ya
+static int g_creationsGen = 0;
 static const std::vector<Creation> &creations(const char *sub, bool sprites) {
     struct Cache { std::vector<Creation> list; double at = -10; int gen = -1; };
     static std::map<std::string, Cache> caches;
@@ -2692,7 +2564,6 @@ static std::string fmtDate(const std::string &path) {
     return s.rfind(pre, 0) == 0 ? s.substr(strlen(pre)) : s;
 }
 
-// miniatura de un sprite guardado: sus frames (hasta 24) y su tamano
 struct SpriteThumb { std::vector<std::unique_ptr<ui::PixTexture>> frames; int w = 0, h = 0, n = 0; fs::file_time_type mtime; bool read = false; };
 static std::map<std::string, SpriteThumb> g_sprThumbs;
 static void releaseCreationThumbs() {
@@ -2724,8 +2595,7 @@ static SpriteThumb &spriteThumb(const Creation &c) {
     return t;
 }
 
-static std::string g_deleteCreation;   // a la espera de confirmar
-// entrada escalonada: cada tarjeta aparece un poco despues que la anterior, subiendo
+static std::string g_deleteCreation;
 static float cardIntro(int i, double since) {
     if (!ui::animations()) return 1;
     float t = (float)std::clamp((GetTime() - since - i * 0.035) / 0.3, 0.0, 1.0);
@@ -2743,18 +2613,14 @@ static void openSpriteFile(const std::string &f) {
     if (studioLoad(f)) g_studio.on = true;
 }
 
-/* ---------------- Source Store (store.hpp): paquetes de sprites y de sonidos ----------------
-   Una pestana en Source Sprite y en Source Sound: el catalogo, descargar, anadir al proyecto, guardar en tus creaciones y
-   "Crear paquete" (de tu proyecto o de tus creaciones) para enviarlo a revision con GitHub o guardarlo en una carpeta. */
 static const char *const kCatSprites[] = {"Personaje", "Sprites sueltos", "Tiles", "Autotiles", "Mixto"};
 static const char *const kCatSonidos[] = {"Música", "Efectos", "Mixto"};
 static const char *const kLicencias[] = {"Libre", "Libre dando crédito", "Solo juegos no comerciales"};
-struct StoreItem { std::string label, kind, ref; bool on = false; };   // kind: sprite, tileset, autotile, sonido; ref: id o archivo
+struct StoreItem { std::string label, kind, ref; bool on = false; };
 struct StoreUI {
-    int tab[2] = {0, 0};                           // 0 tus creaciones, 1 Source Store
+    int tab[2] = {0, 0};
     char buscar[2][64] = {"", ""};
     bool pedido[2] = {false, false};
-    // Crear paquete
     bool showCrear = false, aCarpeta = false, msgErr = false;
     int tipo = 0, cat = 0, lic = 1;
     char nombre[80] = "", desc[600] = "";
@@ -2762,13 +2628,11 @@ struct StoreUI {
     std::string portada, carpeta, msg;
     std::future<std::string> armando;
     envio::Paquete paquete;
-    // escuchar un paquete de sonidos
     bool showEscuchar = false;
     std::string escucharId;
 };
 static StoreUI g_st;
 
-// lo que trae un paquete, en palabras ("3 sprites · 1 autotile")
 static std::string storeContenido(const store::Paquete &p) {
     std::string r;
     auto add = [&](int n, const char *uno, const char *varios) { if (n) r += (r.empty() ? "" : " · ") + std::to_string(n) + " " + (n == 1 ? uno : varios); };
@@ -2776,7 +2640,6 @@ static std::string storeContenido(const store::Paquete &p) {
     add(p.nSonidos, "sonido", "sonidos");
     return r;
 }
-// guarda lo del paquete en Source Sprite / Source Sound (tus creaciones)
 static int storeToCreations(store::Tipo t, const json &pk) {
     int n = 0;
     std::error_code ec;
@@ -2862,7 +2725,6 @@ static void storeCard(store::Tipo t, const store::Paquete &p, float w) {
     ImGui::PopID();
 }
 
-// pestanas "Tus sprites | Source Store" (o sonidos); devuelve true si toca dibujar la tienda
 static bool storeTabs(store::Tipo t) {
     const char *mine = t == store::Sprites ? "Tus sprites" : "Tus sonidos";
     for (int i = 0; i < 2; i++) {
@@ -2930,7 +2792,6 @@ static void openCrearPaquete(store::Tipo t) {
         for (auto &c : creations("Sonidos", false)) g_st.items.push_back({"De Source Sound: " + c.name, "sonido-archivo", c.path});
     }
 }
-// arma el paquete con lo marcado (y, en un autotile, su conjunto de tiles); "" si salio bien
 static std::string buildStorePackage(json &pk) {
     store::Tipo t = (store::Tipo)g_st.tipo;
     pk = {{"formato", "source2d-paquete"}, {"tipo", t == store::Sprites ? "sprites" : "sonidos"}};
@@ -2942,7 +2803,7 @@ static std::string buildStorePackage(json &pk) {
         else if (it.kind == "autotile") {
             if (json *x = findById(app.proj.doc["autotiles"], it.ref)) { pk["autotiles"].push_back(*x); if (!jstr(*x, "tilesetId").empty()) tsIds.insert(jstr(*x, "tilesetId")); }
         } else if (it.kind == "sonido") { if (json *x = findById(app.proj.doc["music"], it.ref)) pk["sonidos"].push_back((*x)["song"]); }
-        else {   // archivo de tus creaciones
+        else {
             std::ifstream in(it.ref);
             json j = json::parse(in, nullptr, false);
             if (!j.is_object()) return "No se pudo leer " + it.ref;
@@ -3030,7 +2891,7 @@ static void drawStoreDialogs() {
         if (ImGui::Button("Elegir imagen...")) {
             ImGui::CloseCurrentPopup();
             app.fileDlg.show(ui::FileDialog::Open, "Miniatura del paquete", ".png|.jpg|.jpeg|.bmp", ui::homeDir(), "", [](const std::string &f) {
-                std::string keep = g_sp.portada, keepF = g_sp.portadaArchivo, err;   // loadPortada deja la imagen en g_sp
+                std::string keep = g_sp.portada, keepF = g_sp.portadaArchivo, err;
                 if (loadPortada(f, err)) g_st.portada = g_sp.portada; else { g_st.msg = err; g_st.msgErr = true; }
                 g_sp.portada = keep; g_sp.portadaArchivo = keepF;
                 g_st.showCrear = true;
@@ -3053,7 +2914,6 @@ static void drawStoreDialogs() {
         if (!m.empty()) { ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 600); ImGui::TextColored(merr ? ImVec4(1, 0.55f, 0.5f, 1) : ImVec4(0.6f, 0.9f, 0.7f, 1), "%s", m.c_str()); ImGui::PopTextWrapPos(); }
         ImGui::EndPopup();
     }
-    // escuchar un paquete de sonidos (descargado)
     if (g_st.showEscuchar) { ImGui::OpenPopup("Escuchar paquete"); g_st.showEscuchar = false; }
     ImGui::SetNextWindowSize(ImVec2(460, 0), ImGuiCond_Appearing);
     if (ui::beginModal("Escuchar paquete", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -3115,7 +2975,7 @@ static void drawSpriteGallery() {
         float in = cardIntro(i, since), lift = ui::animTo(ImGui::GetID("##lift"), hov ? 1.0f : 0.0f, 16.0f);
         ImVec2 p(p0.x, p0.y + (1 - in) * 18 - lift * 4), e(p.x + cw, p.y + ch);
         int alpha = (int)(255 * in);
-        if (lift > 0.01f) dl->AddRectFilled(ImVec2(p.x + 2, p.y + 6), ImVec2(e.x + 2, e.y + 6), IM_COL32(0, 0, 0, (int)(60 * lift * in)), 12);   // sombra
+        if (lift > 0.01f) dl->AddRectFilled(ImVec2(p.x + 2, p.y + 6), ImVec2(e.x + 2, e.y + 6), IM_COL32(0, 0, 0, (int)(60 * lift * in)), 12);
         dl->AddRectFilled(p, e, (ui::kPanel & 0x00FFFFFF) | ((ImU32)alpha << 24), 12);
         dl->AddRect(p, e, hov ? ui::kPrimary : ((ui::kLine & 0x00FFFFFF) | ((ImU32)alpha << 24)), 12, 0, hov ? 2.0f : 1.0f);
         ImVec2 a(p.x + 10, p.y + 10), b(e.x - 10, p.y + 10 + ph);
@@ -3145,7 +3005,6 @@ static void drawSpriteGallery() {
     }
 }
 
-// un sonido guardado: la cancion, su forma de onda y cuanto dura (se calcula una vez)
 struct SoundInfo { json song; std::vector<float> peaks; double secs = 0; fs::file_time_type mtime; bool read = false; };
 static std::map<std::string, SoundInfo> g_sndInfo;
 static SoundInfo &soundInfo(const Creation &c) {
@@ -3166,7 +3025,7 @@ static void openSoundFile(const std::string &f) {
     openSoundStudio();
     g_sound.ed->stop(); g_sound.ed->song = j; g_sound.ed->path = f; g_sound.ed->dirty = false;
 }
-static std::string fmtSecs(double s) {   // 0,4 s para los efectos cortos; 1:05 para la musica
+static std::string fmtSecs(double s) {
     char b[16];
     if (s < 10) { snprintf(b, sizeof b, "%.1f s", s); for (char &c : b) if (c == '.') c = ','; return b; }
     int t = (int)std::round(s);
@@ -3189,7 +3048,7 @@ static void drawSoundGallery() {
     ImGui::SameLine();
     if (homeButton("+ Nuevo efecto", true)) fresh(true);
     ImGui::SameLine();
-    if (homeButton("Canción Test", false)) {   // la de ejemplo (32 s), para ver como esta hecha
+    if (homeButton("Canción Test", false)) {
         json song = json::parse(std::string((const char *)preset_cancion, preset_cancion_len), nullptr, false);
         if (song.is_object()) { sound::clipStop(); openSoundStudio(); g_sound.ed->stop(); g_sound.ed->song = song; g_sound.ed->path.clear(); g_sound.ed->dirty = false; }
     }
@@ -3207,7 +3066,6 @@ static void drawSoundGallery() {
         ImGui::TextDisabled("Todavía no tienes sonidos. Los que guardes salen aquí.");
         return;
     }
-    // cada sonido como una nota de voz: play, forma de onda que se va llenando, duracion y editar
     ImDrawList *dl = ImGui::GetWindowDrawList();
     float w = std::min(620.0f, ImGui::GetContentRegionAvail().x), h = 70, fs = ImGui::GetFontSize();
     std::string playing = sound::clipKey();
@@ -3222,7 +3080,6 @@ static void drawSoundGallery() {
         int alpha = (int)(255 * in);
         bool sfx = jstr(si.song, "mode") == "sfx", on = playing == c.path;
         dl->AddRectFilled(p, e, (ui::kPanel2 & 0x00FFFFFF) | ((ImU32)alpha << 24), 16);
-        // play / parar
         ImVec2 pc(p.x + 36, p.y + h / 2);
         ImGui::SetCursorScreenPos(ImVec2(pc.x - 22, pc.y - 22));
         if (ImGui::InvisibleButton("##play", ImVec2(44, 44)) && !si.song.is_null()) { if (on) sound::clipStop(); else sound::clipPlay(c.path, si.song); }
@@ -3231,7 +3088,6 @@ static void drawSoundGallery() {
         dl->AddCircleFilled(pc, 21 * pulse, ph ? ui::kPrimaryLight : ui::kPrimary, 32);
         ui::drawIcon(dl, on ? ui::Icon::Stop : ui::Icon::Play, ImVec2(pc.x + (on ? 0 : 2), pc.y), 15, IM_COL32_WHITE);
         if (ph) ImGui::SetTooltip(on ? "Parar" : "Escuchar");
-        // nombre y forma de onda
         float wx0 = p.x + 72, wx1 = e.x - 118;
         dl->AddText(ui::boldFont(), fs, ImVec2(wx0, p.y + 9), ui::kText, c.name.c_str());
         const char *kind = sfx ? "Efecto" : "Música";
@@ -3250,7 +3106,6 @@ static void drawSoundGallery() {
         std::string meta = fmtBytes(c.bytes) + " · " + fmtDate(c.path);
         float mw = ImGui::CalcTextSize(meta.c_str()).x;
         dl->AddText(ImVec2(wx1 - mw, e.y - fs - 4), ui::kDim, meta.c_str());
-        // editar
         ImGui::SetCursorScreenPos(ImVec2(e.x - 104, p.y + h / 2 - 17));
         if (homeButton("Editar", false)) openSoundFile(c.path);
         ImGui::SameLine(0, 4);
@@ -3260,7 +3115,6 @@ static void drawSoundGallery() {
     }
 }
 
-// confirmacion para borrar un sprite o un sonido guardado (va a la papelera si se puede)
 static void drawDeleteCreationModal() {
     if (!g_deleteCreation.empty() && !ImGui::IsPopupOpen("Borrar creación")) ImGui::OpenPopup("Borrar creación");
     if (ui::beginModal("Borrar creación", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -3285,14 +3139,11 @@ static void drawDeleteCreationModal() {
 
 static void refreshCreations() { g_creationsGen++; }
 
-/* ---------------- noticias (Inicio > Noticias) ----------------
-   Anuncios y versiones firmados por @floppa-1550 (ver novedades.cpp). Las tarjetas llevan una franja del color de su
-   tipo; las de una version nueva traen el boton para bajarla y abrirla. */
 static ImU32 newsColor(const std::string &tipo) {
     if (tipo == "actualizacion") return IM_COL32(0x4C, 0xC3, 0x8A, 255);
     if (tipo == "evento") return ui::kAccent;
     if (tipo == "consejo") return IM_COL32(0x55, 0xA8, 0xF0, 255);
-    return IM_COL32(0xF0, 0xA0, 0x40, 255);   // aviso
+    return IM_COL32(0xF0, 0xA0, 0x40, 255);
 }
 static const char *newsKind(const std::string &tipo) {
     if (tipo == "actualizacion") return "Actualización";
@@ -3300,7 +3151,7 @@ static const char *newsKind(const std::string &tipo) {
     if (tipo == "consejo") return "Consejo";
     return "Aviso";
 }
-static std::string fechaBonita(const std::string &f) {   // 2026-10-28 -> 28/10/2026
+static std::string fechaBonita(const std::string &f) {
     return f.size() == 10 ? f.substr(8, 2) + "/" + f.substr(5, 2) + "/" + f.substr(0, 4) : f;
 }
 static const Texture2D *newsImage(const std::string &path) {
@@ -3314,7 +3165,6 @@ static const Texture2D *newsImage(const std::string &path) {
     }
     return it->second.id ? &it->second : nullptr;
 }
-// descargar / ver el progreso / abrir una version del repositorio
 static void versionButton(const novedades::Version &v) {
     ImGui::PushID(v.nombre.c_str());
     if (v.nombre == S2D_VERSION) ImGui::TextDisabled("Ya estás usando esta versión.");
@@ -3336,7 +3186,6 @@ static void versionButton(const novedades::Version &v) {
     }
     ImGui::PopID();
 }
-// encuesta de una noticia: antes de votar, una fila por opcion; al votar (o al cerrarse), las barras con los votos
 static std::string tiempoQueda(long long seg) {
     if (seg >= 2 * 86400) return std::to_string(seg / 86400) + " días";
     if (seg >= 3600) return std::to_string(seg / 3600) + " h " + std::to_string(seg % 3600 / 60) + " min";
@@ -3395,8 +3244,6 @@ static void newsPoll(const novedades::Noticia &n) {
     ImGui::PopID();
 }
 
-// texto de una noticia: {lista:Uno, Dos, Tres} sale como lista con puntos y lo de fuera como texto normal;
-// {encuesta} es donde va la encuesta de la noticia (si no esta, la encuesta sale al final del texto)
 static void newsRich(const std::string &s, const novedades::Noticia *poll = nullptr) {
     if (poll && poll->hayEncuesta) {
         size_t m = s.find("{encuesta}");
@@ -3444,7 +3291,7 @@ static void newsCard(const novedades::Noticia &n, float w) {
     ImGui::PushTextWrapPos(w - 22);
     ImGui::TextUnformatted(n.titulo.c_str());
     ImGui::PopFont();
-    if (!n.texto.empty() || n.hayEncuesta) newsRich(n.texto, &n);   // titulo, texto (con la encuesta), imagen y debajo lo "inferior"
+    if (!n.texto.empty() || n.hayEncuesta) newsRich(n.texto, &n);
     if (const Texture2D *t = newsImage(n.imagen)) {
         float iw = std::min((float)t->width, w - 44), ih = iw * t->height / std::max(1, t->width);
         ImGui::Image((ImTextureID)(intptr_t)t->id, ImVec2(iw, ih));
@@ -3470,7 +3317,6 @@ static void drawNewsSection() {
     if (!st.empty()) ImGui::TextDisabled("%s", st.c_str());
     ImGui::Dummy(ImVec2(0, 6));
     float w = std::min(ImGui::GetContentRegionAvail().x, 760.0f);
-    // version estable mas nueva que esta: arriba de todo (si no tiene ya su propia noticia)
     auto &ns = novedades::noticias();
     for (auto &v : novedades::versiones()) {
         if (v.canal != "estable" || v.num <= S2D_VERSION_NUM) continue;
@@ -3491,7 +3337,6 @@ static void drawStartPage() {
     const float menuW = 210;
     ImDrawList *dl = ImGui::GetWindowDrawList();
     ImVec2 wp = ImGui::GetCursorScreenPos(), avail = ImGui::GetContentRegionAvail();
-    // menu lateral (HomePageMenu)
     ImGui::BeginChild("##homemenu", ImVec2(menuW, avail.y), ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
     if (!app.hasProject) {
         ImVec2 lp = ImGui::GetCursorScreenPos();
@@ -3499,7 +3344,6 @@ static void drawStartPage() {
         ml->AddText(ui::boldFont(), 21, ImVec2(lp.x + 18, lp.y + 18), ui::kText, "Source 2D");
         ImGui::Dummy(ImVec2(0, 62));
     } else ImGui::Dummy(ImVec2(0, 12));
-    // id: el apartado (4 abre Source Sprite); Noticias solo si este editor busca noticias
     struct Item { const char *label; ui::Icon icon; int id; };
     std::vector<Item> items = {{"Crear", ui::Icon::Create, 0}, {"Source Play", ui::Icon::Gamepad, 1}, {"Plantillas", ui::Icon::Book, 2}, {"Escuela", ui::Icon::People, 3}};
     if (novedades::activo()) items.push_back({"Noticias", ui::Icon::Bell, 5});
@@ -3521,11 +3365,10 @@ static void drawStartPage() {
         ImU32 c = sel ? ui::kSelectedIconBg : ui::kText2;
         ui::drawIcon(ml, it.icon, ImVec2(p.x + 24, p.y + 20), 18, c);
         ml->AddText(sel ? ui::boldFont() : ImGui::GetFont(), ImGui::GetFontSize() + 1, ImVec2(p.x + 46, p.y + 11), sel ? ui::kText : ui::kText2, it.label);
-        if (i == 5 && novedades::sinLeer() > 0) ml->AddCircleFilled(ImVec2(p.x + menuW - 40, p.y + 20), 4.5f, ui::kAccent);   // hay noticias sin leer
+        if (i == 5 && novedades::sinLeer() > 0) ml->AddCircleFilled(ImVec2(p.x + menuW - 40, p.y + 20), 4.5f, ui::kAccent);
         ImGui::PopID();
         ImGui::Dummy(ImVec2(0, 2));
     }
-    // version: al pie; elegir otra la abre (y cierra esta, preguntando si hay cambios sin guardar)
     ImGui::SetCursorPosY(std::max(ImGui::GetCursorPosY(), avail.y - 86));
     ImGui::SetCursorPosX(16);
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kDim), "Versión");
@@ -3541,7 +3384,6 @@ static void drawStartPage() {
             if (ImGui::Selectable(v.name.c_str(), cur) && !cur) launch(v.name == S2D_VERSION ? selfExe() : v.exe, false);
         }
         if (vers.size() <= 1 && !app.showExperimental && !hasDownloadable()) ImGui::TextDisabled("Las versiones que abras se guardan aquí.");
-        // las del repositorio que no estan en este equipo: se bajan aqui mismo y luego salen arriba
         bool title = false;
         for (auto &v : novedades::versiones()) {
             if (novedades::instalada(v.nombre) || (v.canal != "estable" && !app.showExperimental)) continue;
@@ -3556,7 +3398,7 @@ static void drawStartPage() {
             if (!err.empty()) ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.5f, 1.0f), "%s", err.c_str());
             ImGui::PopID();
         }
-        if (title && ImGui::IsWindowFocused()) vers = installedVersions();   // la que acaba de bajarse sale arriba
+        if (title && ImGui::IsWindowFocused()) vers = installedVersions();
         ImGui::Separator();
         if (ImGui::Selectable(app.showExperimental ? "- Experimentales" : "+ Experimentales", false, ImGuiSelectableFlags_DontClosePopups))
             app.showExperimental = !app.showExperimental;
@@ -3573,12 +3415,10 @@ static void drawStartPage() {
     if (app.vulkan) { ImGui::SetCursorPosX(16); ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.35f, 1.0f), "Experimental"); }
     ImGui::EndChild();
     dl->AddLine(ImVec2(wp.x + menuW, wp.y), ImVec2(wp.x + menuW, wp.y + avail.y), ui::kLine);
-    // contenido
     ImGui::SameLine(0, 0);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(36, 28));
     ImGui::BeginChild("##homebody", ImVec2(0, avail.y), ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoBackground);
     ImGui::PopStyleVar();
-    /* al cambiar de apartado, el nuevo entra con un fundido */
     static int lastSection = -1;
     ImGuiID fid = ImGui::GetID("##secfade");
     if (lastSection != app.homeSection) { ImGui::GetStateStorage()->SetFloat(fid, 0.0f); lastSection = app.homeSection; }
@@ -3617,7 +3457,6 @@ static void drawHome() {
     ImGui::End();
 }
 
-// dialogos de la pagina de inicio: nombre del proyecto nuevo y cambios sin guardar
 static void drawStartDialogs() {
     if (!app.forgetRecent.empty()) {
         app.recent.erase(std::remove(app.recent.begin(), app.recent.end(), app.forgetRecent), app.recent.end());
@@ -3638,7 +3477,6 @@ static void drawStartDialogs() {
         if (ImGui::Button("Cancelar", ImVec2(110, 0))) { app.pendingLink.clear(); ImGui::CloseCurrentPopup(); }
         ImGui::EndPopup();
     }
-    // anuncio importante: sale una sola vez en una ventana al abrir el editor
     static int shownImportant = 0;
     if (const novedades::Noticia *imp = novedades::importantePendiente(); imp && !ImGui::IsPopupOpen("Aviso", ImGuiPopupFlags_AnyPopupId) && !ImGui::GetTopMostPopupModal()) {
         shownImportant = imp->id;
@@ -3722,7 +3560,6 @@ static void drawStartDialogs() {
         if (ImGui::Button("Borrar", ImVec2(120, 0))) {
             std::error_code ec;
             fs::remove(f, ec);
-            // si el proyecto tenia su propia carpeta dentro de la de proyectos y ya esta vacia, se borra tambien
             fs::path dir = fs::path(f).parent_path();
             if (fs::absolute(dir.parent_path(), ec) == fs::absolute(projectsDir(), ec) && fs::is_empty(dir, ec)) fs::remove(dir, ec);
             app.recent.erase(std::remove(app.recent.begin(), app.recent.end(), f), app.recent.end());
@@ -3741,7 +3578,6 @@ static void drawStartDialogs() {
     if (app.showExport) { ImGui::OpenPopup("Exportar"); app.showExport = false; if (app.exportDir.empty()) app.exportDir = projectsDir(); }
     ImGui::SetNextWindowSize(ImVec2(620, 0));
     if (ui::beginModal("Exportar", nullptr, ImGuiWindowFlags_NoResize)) {
-        // Source Play: publicarlo para que lo juegue cualquiera con Source 2D
         {
             ImVec2 a = ImGui::GetCursorScreenPos();
             float bw = ImGui::GetContentRegionAvail().x;
@@ -3952,8 +3788,6 @@ static void drawStartDialogs() {
     }
 }
 
-/* optimizada: fuera los sprites, audios, fuentes y conjuntos de tiles que nada usa (se busca su id y su nombre en
-   el resto del proyecto); despues se exporta ligera */
 static json optimizedDoc(json doc) {
     std::string all = doc.dump();
     auto count = [&](const std::string &needle) { size_t n = 0; for (size_t p = all.find(needle); p != std::string::npos; p = all.find(needle, p + 1)) n++; return n; };
@@ -3980,7 +3814,6 @@ static void exportDialog(const std::string &os) {
                      [os](const std::string &f) { exportGame(f, os, app.liteExport); });
 }
 
-// la escena que se uso por ultimo o, si no hay, la primera del proyecto
 static void focusScene() {
     const json &scs = app.proj.doc["scenes"];
     std::string id = ui::lastFocusKey("scene");
@@ -4042,22 +3875,18 @@ static void drawMenus() {
     }
 }
 
-/* ---------------- pestanas de documentos (como las ClosableTabs de GDevelop) ---------------- */
-// Las pestanas de acoplamiento de ImGui van ocultas: esta fila las sustituye y cada pestana enfoca
-// o cierra su ventana con los mismos open/focusMe de siempre.
-struct DocTab { std::string win, label; ui::Icon icon; bool *open; bool *focus; std::string key; };   // key: documento para trabajar juntos
+struct DocTab { std::string win, label; ui::Icon icon; bool *open; bool *focus; std::string key; };
 
 static std::vector<DocTab> collectTabs() {
     std::vector<DocTab> t;
     auto add = [&](const std::string &win, ui::Icon ic, bool *open, bool *focus, const std::string &key = "") {
         std::string l = win.substr(0, win.find("###"));
-        size_t c = l.find(": ");                       // "Escena: Nivel 1" -> "Nivel 1" (el icono ya dice el tipo)
+        size_t c = l.find(": ");
         if (c != std::string::npos) l = l.substr(c + 2);
         t.push_back({win, l, ic, open, focus, key});
     };
     for (auto &e : app.sheets) if (e->open) add(e->title(app.proj), ui::Icon::Events, &e->open, &e->focusMe, "events:" + e->sceneId);
     for (auto &e : app.scenes) add(e->title(app.proj), ui::Icon::Scene, &e->open, &e->focusMe, "scene:" + e->sceneId);
-    // la escena y sus eventos se llaman igual: el nombre dice cual es cual ("Nivel 1 · Eventos", "Nivel 1 · Escena")
     for (auto &d : t) {
         if (d.key.rfind("events:", 0) == 0 && !d.label.empty() && d.label != "Eventos comunes") d.label += " · Eventos";
         else if (d.key.rfind("scene:", 0) == 0) d.label += " · Escena";
@@ -4072,7 +3901,6 @@ static std::vector<DocTab> collectTabs() {
     if (app.layersDoc && app.layersDoc->open) add("Capas###layers", ui::Icon::Onion, &app.layersDoc->open, &app.layersDoc->focusMe);
     for (auto &e : app.sounds) if (e->open) add(e->title(app.proj), ui::Icon::Bell, &e->open, &e->focusMe);
     if (app.autotiles && app.autotiles->open) add("Autotiles###autotiles", ui::Icon::Grid, &app.autotiles->open, &app.autotiles->focusMe);
-    // en el orden en que se abrieron, como en GDevelop
     for (auto &d : t) if (std::find(app.tabOrder.begin(), app.tabOrder.end(), d.win) == app.tabOrder.end()) app.tabOrder.push_back(d.win);
     app.tabOrder.erase(std::remove_if(app.tabOrder.begin(), app.tabOrder.end(), [&](const std::string &w) {
         return std::none_of(t.begin(), t.end(), [&](const DocTab &d) { return d.win == w; }); }), app.tabOrder.end());
@@ -4082,7 +3910,6 @@ static std::vector<DocTab> collectTabs() {
     return t;
 }
 
-// la pestana activa es la ventana que tiene el foco (o, al empezar, la visible en el centro)
 static void updateActiveTab(const std::vector<DocTab> &tabs) {
     auto known = [&](const char *n) { return std::any_of(tabs.begin(), tabs.end(), [&](const DocTab &d) { return d.win == n; }); };
     ImGuiWindow *nw = GImGui->NavWindow;
@@ -4091,7 +3918,6 @@ static void updateActiveTab(const std::vector<DocTab> &tabs) {
         ImGuiDockNode *n = app.dockCenter ? ImGui::DockBuilderGetNode(app.dockCenter) : nullptr;
         app.activeTab = n && n->VisibleWindow ? n->VisibleWindow->Name : "Inicio";
     }
-    // un nodo sin barra de pestanas solo muestra su primera ventana: la activa pasa al principio
     ImGuiWindow *w = ImGui::FindWindowByName(app.activeTab.c_str());
     ImGuiDockNode *n = w ? w->DockNode : nullptr;
     if (n && n->Windows.Size > 1 && n->Windows[0] != w) {
@@ -4100,7 +3926,6 @@ static void updateActiveTab(const std::vector<DocTab> &tabs) {
     }
 }
 
-// dibuja una pestana; devuelve 1 si se pulso, 2 si se pidio cerrarla
 static int docTab(const DocTab &d, bool active, float maxW, float h) {
     const float padL = 10, iconW = 16, gap = 7, closeW = d.open ? 22 : 0, padR = d.open ? 4 : 10;
     float labelW = d.label.empty() ? 0 : ImGui::CalcTextSize(d.label.c_str()).x;
@@ -4163,7 +3988,7 @@ static void drawTabsBar() {
     ImGui::SetCursorPosY((barH - 32) * 0.5f);
     if (ui::iconButton("tree", ui::Icon::Menu, app.showTree, "Gestor del proyecto", 32)) app.showTree = !app.showTree;
     school::anchor("menu.proyecto");
-    app.treeBtnMin = ImGui::GetItemRectMin(); app.treeBtnMax = ImGui::GetItemRectMax();   // su clic no cierra el cajon "por fuera"
+    app.treeBtnMin = ImGui::GetItemRectMin(); app.treeBtnMax = ImGui::GetItemRectMax();
     ImGui::SameLine(0, 8);
     ImVec2 tabsA = ImGui::GetCursorScreenPos();
     float avail = ImGui::GetContentRegionAvail().x - 8;
@@ -4183,8 +4008,6 @@ static void drawTabsBar() {
     ImGui::End();
 }
 
-// barra de herramientas principal (MainFrame/Toolbar de GDevelop): guardar e historial a la izquierda,
-// vista previa y publicar en el centro
 static void drawToolbar() {
     const float barH = 44, btnH = 32;
     beginBar("##toolbar", barH, ui::kPanel, (barH - btnH) * 0.5f);
@@ -4207,11 +4030,10 @@ static void drawToolbar() {
         app.collabTab = 0; app.showCollab = true;
     }
     school::anchor("toolbar.collab");
-    if (collab::chatSinLeer() > 0) {   // mensajes del chat sin leer: un punto en el boton
+    if (collab::chatSinLeer() > 0) {
         ImVec2 mx = ImGui::GetItemRectMax(), mn = ImGui::GetItemRectMin();
         dl->AddCircleFilled(ImVec2(mx.x - 6, mn.y + 6), 4.5f, ui::kAccent);
     }
-    // quienes estan en la sesion: un circulo con la inicial y, al pasar el raton, que tienen abierto
     for (auto &p : collab::peers()) {
         ImGui::SameLine(0, 4);
         ImVec2 c = ImGui::GetCursorScreenPos();
@@ -4231,7 +4053,6 @@ static void drawToolbar() {
         }
     }
 
-    // vista previa (boton plano) y publicar (boton primario), centrados
     ImFont *bold = ui::boldFont();
     float fs = ImGui::GetFontSize();
     const char *playL = "Vista previa", *pubL = "Exportar";
@@ -4259,7 +4080,6 @@ static void drawToolbar() {
     school::anchor("toolbar.export");
     if (pubHit) app.showExport = true;
 
-    // a la derecha: nombre del proyecto
     std::string st = app.proj.name() + (app.proj.dirty ? "  (sin guardar)" : "");
     float stW = ImGui::CalcTextSize(st.c_str()).x;
     if (ws.x - 14 - stW > x + 16) {
@@ -4282,7 +4102,7 @@ static void buildLayout(ImGuiID dock) {
     ImGui::DockBuilderRemoveNode(dock);
     ImGui::DockBuilderAddNode(dock, ImGuiDockNodeFlags_DockSpace);
     ImGui::DockBuilderSetNodeSize(dock, ImGui::GetMainViewport()->WorkSize);
-    ImGuiID center = dock;     // el gestor del proyecto es un cajon por encima: todo el ancho es para los documentos
+    ImGuiID center = dock;
     ImGui::DockBuilderDockWindow("Inicio", center);
     for (auto &e : app.sprites) ImGui::DockBuilderDockWindow(("Sprite: " + e->name + "###spr_" + e->spriteId).c_str(), center);
     for (auto &e : app.objects) ImGui::DockBuilderDockWindow(e->title(app.proj).c_str(), center);
@@ -4291,15 +4111,11 @@ static void buildLayout(ImGuiID dock) {
     for (auto &e : app.tilesets) ImGui::DockBuilderDockWindow(e->title(app.proj).c_str(), center);
     for (auto &e : app.fonts) ImGui::DockBuilderDockWindow(e->title(app.proj).c_str(), center);
     for (const char *w : {"Ajustes del proyecto###settings", "Shaders###shaders", "Extensiones###extensions"}) ImGui::DockBuilderDockWindow(w, center);
-    // sin las pestanas de ImGui: las sustituye la fila de pestanas de arriba
     ImGui::DockBuilderGetNode(center)->LocalFlags |= ImGuiDockNodeFlags_NoTabBar;
     ImGui::DockBuilderFinish(dock);
     app.dockCenter = center;
 }
 
-/* ---------------- trabajar juntos (collab.hpp) ---------------- */
-// La carpeta temporal de un invitado (ahi se escribe el proyecto para probarlo) lleva invitado.pid: si el editor se
-// cerro de golpe en plena sesion, al abrir otro se borra (salvo que ese editor siga vivo).
 static void guestMarkTemp() {
     if (app.tmpDir.empty() || !guestLocked()) return;
     std::string m = app.tmpDir + "/invitado.pid";
@@ -4318,7 +4134,6 @@ static void cleanGuestLeftovers() {
         if (pid != sys::processId() && !sys::processAlive(pid)) fs::remove_all(e.path(), ec);
     }
 }
-// se acabo la sesion de un invitado sin permiso de copias: el proyecto se cierra sin preguntar y no queda nada
 static void wipeGuestProject() {
     school::projectClosed();
     musicPreview(app.proj, "");
@@ -4328,16 +4143,11 @@ static void wipeGuestProject() {
     if (app.hasProject) fs::remove(recoveryFile(), ec);
     app.proj = Project{};
     app.hasProject = false; app.showTree = false; app.activeTab = "Inicio"; app.homeSection = 0;
-    if (!app.tmpDir.empty()) { fs::remove_all(app.tmpDir, ec); app.tmpDir.clear(); }   // la copia para probar
+    if (!app.tmpDir.empty()) { fs::remove_all(app.tmpDir, ec); app.tmpDir.clear(); }
     refreshProjectList();
 }
-// cada fotograma: manda y recibe cambios y presencia, y pone el editor al dia con lo que llega
 static void collabTick();
-static bool g_chatVisible = false;   // el chat de la sesion se esta viendo (si no, los mensajes avisan arriba)
-/* Reposo: si nadie toca el editor, no hace falta dibujarlo 60 veces por segundo. Sin teclado ni raton durante 2 s baja a
-   20 fps y tras 8 s a 8; en segundo plano (por ejemplo mientras pruebas el juego) a 8; minimizado a 4. Con cualquier tecla, clic,
-   movimiento del raton o rueda vuelve a 60 en ese mismo fotograma. Se queda en 60 mientras suena musica, hay una
-   sesion compartida (cursores de los demas) o se esta arrastrando algo. Las pruebas automaticas van siempre a 60. */
+static bool g_chatVisible = false;
 static void idleFrameRate() {
     static double lastInput = 0;
     static int fps = 60;
@@ -4362,9 +4172,8 @@ static void collabTick() {
     if (!app.scriptPresDoc.empty()) collab::setPresence(app.scriptPresDoc, app.scriptPresX, app.scriptPresY, true, {});
     collab::update(app.proj, ev);
     if (!ev.notice.empty()) notify(ev.notice, ev.noticeErr);
-    if (!ev.chat.empty() && !g_chatVisible) notify("Chat · " + ev.chat);   // con la ventana cerrada, el mensaje avisa arriba
-    g_chatVisible = false;   // drawSessionChat lo vuelve a poner si el chat se ve
-    // invitado: mientras tiene el proyecto se recuerda si el anfitrion deja copias; al terminar, se borra si no
+    if (!ev.chat.empty() && !g_chatVisible) notify("Chat · " + ev.chat);
+    g_chatVisible = false;
     static bool guestHad = false, guestCopies = false;
     if (collab::role() == collab::Role::Client && collab::connected()) { guestHad = true; guestCopies = collab::allowCopies(); guestMarkTemp(); }
     else if (collab::role() == collab::Role::None && guestHad) {
@@ -4374,10 +4183,10 @@ static void collabTick() {
             notify("Terminó la sesión: el proyecto era de otra persona y se cerró sin dejar copia");
         }
     }
-    static bool adopted = false;                         // cliente: el proyecto de la sesion ya se abrio en el editor
+    static bool adopted = false;
     if (collab::role() != collab::Role::Client) adopted = false;
     if (ev.docReplaced) {
-        bool first = !adopted;                            // al entrar se abre de cero; al resincronizar solo se recarga
+        bool first = !adopted;
         adopted = true;
         if (first) {
             app.sprites.clear(); app.objects.clear(); app.scenes.clear(); app.sheets.clear(); app.tilesets.clear(); app.fonts.clear(); app.sounds.clear();
@@ -4390,12 +4199,12 @@ static void collabTick() {
         ev.sprites.insert("*");
         ev.textures = true;
     }
-    if (ev.changed && collab::role() == collab::Role::Host) app.proj.dirty = true;   // el guardado automatico guarda lo de todos
+    if (ev.changed && collab::role() == collab::Role::Host) app.proj.dirty = true;
     if (ev.textures) app.proj.rev++;
     for (auto &e : app.sprites) {
         if (e->dirtyForProject || (!ev.sprites.count("*") && !ev.sprites.count(e->spriteId))) continue;
         if (json *sp = app.proj.spriteById(e->spriteId)) e->reload(*sp);
-        else e->open = false;                                  // alguien lo borro
+        else e->open = false;
     }
     collab::defaultPresence(app.hasProject ? app.activeTab : "");
 }
@@ -4430,7 +4239,6 @@ static void collabModeHelp(int mode, bool hosting) {
     ImGui::PopTextWrapPos();
 }
 
-// chat de la sesion (dentro de la ventana Trabajar juntos)
 static void drawSessionChat() {
     static char buf[320];
     g_chatVisible = true;
@@ -4475,7 +4283,6 @@ static void drawCollabDialog() {
         }
     };
     if (role == collab::Role::None) {
-        // quien soy
         char nm[48]; snprintf(nm, sizeof nm, "%s", prefs().name.c_str());
         ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Tu nombre"); ImGui::SameLine(110);
         ImGui::SetNextItemWidth(200);
@@ -4639,7 +4446,7 @@ static void drawModals() {
             school::anchor((std::string("newobj.") + k[0]).c_str());
             if (kHit) {
                 std::string id = createObject(app.proj, k[0]);
-                if (json *no = findById(app.proj.doc["objects"], id)) (*no)["scene"] = currentScene();   // el objeto es de la escena actual
+                if (json *no = findById(app.proj.doc["objects"], id)) (*no)["scene"] = currentScene();
                 for (auto &e : app.scenes) { if (!strcmp(k[0], "tile")) { e->paintObj = id; e->mode = SceneEditor::Tiles; } else e->placeObj = id; }
                 openObject(id);
                 ImGui::CloseCurrentPopup();
@@ -4683,7 +4490,7 @@ static void drawModals() {
             for (size_t i = 0; i < scs.size(); i++) if (jstr(scs[i], "id") == id) { scs.erase(scs.begin() + i); break; }
             app.scenes.erase(std::remove_if(app.scenes.begin(), app.scenes.end(), [&](auto &e) { return e->sceneId == id; }), app.scenes.end());
             app.sheets.erase(std::remove_if(app.sheets.begin(), app.sheets.end(), [&](auto &e) { return e->sceneId == id; }), app.sheets.end());
-            json &objs = app.proj.doc["objects"];   // los objetos de la escena se van con ella
+            json &objs = app.proj.doc["objects"];
             for (size_t i = objs.size(); i-- > 0;) if (jstr(objs[i], "scene") == id) {
                 std::string oid = jstr(objs[i], "id");
                 app.objects.erase(std::remove_if(app.objects.begin(), app.objects.end(), [&](auto &e) { return e->objectId == oid; }), app.objects.end());
@@ -4747,7 +4554,7 @@ static void drawModals() {
         ImGui::EndPopup();
     }
     drawStartDialogs();
-    school::drawPanel(app.hasProject ? &app.proj : nullptr);   // leccion de la escuela en curso (sin proyecto: se despide)
+    school::drawPanel(app.hasProject ? &app.proj : nullptr);
     if (app.askClose) { ImGui::OpenPopup("Salir"); app.askClose = false; }
     if (ui::beginModal("Salir", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         if (!app.hasProject || !app.proj.dirty) { app.quit = true; ImGui::CloseCurrentPopup(); }
@@ -4769,7 +4576,6 @@ static void drawModals() {
 static void drawToast() {
     if (GetTime() > app.toastUntil || app.toast.empty()) return;
     ImGuiViewport *vp = ImGui::GetMainViewport();
-    // arriba y al centro, bajo las barras: abajo a la derecha tapaba filas de la hoja de eventos
     ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + (app.hasProject ? 96 : 16)), ImGuiCond_Always, ImVec2(0.5f, 0));
     ImGui::SetNextWindowBgAlpha(0.95f);
     ImGui::Begin("##toast", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs);
@@ -4778,16 +4584,14 @@ static void drawToast() {
     ImGui::End();
 }
 
-/* ---------------- notificaciones (noticias con "Notificar") ----------------
-   Baja suave desde arriba con el titulo y se va sola; un clic lleva a Inicio > Noticias. */
-static std::string plainNews(std::string t) {   // sin las llaves de {lista:...} ni la marca de la encuesta
+static std::string plainNews(std::string t) {
     for (size_t p; (p = t.find("{encuesta}")) != std::string::npos;) t.replace(p, 10, "(encuesta)");
     for (size_t p; (p = t.find("{lista:")) != std::string::npos;) t.erase(p, 7);
     t.erase(std::remove(t.begin(), t.end(), '}'), t.end());
     size_t nl = t.find('\n');
     return nl == std::string::npos ? t : t.substr(0, nl);
 }
-static std::string g_notifTest;   // guion: notif.prueba <titulo>
+static std::string g_notifTest;
 static void drawNewsNotification() {
     static double at = -1;
     static std::string tit, txt, tipo;
@@ -4821,7 +4625,7 @@ static void drawNewsNotification() {
     ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
     ImDrawList *dl = ImGui::GetWindowDrawList();
     ImVec2 wp = ImGui::GetWindowPos();
-    float ring = 0.5f + 0.5f * (float)std::sin(now * 9) * (float)std::max(0.0, 1 - t / 1.5);   // la campana se mueve al llegar
+    float ring = 0.5f + 0.5f * (float)std::sin(now * 9) * (float)std::max(0.0, 1 - t / 1.5);
     dl->AddCircleFilled(ImVec2(wp.x + 34, wp.y + H / 2), 18, (newsColor(tipo) & 0x00FFFFFF) | 0x40000000, 24);
     ui::drawIcon(dl, ui::Icon::Bell, ImVec2(wp.x + 34 + (ring - 0.5f) * 3, wp.y + H / 2), 16, newsColor(tipo));
     float fs = ImGui::GetFontSize();
@@ -4830,7 +4634,6 @@ static void drawNewsNotification() {
     dl->AddText(ui::boldFont(), fs + 2, ImVec2(wp.x + 64, wp.y + 12 + fs), ui::kText, tit.c_str());
     if (!txt.empty()) dl->AddText(ImVec2(wp.x + 64, wp.y + 18 + 2 * fs), ui::kText2, txt.c_str());
     dl->PopClipRect();
-    // barra de tiempo restante
     float left = (float)std::clamp(1 - t / life, 0.0, 1.0);
     dl->AddRectFilled(ImVec2(wp.x + 14, wp.y + H - 4), ImVec2(wp.x + 14 + (W - 28) * left, wp.y + H - 2), (newsColor(tipo) & 0x00FFFFFF) | 0x90000000, 1);
     ImGui::SetCursorScreenPos(ImVec2(wp.x + W - 30, wp.y + 8));
@@ -4838,28 +4641,25 @@ static void drawNewsNotification() {
     ui::drawIcon(dl, ui::Icon::Close, ImVec2(wp.x + W - 19, wp.y + 19), 10, ImGui::IsItemHovered() ? ui::kText : ui::kDim);
     ImGui::SetCursorScreenPos(wp);
     bool hit = ImGui::InvisibleButton("##nver", ImVec2(W - 36, H));
-    if (ImGui::IsItemHovered()) { ImGui::SetMouseCursor(ImGuiMouseCursor_Hand); if (t > 0.45 && t < life) at = now - std::min(t, 1.0); }   // con el raton encima no se va
+    if (ImGui::IsItemHovered()) { ImGui::SetMouseCursor(ImGuiMouseCursor_Hand); if (t > 0.45 && t < life) at = now - std::min(t, 1.0); }
     ImGui::End();
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(3);
     if (hit) { app.homeSection = 5; app.focusWelcome = app.hasProject; g_studio.on = false; if (g_sound.ed) g_sound.ed->stop(); g_sound.on = false; }
-    if ((hit || closeHit) && t < life) at = now - life;   // se va (con su animacion)
+    if ((hit || closeHit) && t < life) at = now - life;
 }
 
-/* ---------------- archivos arrastrados a la ventana ----------------
-   Mientras se arrastran por encima (en Linux; en Windows el sistema no avisa hasta soltar) sale un recuadro como el de
-   Steam; al soltar, el recuadro se encoge hacia el centro y se abre cada archivo donde toca. */
-extern "C" int s2d_drag_hover;   // glfw/input.c (parche): 1 mientras hay archivos arrastrandose encima
+extern "C" int s2d_drag_hover;
 static double g_dropAt = -1;
 static std::string g_dropName;
 static void openDroppedFile(const std::string &f) {
     std::string e = lowerExtOf(f), name = fs::path(f).filename().string();
-    bool proj = e == ".source2d" || e == ".json";   // .source2d.json o .source2d (openProject comprueba que sea un proyecto)
+    bool proj = e == ".source2d" || e == ".json";
     if (proj) { guardSwitch([f] { openProject(f); }); return; }
     if (isSoundFile(f)) { openSoundFile(f); return; }
     bool img = e == ".png" || e == ".gif" || e == ".bmp" || e == ".jpg" || e == ".jpeg" || e == ".tga" || e == ".qoi";
     if (isSpriteFile(f) || (img && (!app.hasProject || g_studio.on))) { openSpriteFile(f); return; }
-    if (img) { app.importer.asTiles = false; if (!app.importer.load(f)) notify(app.importer.error, true); return; }   // al proyecto
+    if (img) { app.importer.asTiles = false; if (!app.importer.load(f)) notify(app.importer.error, true); return; }
     bool audio = e == ".wav" || e == ".ogg" || e == ".mp3" || e == ".flac" || e == ".qoa";
     if (audio && app.hasProject) {
         std::string err;
@@ -4893,12 +4693,11 @@ static void drawDropOverlay() {
     ImDrawList *dl = ImGui::GetForegroundDrawList();
     ImVec2 p0 = vp->Pos, p1(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y), c((p0.x + p1.x) / 2, (p0.y + p1.y) / 2);
     float now = (float)GetTime();
-    if (a > 0.01f) {   // arrastrando: fondo oscuro y recuadro de rayas que corren, con la flecha que rebota
+    if (a > 0.01f) {
         dl->AddRectFilled(p0, p1, IM_COL32(10, 10, 16, (int)(170 * a)));
         float in = 26 + (1 - a) * 30;
         ImVec2 a0(p0.x + in, p0.y + in), a1(p1.x - in, p1.y - in);
         dl->AddRectFilled(a0, a1, (ui::kPrimary & 0x00FFFFFF) | ((ImU32)(28 * a) << 24), 22);
-        // borde de rayas (marcha de hormigas)
         float per = 2 * ((a1.x - a0.x) + (a1.y - a0.y)), dash = 18, off = std::fmod(now * 40, dash * 2);
         auto at = [&](float d) {
             d = std::fmod(d + per, per);
@@ -4919,7 +4718,7 @@ static void drawDropOverlay() {
         dl->AddText(ui::boldFont(), 26, ImVec2(c.x - s1.x / 2, c.y + 30), IM_COL32(255, 255, 255, (int)(255 * a)), t1);
         dl->AddText(ImVec2(c.x - s2.x / 2, c.y + 64), (ui::kText2 & 0x00FFFFFF) | ((ImU32)(255 * a) << 24), t2);
     }
-    if (g_dropAt >= 0) {   // al soltar: una tarjeta con el nombre se encoge hacia el centro y se desvanece
+    if (g_dropAt >= 0) {
         float t = (float)std::clamp(since / 0.6, 0.0, 1.0), k = 1 - t * t, sc = 1.15f - 0.55f * t;
         ImVec2 ts = ImGui::CalcTextSize(g_dropName.c_str());
         float w = (std::max(ts.x, 120.0f) + 70) * sc, h = 58 * sc;
@@ -4941,7 +4740,6 @@ static void globalShortcuts() {
     if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) playProject();
 }
 
-/* ---------------- guion de pruebas (--script) ---------------- */
 static SpriteEditor *activeSprite() { return g_studio.on && g_studio.ed ? g_studio.ed.get() : app.sprites.empty() ? nullptr : app.sprites.back().get(); }
 static Tool toolByName(const std::string &n) {
     static const std::map<std::string, Tool> m = {{"pencil", Tool::Pencil}, {"eraser", Tool::Eraser}, {"bucket", Tool::Bucket}, {"picker", Tool::Picker},
@@ -4954,7 +4752,6 @@ static Tool toolByName(const std::string &n) {
 static void runScriptStep() {
     if (app.scriptWait > 0) { app.scriptWait--; return; }
     if (app.scriptPos >= app.script.size()) {
-        /* guion terminado sin "quit": se cierra igual (si no, la bateria esperaria hasta su limite de tiempo) */
         if (!app.quit) {
             if (prefs().projectsDir.find("source2d-pruebas-") != std::string::npos) { std::error_code ec; fs::remove_all(prefs().projectsDir, ec); }
             printf("S2DEDIT FIN fallos=%d (el guion no acaba en quit)\n", app.fails); fflush(stdout); app.quit = true;
@@ -4972,7 +4769,6 @@ static void runScriptStep() {
     else if (cmd == "openajeno") { std::string p; in >> p; app.scriptTrustCheck = true; openProject(p); app.scriptTrustCheck = false; }
     else if (cmd == "licencias") app.showLicenses = true;
     else if (cmd.rfind("colab.", 0) == 0) {
-        /* trabajar juntos: dos editores en la misma PC (uno comparte y el otro se une por 127.0.0.1) */
         auto waitFor = [&](bool ok, int maxFrames, const std::string &what) {
             if (ok) { app.scriptWaitTries = 0; printf("S2DEDIT OK %s\n", line.c_str()); return; }
             if (++app.scriptWaitTries < maxFrames) { app.scriptPos--; return; }
@@ -4992,7 +4788,6 @@ static void runScriptStep() {
             int n = 0; in >> n;
             waitFor((int)collab::peers().size() == n, 900, std::to_string(collab::peers().size()) + " personas");
         } else if (cmd == "colab.wait") {
-            // colab.wait <puntero JSON> <valor JSON>: espera (hasta 15 s) a que el proyecto tenga ese valor
             std::string ptr, val; in >> ptr; std::getline(in >> std::ws, val);
             json::json_pointer jp(ptr);
             json v = json::parse(val, nullptr, false);
@@ -5001,7 +4796,6 @@ static void runScriptStep() {
         } else if (cmd == "colab.pres") {
             in >> app.scriptPresDoc >> app.scriptPresX >> app.scriptPresY;
         } else if (cmd == "colab.waitpres") {
-            // colab.waitpres <nombre> <documento>: espera a ver a esa persona en ese documento (con cursor)
             std::string nm, doc; in >> nm >> doc;
             bool ok = false;
             for (auto &p : collab::peers()) if (p.name == nm && p.doc == doc && p.cursor) ok = true;
@@ -5013,11 +4807,9 @@ static void runScriptStep() {
             int tab = 0, mode = 0; in >> tab >> mode;
             app.collabTab = tab; app.collabMode = mode; app.showCollab = true;
         } else if (cmd == "colab.waitfound") {
-            // la sesion del otro editor aparece en "Unirse" (aviso por UDP en la red local)
             collab::discover(true);
             waitFor(!collab::found().empty(), 900, "no se encontro ninguna sesion");
         } else if (cmd == "colab.waitdoc") {
-            // colab.waitdoc <nombre> <documento> [paint|sel]: espera a ver a esa persona ahi (pintando o con algo seleccionado)
             std::string nm, doc, what; in >> nm >> doc >> what;
             bool ok = false;
             for (auto &p : collab::peers()) {
@@ -5029,33 +4821,33 @@ static void runScriptStep() {
             std::string seen;
             for (auto &p : collab::peers()) if (p.name == nm) seen = " (esta en '" + p.doc + "', " + p.extra.dump().substr(0, 80) + ")";
             waitFor(ok, 900, "no se ve a " + nm + " en " + doc + (what.empty() ? "" : " (" + what + ")") + seen);
-        } else if (cmd == "colab.chatsend") {   // colab.chatsend <texto>
+        } else if (cmd == "colab.chatsend") {
             std::string t; std::getline(in >> std::ws, t);
             collab::Events ev;
             collab::sendChat(t, ev);
-        } else if (cmd == "colab.chatwait") {   // colab.chatwait <texto>: espera a que llegue un mensaje con ese texto
+        } else if (cmd == "colab.chatwait") {
             std::string t; std::getline(in >> std::ws, t);
             bool ok = false;
             for (auto &m : collab::chat()) if (m.text == t) ok = true;
             waitFor(ok, 900, "no llego el mensaje: " + t);
-        } else if (cmd == "colab.chatnohay") {   // colab.chatnohay <texto>: ese mensaje no llego (el freno del anfitrion)
+        } else if (cmd == "colab.chatnohay") {
             std::string t; std::getline(in >> std::ws, t);
             bool hay = false;
             for (auto &m : collab::chat()) if (m.text == t) hay = true;
             if (hay) app.fails++;
             printf("S2DEDIT %s %s\n", hay ? "FAIL" : "OK", line.c_str());
-        } else if (cmd == "colab.chatflood") {   // colab.chatflood: 8 mensajes seguidos; el anfitrion deja pasar 5
+        } else if (cmd == "colab.chatflood") {
             collab::Events ev;
             for (int i = 0; i < 8; i++) collab::sendChat("rafaga " + std::to_string(i), ev);
         } else if (cmd == "colab.stop") {
             collab::stop();
-        } else if (cmd == "colab.trysave") {   // colab.trysave <ruta>: un invitado sin permiso no puede guardar
+        } else if (cmd == "colab.trysave") {
             std::string f; in >> f;
             saveProject(f);
             bool ok = !fs::exists(f);
             if (!ok) app.fails++;
             printf("S2DEDIT %s %s\n", ok ? "OK" : "FAIL", line.c_str());
-        } else if (cmd == "colab.expectwiped") {   // tras la sesion: ni proyecto abierto ni copia para probar
+        } else if (cmd == "colab.expectwiped") {
             std::string tmp = app.tmpDir;
             bool ok = !app.hasProject && app.tmpDir.empty();
             if (!ok && app.scriptRetry++ < 300) { app.scriptPos--; return; }
@@ -5091,7 +4883,7 @@ static void runScriptStep() {
         for (size_t i = 2; i + 1 < v.size(); i += 2) e->strokeMove(v[i], v[i + 1]);
         e->strokeEnd();
     }
-    else if (cmd == "strokehold" && need()) {   // strokehold x y x y...: trazo sin soltar el boton (trabajar juntos)
+    else if (cmd == "strokehold" && need()) {
         std::vector<int> v; int x;
         while (in >> x) v.push_back(x);
         if (v.size() < 2) return;
@@ -5122,12 +4914,11 @@ static void runScriptStep() {
     else if (cmd == "resize" && need()) { int w, h; in >> w >> h; e->resizeCanvas(w, h, false); }
     else if (cmd == "flipx" && need()) e->flip(true);
     else if (cmd == "rot90" && need()) e->rotate90();
-    // Source Sprite y herramientas de corte
-    else if (cmd == "ini.load") { std::string f; in >> f; ImGui::LoadIniSettingsFromDisk(f.c_str()); app.wantLayout = true; }   // disposicion guardada de un usuario
+    else if (cmd == "ini.load") { std::string f; in >> f; ImGui::LoadIniSettingsFromDisk(f.c_str()); app.wantLayout = true; }
     else if (cmd == "closeproject") closeProject();
-    else if (cmd == "export.source") { std::string f; std::getline(in >> std::ws, f); exportSourceGame(f); sourceExportTick(true); }   // Exportar > Solo para Source 2D
+    else if (cmd == "export.source") { std::string f; std::getline(in >> std::ws, f); exportSourceGame(f); sourceExportTick(true); }
     else if (cmd == "expectfile") { std::string f; std::getline(in >> std::ws, f); bool ok = fs::exists(f); if (!ok) app.fails++; printf("S2DEDIT %s %s\n", ok ? "OK" : "FAIL", line.c_str()); }
-    else if (cmd == "expectstudio") { int v; in >> v; bool ok = (g_studio.on ? 1 : g_sound.on ? 2 : 0) == v; if (!ok) app.fails++; printf("S2DEDIT %s %s\n", ok ? "OK" : "FAIL", line.c_str()); }   // 0 ninguno, 1 Source Sprite, 2 Source Sound
+    else if (cmd == "expectstudio") { int v; in >> v; bool ok = (g_studio.on ? 1 : g_sound.on ? 2 : 0) == v; if (!ok) app.fails++; printf("S2DEDIT %s %s\n", ok ? "OK" : "FAIL", line.c_str()); }
     else if (cmd == "expectproject") { int v; in >> v; bool ok = app.hasProject == (v != 0); if (!ok) app.fails++; printf("S2DEDIT %s %s\n", ok ? "OK" : "FAIL", line.c_str()); }
     else if (cmd == "studio") openStudio();
     else if (cmd == "studio.close") g_studio.on = false;
@@ -5172,7 +4963,7 @@ static void runScriptStep() {
     }
     else if (cmd == "objtab") { int t; in >> t; if (!app.objects.empty()) app.objects.back()->forceTab = t; }
     else if (cmd == "newobject") { std::string k; in >> k; std::string id = createObject(app.proj, k); if (json *no = findById(app.proj.doc["objects"], id)) (*no)["scene"] = currentScene(); openObject(id); }
-    else if (cmd == "ev.comunes") { int v; in >> v; app.scriptCommon = v != 0; }   // ev.* sobre los eventos comunes (1) o los de la escena (0)
+    else if (cmd == "ev.comunes") { int v; in >> v; app.scriptCommon = v != 0; }
     else if (cmd == "newscene") openScene(newScene());
     else if (cmd == "addbh" || cmd == "delbh") {
         std::string t; in >> t;
@@ -5182,7 +4973,6 @@ static void runScriptStep() {
         }
     }
     else if (cmd == "jset" || cmd == "jexpect") {
-        // jset <puntero JSON> <valor JSON>   (por ejemplo: jset /objects/0/name "Heroe")
         std::string ptr, val; in >> ptr; std::getline(in >> std::ws, val);
         try {
             json v = json::parse(val);
@@ -5197,7 +4987,6 @@ static void runScriptStep() {
         } catch (const std::exception &ex) { printf("S2DEDIT FAIL %s: %s\n", line.c_str(), ex.what()); app.fails++; }
     }
     else if (cmd.rfind("sc.", 0) == 0) {
-        // acciones del editor de escena abierto (el ultimo)
         if (app.scenes.empty()) { printf("S2DEDIT FAIL %s: no hay escena abierta\n", line.c_str()); app.fails++; return; }
         SceneEditor &se = *app.scenes.back();
         json *sc = findById(app.proj.doc["scenes"], se.sceneId);
@@ -5213,7 +5002,7 @@ static void runScriptStep() {
         else if (a == "newpiece") se.newPiece = true;
         else if (a == "editobj") { std::string nm; std::getline(in >> std::ws, nm); for (auto &o : app.proj.doc["objects"]) if (jstr(o, "name") == nm) se.editObject(jstr(o, "id")); }
         else if (a == "objtab") { int t; in >> t; if (se.objView) se.objView->forceTab = t; }
-        else if (a == "frameop") {   // pruebas: sc.frameop <m|d|c|n> i [j] sobre la animacion elegida del objeto abierto
+        else if (a == "frameop") {
             std::string op; int i = 0, j = 0; in >> op >> i >> j;
             if (se.objView) if (json *o = findById(app.proj.doc["objects"], se.objView->objectId)) {
                 json &an = (*o)["animations"];
@@ -5248,7 +5037,6 @@ static void runScriptStep() {
         json &evs = ee.events(app.proj);
         std::string a = cmd.substr(3);
         auto setParams = [&](json &row, const std::string &kind) {
-            // pares clave=valor; "@Nombre" se convierte en el id del objeto o escena
             std::string kv;
             while (in >> kv) {
                 size_t eq = kv.find('=');
@@ -5268,7 +5056,7 @@ static void runScriptStep() {
         else if (a == "add") { std::string t; in >> t; ee.addEvent(app.proj, t, false); }
         else if (a == "sub") ee.addEvent(app.proj, "", true);
         else if (a == "select") in >> ee.sel;
-        else if (a == "unfold") {   // ev.unfold <nombre del grupo>: lo despliega y deja la hoja en ese grupo
+        else if (a == "unfold") {
             std::string nm; std::getline(in >> std::ws, nm);
             for (size_t k = 0; k < evs.size(); k++) if (jstr(evs[k], "kind") == "folder" && jstr(evs[k], "name") == nm) { evs[k]["collapsed"] = false; ee.sel = (int)k; }
         }
@@ -5340,13 +5128,13 @@ static void runScriptStep() {
     }
     else if (cmd == "newpixelfont") { std::string nm = "Fuente"; int w = 8, h = 8; in >> nm >> w >> h; openFont(createPixelFont(app.proj, nm, w, h, true)); }
     else if (cmd == "font.import") { std::string f, err; in >> f; std::string id = importFont(app.proj, f, err); if (id.empty()) { printf("S2DEDIT FAIL %s\n", err.c_str()); app.fails++; } else openFont(id); }
-    else if (cmd == "font.use") {   // font.use <objeto> <fuente>: pone la fuente a un texto o boton
+    else if (cmd == "font.use") {
         std::string on, fn; in >> on >> fn;
         std::string fid;
         for (auto &f : app.proj.doc["fonts"]) if (jstr(f, "name") == fn) fid = jstr(f, "id");
         for (auto &o : app.proj.doc["objects"]) if (jstr(o, "name") == on) { o[jstr(o, "type") == "button" ? "button" : "text"]["font"] = fid; app.proj.dirty = true; app.proj.rev++; }
     }
-    else if (cmd == "font.stroke") {   // font.stroke x0 y0 x1 y1: dibuja en la letra actual del ultimo editor de fuentes
+    else if (cmd == "font.stroke") {
         if (app.fonts.empty()) { printf("S2DEDIT FAIL %s: no hay fuente abierta\n", line.c_str()); app.fails++; return; }
         int x0, y0, x1, y1; in >> x0 >> y0 >> x1 >> y1;
         auto &fe = *app.fonts.back();
@@ -5357,7 +5145,6 @@ static void runScriptStep() {
     else if (cmd == "music.import") { std::string f, err; in >> f; std::string id = importMusic(app.proj, f, err); if (id.empty()) { printf("S2DEDIT FAIL %s\n", err.c_str()); app.fails++; } }
     else if (cmd == "music.play") { std::string nm; std::getline(in >> std::ws, nm); for (auto &m : app.proj.doc["music"]) if (jstr(m, "name") == nm) musicPreview(app.proj, jstr(m, "id")); printf("S2DEDIT musica sonando: %s\n", musicPlaying().empty() ? "no" : "si"); }
     else if (cmd == "doc") {
-        // doc <settings|shaders|extensions> [id a seleccionar]
         std::string d, id; in >> d >> id;
         if (d == "settings") openDoc(app.settings);
         else if (d == "shaders") { openDoc(app.shaders); if (!id.empty()) app.shaders->cur = id; }
@@ -5369,10 +5156,10 @@ static void runScriptStep() {
     else if (cmd == "shader.rain") addRainShader(app.proj);
     else if (cmd == "ext.steam") addSteamExtension(app.proj);
     else if (cmd == "school.start") { std::string id; in >> id; school::start(id); }
-    else if (cmd == "spriteobj") {                     // pruebas: abre el sprite del ultimo objeto abierto ("Editar sprite")
+    else if (cmd == "spriteobj") {
         if (!app.objects.empty()) if (json *o = findById(app.proj.doc["objects"], app.objects.back()->objectId)) openSprite(jstr(*o, "spriteId"));
     }
-    else if (cmd == "placelast") {                     // pruebas: una instancia del ultimo objeto en la primera escena
+    else if (cmd == "placelast") {
         json &objs = app.proj.doc["objects"];
         if (!objs.empty() && !app.proj.doc["scenes"].empty())
             app.proj.doc["scenes"][0]["instances"].push_back({{"id", makeUid("i")}, {"objectId", jstr(objs.back(), "id")}, {"x", 100}, {"y", 100},
@@ -5382,8 +5169,6 @@ static void runScriptStep() {
     else if (cmd == "school.ready") school::pressReady();
     else if (cmd == "school.auto") { if (!school::autoStep(app.proj)) { printf("S2DEDIT FAIL school.auto: este paso no tiene \"Hazlo por mi\"\n"); app.fails++; } }
     else if (cmd.rfind("sound.", 0) == 0) {
-        // Source Sound: sound.studio | sound.close | sound.newproj music|sfx | sound.note paso nota largo | sound.track i inst
-        //               sound.preset <nombre del efecto> | sound.export archivo(.wav|.mp3) | sound.play
         std::string a = cmd.substr(6);
         sound::Editor *e = !app.sounds.empty() ? app.sounds.back().get() : g_sound.ed.get();
         if (a == "studio") { openSoundStudio(); e = g_sound.ed.get(); }
@@ -5418,11 +5203,10 @@ static void runScriptStep() {
         printf("S2DEDIT %s %s\n", ok ? "OK" : "FAIL", line.c_str());
     }
     else if (cmd == "play") { std::string nm; std::getline(in >> std::ws, nm); std::string id; for (auto &sc : app.proj.doc["scenes"]) if (jstr(sc, "name") == nm) id = jstr(sc, "id"); writeTempProject(id); printf("S2DEDIT temp %s/prueba.source2d.json\n", app.tmpDir.c_str()); }
-    else if (cmd == "save") { std::string p; in >> p; saveProject(p.empty() ? app.proj.path : p); }   // sin ruta: la del proyecto
-    else if (cmd == "export") { std::string p, os = "linux", mode; in >> p >> os >> mode; exportGame(p, os, mode == "ligera", false, mode == "carpeta"); }   // export <salida> [linux|windows|html] [ligera|carpeta]
-    else if (cmd == "exportwait") { if (exportsRunning()) app.scriptPos--; }   // espera a que terminen las exportaciones
+    else if (cmd == "save") { std::string p; in >> p; saveProject(p.empty() ? app.proj.path : p); }
+    else if (cmd == "export") { std::string p, os = "linux", mode; in >> p >> os >> mode; exportGame(p, os, mode == "ligera", false, mode == "carpeta"); }
+    else if (cmd == "exportwait") { if (exportsRunning()) app.scriptPos--; }
     else if (cmd.rfind("bar.", 0) == 0) {
-        // botones de la barra superior
         std::string a = cmd.substr(4);
         if (a == "undo") ui::requestHistory(-1);
         else if (a == "redo") ui::requestHistory(1);
@@ -5439,18 +5223,16 @@ static void runScriptStep() {
         }
         else { printf("S2DEDIT FAIL boton de la barra desconocido [%s]: %s\n", a.c_str(), line.c_str()); app.fails++; }
     }
-    else if (cmd == "home.section") in >> app.homeSection;   // 0 Crear, 1 Prueba
-    // noticias (con S2D_NOVEDADES_URL=file://... y S2D_FIRMA_PUBLICA de una clave de prueba)
+    else if (cmd == "home.section") in >> app.homeSection;
     else if (cmd == "noticias.espera") { if (novedades::estado() == "Buscando noticias...") app.scriptPos--; }
-    else if (cmd == "noticias.expect") {   // noticias.expect <noticias> <versiones> <importante 0|1>
+    else if (cmd == "noticias.expect") {
         int n, v, imp; in >> n >> v >> imp;
         int gn = (int)novedades::noticias().size(), gv = (int)novedades::versiones().size(), gi = novedades::importantePendiente() != nullptr;
         bool ok = gn == n && gv == v && gi == imp;
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s -> noticias=%d versiones=%d importante=%d estado=[%s]\n", ok ? "OK" : "FAIL", line.c_str(), gn, gv, gi, novedades::estado().c_str());
     }
-    // Source Play (con S2D_TIENDA_URL=file://... y la clave de prueba)
-    else if (cmd == "sp.paquete") {   // sp.paquete <carpeta> <abierto 0|1> [clave]: "Guardar en una carpeta"
+    else if (cmd == "sp.paquete") {
         std::string d, clave; int ab = 1; in >> d >> ab >> clave;
         snprintf(g_sp.nombre, sizeof g_sp.nombre, "%s", app.proj.name().c_str());
         snprintf(g_sp.descripcion, sizeof g_sp.descripcion, "Juego de prueba");
@@ -5459,17 +5241,17 @@ static void runScriptStep() {
         g_sp.carpeta = d;
         startPackage(true);
     }
-    else if (cmd == "sp.portada") {   // sp.portada <imagen>: miniatura propia para el siguiente paquete
+    else if (cmd == "sp.portada") {
         std::string f, err; in >> f;
         bool ok = loadPortada(f, err);
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s %s\n", ok ? "OK" : "FAIL", line.c_str(), err.c_str());
     }
-    else if (cmd == "sp.espera") {   // sp.espera: hasta que el paquete este en la carpeta
+    else if (cmd == "sp.espera") {
         if (g_sp.armando.valid()) app.scriptPos--;
         else { bool ok = !g_sp.msgErr; if (!ok) app.fails++; printf("S2DEDIT %s %s -> %s\n", ok ? "OK" : "FAIL", line.c_str(), g_sp.msg.c_str()); }
     }
-    else if (cmd == "sp.entrar") envio::entrar();   // con S2D_GITHUB_API/WEB de test/desktop/github_falso.py
+    else if (cmd == "sp.entrar") envio::entrar();
     else if (cmd == "sp.conectado") {
         if (!envio::conectado() && envio::errorCuenta().empty() && app.scriptRetry++ < 900) { app.scriptPos--; return; }
         app.scriptRetry = 0;
@@ -5477,7 +5259,7 @@ static void runScriptStep() {
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s -> %s %s\n", ok ? "OK" : "FAIL", line.c_str(), envio::usuario().c_str(), envio::errorCuenta().c_str());
     }
-    else if (cmd == "sp.enviar") {   // sp.enviar: "Enviar a revision" del proyecto abierto (abierto)
+    else if (cmd == "sp.enviar") {
         snprintf(g_sp.nombre, sizeof g_sp.nombre, "%s", app.proj.name().c_str());
         g_sp.abierto = true; g_sp.normas = true; g_sp.msg.clear(); g_sp.msgErr = false;
         startPackage(false);
@@ -5489,7 +5271,7 @@ static void runScriptStep() {
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s -> %s\n", ok ? "OK" : "FAIL", line.c_str(), envio::estadoEnvio().c_str());
     }
-    else if (cmd == "sp.mio") {   // sp.mio <estado>: el envio llega a ese estado (lo dice el comentario del revisor)
+    else if (cmd == "sp.mio") {
         std::string want; in >> want;
         envio::mirarMios();
         std::string got = envio::mios().empty() ? "" : envio::mios().back().estado;
@@ -5499,7 +5281,7 @@ static void runScriptStep() {
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s -> %s (%s)\n", ok ? "OK" : "FAIL", line.c_str(), got.c_str(), envio::mios().empty() ? "" : envio::mios().back().motivo.c_str());
     }
-    else if (cmd == "sp.perfil") {   // sp.perfil <login> <nombre esperado>: abre su perfil y espera a que llegue
+    else if (cmd == "sp.perfil") {
         std::string l, want; in >> l; std::getline(in >> std::ws, want);
         if (app.scriptRetry == 0) openPerfil(l);
         const envio::Perfil *pf = envio::perfil(l);
@@ -5511,7 +5293,7 @@ static void runScriptStep() {
         printf("S2DEDIT %s %s -> nombre=[%s] seguidores=%d siguiendo=%d sigo=%d foto=%d unido=%s\n", ok ? "OK" : "FAIL", line.c_str(), pf ? pf->nombre.c_str() : "",
                pf ? pf->seguidores : -9, pf ? pf->siguiendo : -9, pf ? pf->sigo : -9, pf && !pf->avatar.empty(), envio::unido(l).c_str());
     }
-    else if (cmd == "sp.seguir") {   // sp.seguir <login> <1|0> <seguidores esperados>
+    else if (cmd == "sp.seguir") {
         std::string l; int si = 1, want = 0; in >> l >> si >> want;
         if (app.scriptRetry == 0) envio::seguir(l, si != 0);
         const envio::Perfil *pf = envio::perfil(l);
@@ -5521,7 +5303,7 @@ static void runScriptStep() {
         if (!listo) app.fails++;
         printf("S2DEDIT %s %s -> sigo=%d seguidores=%d\n", listo ? "OK" : "FAIL", line.c_str(), pf ? pf->sigo : -9, pf ? pf->seguidores : -9);
     }
-    else if (cmd == "sp.listas") {   // sp.listas <login> <seguidores en la lista> <siguiendo en la lista>
+    else if (cmd == "sp.listas") {
         std::string l; int a = 0, b = 0; in >> l >> a >> b;
         envio::pedirListas(l);
         const envio::Perfil *pf = envio::perfil(l);
@@ -5531,7 +5313,7 @@ static void runScriptStep() {
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s\n", ok ? "OK" : "FAIL", line.c_str());
     }
-    else if (cmd == "sp.denunciar") {   // sp.denunciar <login>: denuncia una cuenta (motivo 1) y espera la respuesta
+    else if (cmd == "sp.denunciar") {
         std::string l; in >> l;
         if (app.scriptRetry == 0) envio::denunciar("Denuncia: cuenta @" + l, "**Motivo:** Acoso o insultos\n\nPrueba");
         std::string st = envio::estadoDenuncia();
@@ -5541,7 +5323,7 @@ static void runScriptStep() {
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s -> %s\n", ok ? "OK" : "FAIL", line.c_str(), st.c_str());
     }
-    else if (cmd == "sp.pestana") {   // sp.pestana <0|1|2>: como pulsar Juegos / Seguidores / Siguiendo; el perfil sigue abierto
+    else if (cmd == "sp.pestana") {
         int t = 0; in >> t;
         t = std::clamp(t, 0, 2);
         rlImGuiScriptX = g_sp.tabPos[t].x; rlImGuiScriptY = g_sp.tabPos[t].y;
@@ -5552,7 +5334,7 @@ static void runScriptStep() {
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s\n", ok ? "OK" : "FAIL", line.c_str());
     }
-    else if (cmd == "sp.registrados") {   // sp.registrados <cuantos>: cuentas en Source Play (estrellas)
+    else if (cmd == "sp.registrados") {
         int n; in >> n;
         envio::pedirRegistrados();
         bool ok = (int)envio::registrados().size() == n;
@@ -5561,7 +5343,7 @@ static void runScriptStep() {
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s -> %zu\n", ok ? "OK" : "FAIL", line.c_str(), envio::registrados().size());
     }
-    else if (cmd == "tienda.destacado") {   // tienda.destacado <id> <0|1>
+    else if (cmd == "tienda.destacado") {
         std::string id; int want = 0; in >> id >> want;
         bool got = false;
         for (auto &j : tienda::juegos()) if (j.id == id) got = j.destacado;
@@ -5569,23 +5351,22 @@ static void runScriptStep() {
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s\n", ok ? "OK" : "FAIL", line.c_str());
     }
-    else if (cmd == "tienda.favorito") {   // tienda.favorito <id>: lo marca y comprueba
+    else if (cmd == "tienda.favorito") {
         std::string id; in >> id;
         tienda::setFavorito(id, true);
         bool ok = tienda::favorito(id);
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s\n", ok ? "OK" : "FAIL", line.c_str());
     }
-    else if (cmd == "tienda.insignia") {   // tienda.insignia <login> <0|1|2>
+    else if (cmd == "tienda.insignia") {
         std::string l; int want = 0; in >> l >> want;
         bool ok = tienda::insignia(l) == want;
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s -> %d\n", ok ? "OK" : "FAIL", line.c_str(), tienda::insignia(l));
     }
-    // Source Store (con S2D_STORE_SPRITES_URL / S2D_STORE_SONIDOS_URL=file://... y la clave de prueba)
-    else if (cmd == "store.tab") { std::string tp; in >> tp; g_st.tab[tp == "sonidos" ? 1 : 0] = 1; }   // la pestana Source Store
-    else if (cmd == "store.cancion") addFloppaSong();   // la canción Test en el proyecto (para el paquete de sonidos)
-    else if (cmd == "store.paquete") {   // store.paquete <sprites|sonidos> <carpeta>: todo lo que haya, "Guardar en una carpeta"
+    else if (cmd == "store.tab") { std::string tp; in >> tp; g_st.tab[tp == "sonidos" ? 1 : 0] = 1; }
+    else if (cmd == "store.cancion") addFloppaSong();
+    else if (cmd == "store.paquete") {
         std::string tp, d; in >> tp >> d;
         openCrearPaquete(tp == "sonidos" ? store::Sonidos : store::Sprites);
         for (auto &it : g_st.items) it.on = true;
@@ -5597,7 +5378,7 @@ static void runScriptStep() {
         if (g_st.armando.valid()) app.scriptPos--;
         else { bool ok = !g_st.msgErr; if (!ok) app.fails++; printf("S2DEDIT %s %s -> %s\n", ok ? "OK" : "FAIL", line.c_str(), g_st.msg.c_str()); }
     }
-    else if (cmd == "store.expect") {   // store.expect <tipo> <paquetes>: espera al catalogo
+    else if (cmd == "store.expect") {
         std::string tp; int n = 0; in >> tp >> n;
         store::Tipo t = tp == "sonidos" ? store::Sonidos : store::Sprites;
         if (app.scriptRetry == 0) store::buscarAhora(t);
@@ -5612,7 +5393,7 @@ static void runScriptStep() {
         store::Tipo t = tp == "sonidos" ? store::Sonidos : store::Sprites;
         for (auto &p : store::paquetes(t)) store::descargar(t, p);
     }
-    else if (cmd == "store.instalados") {   // espera las descargas y abre cada paquete (comprobado)
+    else if (cmd == "store.instalados") {
         std::string tp; in >> tp;
         store::Tipo t = tp == "sonidos" ? store::Sonidos : store::Sprites;
         bool busy = false;
@@ -5625,7 +5406,7 @@ static void runScriptStep() {
             printf("S2DEDIT %s store.instalado %s (%s) -> %s %s\n", ok ? "OK" : "FAIL", p.id.c_str(), storeContenido(p).c_str(), err.c_str(), store::error(t, p.id).c_str());
         }
     }
-    else if (cmd == "store.anadir") {   // store.anadir <tipo>: todos los paquetes al proyecto abierto (crece lo que toca)
+    else if (cmd == "store.anadir") {
         std::string tp; in >> tp;
         store::Tipo t = tp == "sonidos" ? store::Sonidos : store::Sprites;
         auto cuenta = [&] { int n = 0; for (const char *k : {"sprites", "tilesets", "autotiles", "music"}) n += app.proj.doc.contains(k) ? (int)app.proj.doc[k].size() : 0; return n; };
@@ -5635,7 +5416,7 @@ static void runScriptStep() {
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s -> %d a %d\n", ok ? "OK" : "FAIL", line.c_str(), antes, cuenta());
     }
-    else if (cmd == "store.creaciones") {   // store.creaciones <tipo>: guarda los paquetes en tus creaciones
+    else if (cmd == "store.creaciones") {
         std::string tp; in >> tp;
         store::Tipo t = tp == "sonidos" ? store::Sonidos : store::Sprites;
         int n = 0;
@@ -5645,14 +5426,14 @@ static void runScriptStep() {
         printf("S2DEDIT %s %s -> %d\n", ok ? "OK" : "FAIL", line.c_str(), n);
     }
     else if (cmd == "tienda.espera") { if (tienda::estado() == "Buscando juegos...") app.scriptPos--; }
-    else if (cmd == "tienda.expect") {   // tienda.expect <juegos>
+    else if (cmd == "tienda.expect") {
         int n; in >> n;
         bool ok = (int)tienda::juegos().size() == n;
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s -> juegos=%zu estado=[%s]\n", ok ? "OK" : "FAIL", line.c_str(), tienda::juegos().size(), tienda::estado().c_str());
     }
     else if (cmd == "tienda.descargar") { for (auto &j : tienda::juegos()) tienda::descargar(j); }
-    else if (cmd == "tienda.instalados") {   // espera las descargas y abre cada juego en memoria (como Jugar)
+    else if (cmd == "tienda.instalados") {
         bool busy = false;
         for (auto &j : tienda::juegos()) if (tienda::estadoDe(j) == tienda::Estado::Descargando) busy = true;
         if (busy) app.scriptPos--;
@@ -5663,7 +5444,7 @@ static void runScriptStep() {
             printf("S2DEDIT %s tienda.instalado %s (%s) -> %s %s\n", ok ? "OK" : "FAIL", j.id.c_str(), j.abierto ? "abierto" : "cerrado", err.c_str(), tienda::error(j.id).c_str());
         }
     }
-    else if (cmd == "tienda.fuente") {   // tienda.fuente <clave> <espera 0|1>: ver por dentro los cerrados
+    else if (cmd == "tienda.fuente") {
         std::string clave; int want = 1; in >> clave >> want;
         bool busy = false;
         for (auto &j : tienda::juegos()) if (!j.abierto) { tienda::pedirFuente(j); if (!tienda::fuenteLista(j.id)) busy = true; }
@@ -5677,7 +5458,7 @@ static void runScriptStep() {
             printf("S2DEDIT %s %s -> %s %s\n", ok ? "OK" : "FAIL", line.c_str(), got ? "abierto" : "no", err.c_str());
         }
     }
-    else if (cmd == "tienda.portadas") {   // las portadas descargadas y comprobadas
+    else if (cmd == "tienda.portadas") {
         bool busy = false;
         for (auto &j : tienda::juegos()) if (j.portadaLocal.empty()) busy = true;
         if (busy && app.scriptRetry++ < 600) { app.scriptPos--; return; }
@@ -5685,11 +5466,11 @@ static void runScriptStep() {
         if (busy) app.fails++;
         printf("S2DEDIT %s %s\n", busy ? "FAIL" : "OK", line.c_str());
     }
-    else if (cmd == "encuesta.votar") {   // encuesta.votar <id> <opcion>
+    else if (cmd == "encuesta.votar") {
         int id, op; in >> id >> op;
         for (auto &x : novedades::noticias()) if (x.id == id) novedades::votar(x, op);
     }
-    else if (cmd == "encuesta.expect") {   // encuesta.expect <id> <mi voto> <votos,separados,por,comas>: espera a que lleguen
+    else if (cmd == "encuesta.expect") {
         int id, mio; std::string want; in >> id >> mio >> want;
         std::string got;
         for (long long x : novedades::votos(id)) got += (got.empty() ? "" : ",") + std::to_string(x);
@@ -5705,7 +5486,7 @@ static void runScriptStep() {
         std::string nm; std::getline(in >> std::ws, nm);
         for (auto &v : novedades::versiones()) if (v.nombre == nm) novedades::descargar(v);
     }
-    else if (cmd == "noticias.instalada") {   // espera a que acabe la descarga y comprueba que quedo bien
+    else if (cmd == "noticias.instalada") {
         std::string nm; std::getline(in >> std::ws, nm);
         if (novedades::progreso(nm) >= 0) app.scriptPos--;
         else {
@@ -5714,26 +5495,25 @@ static void runScriptStep() {
             printf("S2DEDIT %s %s -> %s\n", ok ? "OK" : "FAIL", line.c_str(), novedades::errorDescarga(nm).c_str());
         }
     }
-    else if (cmd == "lang") { std::string l; std::getline(in >> std::ws, l); ui::setLanguage(l); }   // idioma del editor (pruebas)
-    else if (cmd == "home.remix") { int i; in >> i; if (i >= 0 && i < (int)exampleGames().size() && !exampleGames()[i].doc.empty()) openExampleCopy(i); }   // "Ver por dentro"
-    else if (cmd == "expectsaved") {   // el proyecto abierto tiene archivo y esta guardado
+    else if (cmd == "lang") { std::string l; std::getline(in >> std::ws, l); ui::setLanguage(l); }
+    else if (cmd == "home.remix") { int i; in >> i; if (i >= 0 && i < (int)exampleGames().size() && !exampleGames()[i].doc.empty()) openExampleCopy(i); }
+    else if (cmd == "expectsaved") {
         bool ok = !app.proj.path.empty() && fs::exists(app.proj.path) && !app.proj.dirty;
         if (!ok) app.fails++;
         printf("S2DEDIT %s expectsaved -> %s\n", ok ? "OK" : "FAIL", app.proj.path.c_str());
     }
-    else if (cmd == "home.new") { std::string nm; std::getline(in >> std::ws, nm); createProject(nm); refreshProjectList(); }   // como "Crear un proyecto"
+    else if (cmd == "home.new") { std::string nm; std::getline(in >> std::ws, nm); createProject(nm); refreshProjectList(); }
     else if (cmd == "shot") { in >> app.shotPath; }
     else if (cmd == "wait") in >> app.scriptWait;
     else if (cmd == "move") in >> rlImGuiScriptX >> rlImGuiScriptY;
-    else if (cmd == "perf") { in >> app.perfN; app.perfFrames = app.perfN; app.perfStart = GetTime(); app.perfLast = 0; app.perfMax = 0; }   // raton del guion (no mueve el del sistema)
+    else if (cmd == "perf") { in >> app.perfN; app.perfFrames = app.perfN; app.perfStart = GetTime(); app.perfLast = 0; app.perfMax = 0; }
     else if (cmd == "click") { in >> rlImGuiScriptX >> rlImGuiScriptY; rlImGuiScriptDown = true; app.mouseUpIn = 3; app.scriptWait = 4; }
-    else if (cmd == "press") { in >> rlImGuiScriptX >> rlImGuiScriptY; rlImGuiScriptDown = true; app.mouseUpIn = 0; }   // mantener (arrastrar con move)
+    else if (cmd == "press") { in >> rlImGuiScriptX >> rlImGuiScriptY; rlImGuiScriptDown = true; app.mouseUpIn = 0; }
     else if (cmd == "release") rlImGuiScriptDown = false;
-    else if (cmd == "drop.hover") in >> s2d_drag_hover;                               // como si hubiera archivos arrastrandose encima
+    else if (cmd == "drop.hover") in >> s2d_drag_hover;
     else if (cmd == "drop.file") { std::string f; std::getline(in >> std::ws, f); g_dropAt = GetTime(); g_dropName = fs::path(f).filename().string(); s2d_drag_hover = 0; openDroppedFile(f); }
-    else if (cmd == "notif.prueba") { std::getline(in >> std::ws, g_notifTest); }      // una notificacion de mentira
+    else if (cmd == "notif.prueba") { std::getline(in >> std::ws, g_notifTest); }
     else if (cmd == "expect" && need()) {
-        // expect <frame> <x> <y> <color|none>: pixel compuesto
         int f, x, y; std::string c; in >> f >> x >> y >> c;
         std::vector<Px> comp; e->composite(f, comp, false);
         Px want = c == "none" ? Px{} : parseColor(c), got = (x >= 0 && y >= 0 && x < e->st.w && y < e->st.h) ? comp[y * e->st.w + x] : Px{};
@@ -5753,9 +5533,6 @@ static void runScriptStep() {
     fflush(stdout);
 }
 
-/* ---------------- principal ---------------- */
-// Controladores/Source-Play.sh: source2d --jugar|--comprobar <juego.source2d|juego.s2dplay> [--llave HEX]
-// comprobar: que se abre y es un proyecto (sale 0 y dice nombre y escenas); jugar: ademas lo abre en el jugador y espera
 static int sourcePlayCli(const std::string &mode, const std::string &file, const std::string &llave) {
     std::ifstream in(fs::u8path(file), std::ios::binary);
     std::string data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()), plain, err;
@@ -5781,9 +5558,6 @@ static int sourcePlayCli(const std::string &mode, const std::string &file, const
     return code;
 }
 
-// Controladores/Source-Sprite.sh y Source-Sound.sh: source2d --paquete <paquete.s2dpaquete> <sprites|sonidos> [carpeta]
-// comprueba el paquete (que solo traiga lo que toca) y dice lo que lleva; con carpeta, saca cada sprite (.s2dsprite) o
-// sonido (.s2dsound) para abrirlo y revisarlo
 static int paqueteCli(const std::string &file, const std::string &tipo, const std::string &out) {
     std::ifstream in(fs::u8path(file), std::ios::binary);
     std::string data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()), err;
@@ -5803,7 +5577,7 @@ static int paqueteCli(const std::string &file, const std::string &tipo, const st
     auto nombre = [](std::string s) { for (char &c : s) if (strchr("/\\:*?\"<>|", c)) c = '_'; return s.empty() ? std::string("sin nombre") : s; };
     if (pk.contains("sprites")) for (auto x : pk["sprites"]) { x["format"] = "source2d-sprite"; std::ofstream(fs::u8path(out + "/" + nombre(jstr(x, "name")) + ".s2dsprite")) << x.dump(); }
     if (pk.contains("sonidos")) for (auto &x : pk["sonidos"]) std::ofstream(fs::u8path(out + "/" + nombre(jstr(x, "name")) + ".s2dsound")) << x.dump(1);
-    if (pk.contains("tilesets") || pk.contains("autotiles")) {   // tiles y autotiles: en un proyecto pequeno para abrirlo en el editor
+    if (pk.contains("tilesets") || pk.contains("autotiles")) {
         json doc = {{"id", "p_revision"}, {"name", "Revisión de paquete"}, {"version", 3}, {"settings", {{"width", 960}, {"height", 540}}},
                     {"globals", json::array()}, {"sprites", json::array()}, {"tilesets", json::array()}, {"objects", json::array()},
                     {"scenes", json::array({{{"id", "sc_r"}, {"name", "Escena"}, {"width", 960}, {"height", 540}, {"instances", json::array()}}})},
@@ -5853,16 +5627,15 @@ int main(int argc, char **argv) {
         while (std::getline(in, l)) app.script.push_back(l);
     }
     SetTraceLogLevel(LOG_WARNING);
-    /* sin MSAA: en graficas viejas pedirlo puede impedir que se abra la ventana (ImGui ya suaviza sus bordes) */
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
     InitWindow(1400, 860, "Source 2D " S2D_VERSION);
     if (!IsWindowReady()) { s2d_window_failed(argv); return 1; }
-    ui::setAnimations(prefs().animations && app.script.empty());   // las pruebas, sin animaciones (capturas iguales)
+    ui::setAnimations(prefs().animations && app.script.empty());
     ui::loadLanguages(exeDir());
     school::onNotify = [](const std::string &m) { notify(m); };
     school::onAddSong = [] { addFloppaSong(); };
     school::saveProgress = app.script.empty();
-    school::onNewProject = [](const std::string &nm) {          // la leccion sigue en el proyecto abierto o en uno nuevo
+    school::onNewProject = [](const std::string &nm) {
         if (!app.hasProject) { createProject(nm); refreshProjectList(); }
         app.openFirstScene = true;
     };
@@ -5874,7 +5647,7 @@ int main(int argc, char **argv) {
     cleanGuestLeftovers();
     if (app.script.empty()) {
         installThisVersion();
-        std::error_code ec;                              // lo que quedo de un cierre de golpe (luz, apagado)
+        std::error_code ec;
         for (auto &e : fs::directory_iterator(recoveryDir(), ec)) if (e.path().extension() == ".json") app.recoveries.push_back(e.path().string());
     }
     SetExitKey(KEY_NULL);
@@ -5918,7 +5691,7 @@ int main(int argc, char **argv) {
         else if (g_studio.on) drawStudio();
         else if (!app.hasProject) drawHome();
         else {
-            ImGuiID dock = ImGui::GetID("MainDock2");     // 2: sin la columna del panel (los .ini viejos no la traen)
+            ImGuiID dock = ImGui::GetID("MainDock2");
             if (app.wantLayout || !ImGui::DockBuilderGetNode(dock)) { buildLayout(dock); app.wantLayout = false; }
             ImGui::DockSpaceOverViewport(dock, ImGui::GetMainViewport());
             if (!app.dockCenter) app.dockCenter = dock;
@@ -5928,49 +5701,49 @@ int main(int argc, char **argv) {
                 app.openFirstScene = false;
                 openEvents(false);
                 if (!app.proj.doc["scenes"].empty()) openScene(jstr(app.proj.doc["scenes"][0], "id"));
-                if (app.eventsFirst) { app.eventsFirst = false; app.focusEventsIn = 4; }   // la escena queda en su pestana
+                if (app.eventsFirst) { app.eventsFirst = false; app.focusEventsIn = 4; }
             }
             if (app.focusEventsIn > 0 && --app.focusEventsIn == 0) openEvents(true);
             for (auto &e : app.sheets) {
                 if (!e->open) continue;
-                if (app.dockCenter) ImGui::SetNextWindowDockID(app.dockCenter, ImGuiCond_Always);   // nunca flotando
+                if (app.dockCenter) ImGui::SetNextWindowDockID(app.dockCenter, ImGuiCond_Always);
                 if (app.scrollEventsToEnd) { e->scrollToEnd = true; }
                 e->draw(app.proj);
             }
             app.scrollEventsToEnd = false;
             for (auto &e : app.scenes) {
-                if (app.dockCenter) ImGui::SetNextWindowDockID(app.dockCenter, ImGuiCond_Always);   // nunca flotando
+                if (app.dockCenter) ImGui::SetNextWindowDockID(app.dockCenter, ImGuiCond_Always);
                 e->draw(app.proj);
             }
             for (auto &e : app.objects) {
-                if (app.dockCenter) ImGui::SetNextWindowDockID(app.dockCenter, ImGuiCond_Always);   // nunca flotando
+                if (app.dockCenter) ImGui::SetNextWindowDockID(app.dockCenter, ImGuiCond_Always);
                 e->draw(app.proj);
             }
             for (auto &e : app.tilesets) {
-                if (app.dockCenter) ImGui::SetNextWindowDockID(app.dockCenter, ImGuiCond_Always);   // nunca flotando
+                if (app.dockCenter) ImGui::SetNextWindowDockID(app.dockCenter, ImGuiCond_Always);
                 e->draw(app.proj);
             }
             for (auto &e : app.fonts) {
-                if (app.dockCenter) ImGui::SetNextWindowDockID(app.dockCenter, ImGuiCond_Always);   // nunca flotando
+                if (app.dockCenter) ImGui::SetNextWindowDockID(app.dockCenter, ImGuiCond_Always);
                 e->draw(app.proj);
             }
             auto drawDoc = [](auto &d) {
                 if (!d || !d->open) return;
-                if (app.dockCenter) ImGui::SetNextWindowDockID(app.dockCenter, ImGuiCond_Always);   // nunca flotando
+                if (app.dockCenter) ImGui::SetNextWindowDockID(app.dockCenter, ImGuiCond_Always);
                 d->draw(app.proj);
             };
             drawDoc(app.settings); drawDoc(app.shaders); drawDoc(app.extensions); drawDoc(app.layersDoc); drawDoc(app.autotiles);
             for (auto &e : app.sounds) {
-                if (app.dockCenter) ImGui::SetNextWindowDockID(app.dockCenter, ImGuiCond_Always);   // nunca flotando
+                if (app.dockCenter) ImGui::SetNextWindowDockID(app.dockCenter, ImGuiCond_Always);
                 e->draw(app.proj);
             }
             app.sounds.erase(std::remove_if(app.sounds.begin(), app.sounds.end(), [](auto &e) { return !e->open; }), app.sounds.end());
             refreshExtensionDefs(app.proj);
             for (auto &e : app.sprites) {
-                if (app.dockCenter) ImGui::SetNextWindowDockID(app.dockCenter, ImGuiCond_Always);   // nunca flotando
+                if (app.dockCenter) ImGui::SetNextWindowDockID(app.dockCenter, ImGuiCond_Always);
                 e->draw(app.proj);
             }
-            if (app.showTree) drawProjectPanel();   // por encima de los documentos (tambien de Inicio)
+            if (app.showTree) drawProjectPanel();
             else closedProjectPanel();
             syncEditors();
             app.sprites.erase(std::remove_if(app.sprites.begin(), app.sprites.end(), [](auto &e) { return !e->open; }), app.sprites.end());
@@ -6009,11 +5782,9 @@ int main(int argc, char **argv) {
     for (auto &kv : app.thumbs) kv.second.release();
     releaseTextures();
     releaseFontCache();
-    /* todo lo que tenga texturas se destruye antes de cerrar la ventana (si no, sus destructores las liberan despues de
-       CloseWindow y el editor se cae al salir): editores, Source Sprite y documentos del proyecto */
     collab::stop();
     app.tilesets.clear();
-    clearRecovery();                                     // cierre normal: no hay nada que recuperar
+    clearRecovery();
     musicShutdown();
     app.sprites.clear(); app.objects.clear(); app.scenes.clear(); app.sheets.clear(); app.fonts.clear();
     app.settings.reset(); app.shaders.reset(); app.extensions.reset(); app.layersDoc.reset(); app.autotiles.reset();

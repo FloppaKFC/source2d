@@ -30,26 +30,20 @@ GD = json.load(open(os.path.join(SRC, 'Project Ry-mik.json')))
 VW, VH = 640, 360
 CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'build', 'gen', 'rymik')
 
-
 def strip_comments(doc):
     """los juegos de prueba van sin comentarios en la hoja de eventos"""
     for lst in [doc.get('events', [])] + [sc.get('events', []) for sc in doc.get('scenes', [])]:
         lst[:] = [e for e in lst if e.get('kind') != 'comment']
 
-
-# ---------------- imagenes ----------------
 def pixels(im):
     raw = im.convert('RGBA').tobytes()
     return [None if raw[i + 3] < 128 else '#%02x%02x%02x' % (raw[i], raw[i + 1], raw[i + 2]) for i in range(0, len(raw), 4)]
 
-
 def img(path):
     return Image.open(os.path.join(SRC, path)).convert('RGBA')
 
-
 def sprite(sid, name, ims):
     return dict(id=sid, name=name, width=ims[0].width, height=ims[0].height, frames=[dict(pixels=pixels(i)) for i in ims])
-
 
 def nine_slice(im, w, h, l, t, r, b):
     out = Image.new('RGBA', (w, h))
@@ -60,9 +54,8 @@ def nine_slice(im, w, h, l, t, r, b):
                 out.alpha_composite(im.crop((sx0, sy0, sx1, sy1)).resize((dx1 - dx0, dy1 - dy0), Image.NEAREST), (dx0, dy0))
     return out
 
-
-NOTA = img('assets/default.png')                       # 96x32: la nota y el notador (blancos, se tinen)
-barra = Image.new('RGBA', (120, 14))                    # barra de volumen (borde y relleno del deslizador original)
+NOTA = img('assets/default.png')
+barra = Image.new('RGBA', (120, 14))
 barra.alpha_composite(nine_slice(img('assets/Square Blue Slider Border.png'), 120, 14, 4, 4, 4, 4), (0, 0))
 barra.alpha_composite(img('assets/Square Blue Slider Fill Bar.png').resize((116, 10), Image.NEAREST), (2, 2))
 sprites = [
@@ -80,7 +73,6 @@ sprites = [
     sprite('s_flecha_d', 'Flecha derecha', [art.flecha(izquierda=False)]),
 ]
 
-# ---------------- fuente bitmap (BMFont) -> fuente de pixeles ----------------
 fnt = open(os.path.join(SRC, 'assets/NotJamOldStyle11.fnt')).read()
 atlas = img('assets/NotJamOldStyle11.png')
 chars = [dict((k, int(v)) for k, v in re.findall(r'(\w+)=(-?\d+)', l)) for l in fnt.splitlines() if l.startswith('char ')]
@@ -91,15 +83,13 @@ for c in chars:
     px = [None] * (CELL_W * CELL_H)
     for iy in range(c['height']):
         for ix in range(c['width']):
-            x, y = ix + c['xoffset'], iy + c['yoffset'] - 1      # sin el relleno de 1 px del atlas
+            x, y = ix + c['xoffset'], iy + c['yoffset'] - 1
             if atlas.getpixel((c['x'] + ix, c['y'] + iy))[3] >= 128 and 0 <= x < CELL_W and 0 <= y < CELL_H:
                 px[y * CELL_W + x] = '#ffffff'
     cs += chr(c['id'])
     glyphs.append(dict(pixels=px, adv=c['xadvance']))
 FONT = dict(id='f_notjam', name='NotJam Old Style 11', kind='pixel', cellW=CELL_W, cellH=CELL_H, chars=cs, glyphs=glyphs, spacing=0, tint=True)
 
-
-# ---------------- canciones ----------------
 def encode(name):
     src = os.path.join(SRC, name)
     data = open(src, 'rb').read()
@@ -112,8 +102,6 @@ def encode(name):
     small = open(dst, 'rb').read()
     return small if len(small) < len(data) else data
 
-
-# ---------------- niveles del original -> .json "rymik-nivel" ----------------
 def parse_level(text):
     """como el JS original (CARGAR NIVEL + refreshBeatmaps): metadatos, notas (con las largas validadas) y efectos"""
     meta = {}
@@ -124,7 +112,6 @@ def parse_level(text):
     notes, effects = [], []
     for m in re.finditer(r'([\d.]+)s\(([^)]+)\)', text):
         t = float(m.group(1))
-        # las comas dentro de corchetes son parametros de la nota (D[naranja,2,6]); el original las partia y perdia esas notas
         for item in re.split(r',(?![^\[]*\])', m.group(2).upper()):
             parts = item.strip().split(':')
             key = parts[0].strip()
@@ -152,20 +139,17 @@ def parse_level(text):
                 continue
             notes.append(dict(t=t, end=float(parts[1]) if len(parts) > 1 else t, c='DFJK'.index(key), esp=esp, g=g, h=h, w=w))
     notes.sort(key=lambda n: n['t'])
-    for n in notes:                     # nota larga valida: dura 0.2 s o mas y nadie empieza en su carril mientras dura
+    for n in notes:
         ok = n['end'] >= n['t'] + 0.2 and not any(o is not n and o['c'] == n['c'] and n['t'] <= o['t'] <= n['end'] for o in notes)
         n['fin'] = n['end'] if ok else -1
     effects.sort(key=lambda e: e['t'])
     return meta, notes, effects
-
 
 def png_b64(im):
     b = io.BytesIO()
     im.save(b, 'PNG', optimize=True)
     return base64.b64encode(b.getvalue()).decode()
 
-
-# nombre y portada de cada nivel (tarjetas del menu original: variable Marco = nivel, animacion de la Foto)
 gd_menu = [l for l in GD['layouts'] if l['name'] == 'Niveles'][0]
 FOTOS = ['0x1900-000000-80-0-0(1).jpg', 'artworks-yMUDp2qyz4OBFsvX-jEJPcQ-t500x500(1).jpg', 'ab67616d00001e0244f4d8e99ee8335a3a0873b0(1).jpg',
          'images(1).png', 'images(1).jpg', 'ab67616d0000b273057d046c6dfb348e0215567c(1).jpg']
@@ -187,11 +171,11 @@ for v in GD['variables'][0]['children']:
     k = int(re.sub(r'\D', '', v['name']))
     meta, notes, effects = parse_level(str(v.get('value') or ''))
     if 'M' not in meta:
-        continue                                           # nivel vacio (sin cancion)
+        continue
     nombre = card.get(k, {}).get('nombre') or os.path.splitext(meta['M'])[0]
     foto = card.get(k, {}).get('foto')
     for n in notes:
-        n['esp'] = 0                                       # por ahora sin notas naranjas ni grises
+        n['esp'] = 0
     lv = dict(formato='rymik-nivel', version=1, nombre=nombre, fondo=(meta.get('F') or '#808080').split(',')[0].strip().lower(),
               velocidad=float(meta.get('V', 400)), retraso=float(meta.get('R', 0) or 0),
               musica=dict(tipo='audio/mpeg', datos=base64.b64encode(encode(meta['M'])).decode()),
@@ -207,22 +191,17 @@ if NIVELES_DIR:
     for f in files:
         open(os.path.join(NIVELES_DIR, f['name']), 'w').write(f['text'])
 
-# ---------------- eventos: ayudas ----------------
 _n = [0]
-
 
 def C(t, inv=False, **p):
     return dict(type=t, enabled=True, invert=inv, params=p)
-
 
 def X(expr, inv=False):
     """condicion con una expresion (verdadera si no es 0)"""
     return C('exprTrue', inv, value=expr)
 
-
 def SET(var, val, op='set'):
     return C('setVar', variable=var, op=op, value=str(val))
-
 
 def ev(conds, acts, level=0, **extra):
     _n[0] += 1
@@ -230,16 +209,13 @@ def ev(conds, acts, level=0, **extra):
     e.update(extra)
     return e
 
-
 def note(text, level=0):
     _n[0] += 1
     return dict(id='nt%d' % _n[0], kind='comment', text=text, level=level)
 
-
 def folder(name):
     _n[0] += 1
     return dict(id='fd%d' % _n[0], kind='folder', name=name, collapsed=False)
-
 
 def in_folder(name, evs):
     fd = folder(name)
@@ -247,7 +223,6 @@ def in_folder(name, evs):
         if e.get('kind') != 'folder':
             e['folder'] = fd['id']
     return [fd] + evs
-
 
 def fn(name, params, body):
     """funcion de eventos (nivel 0) con su cuerpo (nivel 1 y mas)"""
@@ -257,31 +232,25 @@ def fn(name, params, body):
         out.append(e)
     return out
 
-
 def sub(evs, d):
     """los mismos eventos d niveles mas adentro"""
     for e in evs:
         e['level'] = e.get('level', 0) + d
     return evs
 
-
 def tr(es, en):
     """texto en el idioma elegido (variable global Idioma); la fuente NotJam no tiene tildes ni enes"""
     return '($Idioma == "en" ? %s : %s)' % (json.dumps(en, ensure_ascii=False), json.dumps(es, ensure_ascii=False))
 
-
 SFX_VOL = '$Volumen_Global / 100 * $Volumen_SFX / 100'
-
 
 def sfx(wave, f0, f1, dur, vol):
     return C('sfx', wave=wave, freqFrom=f0, freqTo=f1, duration=dur, volume='%g * %s' % (vol * 100, SFX_VOL))
 
-
 S_HOVER = lambda: sfx('sine', 440, 880, 0.05, 0.15)
 S_CLICK = lambda: sfx('triangle', 523.25, 659.25, 0.18, 0.15)
 S_BACK = lambda: sfx('triangle', 659.25, 392, 0.15, 0.15)
-OUTLINE = dict(width=2, color='#000000')                    # el efecto Outline de los textos del original
-
+OUTLINE = dict(width=2, color='#000000')
 
 def obj(oid, name, otype='sprite', scene=None, **k):
     o = dict(id=oid, name=name, type=otype, spriteId=None, hud=False, shader='', capa='base', vars=[], animations=[],
@@ -293,13 +262,11 @@ def obj(oid, name, otype='sprite', scene=None, **k):
     o.update(k)
     return o
 
-
 def spr(oid, name, scene, sid, vars=(), hud=False, outline=None):
     o = obj(oid, name, scene=scene, spriteId=sid, hud=hud, vars=[dict(name=n, value=v) for n, v in vars])
     if outline:
         o['outline'] = outline
     return o
-
 
 def txt(oid, name, scene, align='center', content='', hud=False, vars=(), outline=True, color='#ffffff'):
     o = obj(oid, name, 'text', scene, hud=hud, vars=[dict(name=n, value=v) for n, v in vars],
@@ -308,9 +275,7 @@ def txt(oid, name, scene, align='center', content='', hud=False, vars=(), outlin
         o['outline'] = dict(OUTLINE)
     return o
 
-
 _ii = [0]
-
 
 def inst(oid, x, y, **k):
     _ii[0] += 1
@@ -320,11 +285,9 @@ def inst(oid, x, y, **k):
     d.update(k)
     return d
 
-
 def ir(dest):
     """cambiar de escena con el ruido de cambio de canal (ver eventos comunes)"""
     return [SET('IrA', '"%s"' % dest), sfx('sawtooth', 1800, 200, 0.25, 0.12)]
-
 
 SAVE_VARS = 'Volumen_Global, Volumen_Musica, Volumen_SFX, CrtNivel, Teclas, Idioma, RecNombre, RecPuntos, RecPrec, RecJugadas'
 GUARDAR = lambda: C('saveVars', slot='rymik2', vars=SAVE_VARS)
@@ -333,7 +296,6 @@ SC = dict(inicio='sc_inicio', niveles='sc_niveles', ajustes='sc_ajustes', perfil
 LIBRE = '$IrA == ""'
 DT = 'TiempoDelta()'
 
-
 def burbujas(n, seed):
     """circulos de colores que flotan por el fondo de los menus"""
     import random
@@ -341,7 +303,6 @@ def burbujas(n, seed):
     cols = ['255;80;140', '80;200;255', '255;210;60', '150;90;255', '60;255;170', '255;120;60']
     return [inst('o_burbuja', r.uniform(0, VW), r.uniform(0, VH), s=r.uniform(0.6, 2.2), opacity=r.uniform(10, 22), z=-50,
                  vars=dict(vx=r.uniform(-14, 14), vy=r.uniform(-22, -6), col=cols[i % len(cols)])) for i in range(n)]
-
 
 def lista_nav(n, y0, dy, x0, x1, extra_guard='1'):
     """navegacion de una lista de n filas: flechas, raton (al moverlo) y Enter/clic. Deja Act=1 al activar,
@@ -361,10 +322,6 @@ def lista_nav(n, y0, dy, x0, x1, extra_guard='1'):
         ev([C('keyPressed', key='arrowright')], [SET('Der', 1)], level=1),
     ]
 
-
-# ======================================================================================================
-#  OBJETOS GLOBALES Y EVENTOS COMUNES
-# ======================================================================================================
 objects = [
     obj('o_fondo', 'Fondo', spriteId='s_blanco', capa='fondo'),
     spr('o_burbuja', 'Burbuja', None, 's_circulo', vars=(('vx', 0), ('vy', 0), ('col', '255;255;255'))),
@@ -471,9 +428,6 @@ com += in_folder('Pantalla de tele', [
     ev([X('Burbuja.X > %d' % (VW + 60))], [C('setX', object='o_burbuja', value=-60)], level=1),
 ])
 
-# ======================================================================================================
-#  INICIO: tele que se enciende y menu de 5 botones
-# ======================================================================================================
 S = SC['inicio']
 BOTONES = [('Iniciar', 'Start'), ('Ajustes', 'Settings'), ('Perfil', 'Profile'), ('Editor', 'Editor'), ('Salir', 'Quit')]
 objects += [
@@ -551,9 +505,6 @@ ini += in_folder('Tele: apagar (Salir)', [
     ev([X('$AT >= 0.85')], [C('quitGame')], level=1),
 ])
 
-# ======================================================================================================
-#  NIVELES: casetes
-# ======================================================================================================
 S = SC['niveles']
 objects += [
     spr('o_casete', 'Casete', S, 's_casete', vars=(('k', 0), ('sc', 1))),
@@ -649,9 +600,6 @@ niv += in_folder('Vista previa de la cancion', [
     ev([], [C('musicVolume', value='max(0, $vol) * $Volumen_Global / 100 * $Volumen_Musica / 100')]),
 ])
 
-# ======================================================================================================
-#  AJUSTES
-# ======================================================================================================
 S = SC['ajustes']
 A_ROWS = [('Carril 1', 'Lane 1'), ('Carril 2', 'Lane 2'), ('Carril 3', 'Lane 3'), ('Carril 4', 'Lane 4'), ('Pausa', 'Pause'),
           ('Volumen general', 'Master volume'), ('Volumen de la musica', 'Music volume'), ('Volumen de los efectos', 'Effects volume'),
@@ -739,9 +687,6 @@ aj += in_folder('Ajustes: acciones', [
     ev([X('$MsgT <= 0')], [C('setOpacity', object='o_amsg', value=0)]),
 ])
 
-# ======================================================================================================
-#  PERFIL
-# ======================================================================================================
 S = SC['perfil']
 P_COLS = [(50, 'left'), (300, 'center'), (385, 'center'), (470, 'center'), (565, 'center')]
 PN = 8
@@ -787,9 +732,6 @@ pf = in_folder('Perfil', [
     ev([X(LIBRE), C('mousePressed', button='right')], [S_BACK()] + ir('inicio')),
 ])
 
-# ======================================================================================================
-#  ARCHIVOS: explorador
-# ======================================================================================================
 S = SC['archivos']
 FN_ROWS, FY0, FDY = 13, 62, 19
 objects += [txt('o_ftitulo', 'FTitulo', S), txt('o_fruta', 'FRuta', S, align='left'), txt('o_ffila', 'FFila', S, align='left', vars=(('r', 0),)),
@@ -845,9 +787,6 @@ fa = in_folder('Explorador de archivos', [
             C('setTextColor', object='o_ffila', color='{= $j == $Sel ? "#ffd640" : (endsWith("" + $Ents[$j], "/") || $Ents[$j] == ".." ? "#8fd8ff" : "#ffffff")}')], level=1),
 ])
 
-# ======================================================================================================
-#  EDITOR DE NIVELES
-# ======================================================================================================
 S = SC['editor']
 E_ROWS = [('Nombre', 'Name'), ('Cancion', 'Song'), ('Logo', 'Logo'), ('Color (paleta)', 'Color (palette)'), ('Rojo', 'Red'), ('Verde', 'Green'),
           ('Azul', 'Blue'), ('Velocidad', 'Speed'), ('Retraso', 'Delay'), ('Abrir nivel', 'Open level'), ('Abrir archivo .json...', 'Open .json file...'),
@@ -1122,9 +1061,6 @@ ed += in_folder('Editor: revisar', [
     ev([X('$MsgT <= 0')], [C('setOpacity', object='o_emsg', value=0)]),
 ])
 
-# ======================================================================================================
-#  JUEGO
-# ======================================================================================================
 S = SC['juego']
 YN, YS, LIM = 288, -400, 338
 KEYS = ['{= $Teclas[%d]}' % c for c in range(4)]
@@ -1142,10 +1078,8 @@ objects += [
 ]
 PUNT_Y, COMBO_Y = 128, 160
 
-
 def tcy(y, s):
     return y + CELL_H * s / 2
-
 
 game_insts = []
 for c in range(4):
@@ -1445,7 +1379,6 @@ g += in_folder('Notas en pantalla', [
     ev([], [C('removeObj', object='o_nota')], level=2),
 ])
 
-
 def lane_block(c):
     k = KEYS[c]
     lx = LANE_X[c]
@@ -1500,7 +1433,6 @@ def lane_block(c):
         ev([SC_LANE(c)], [C('setObjVar', object='o_notador', variable='yo', value='10')], level=3),
     ]
 
-
 lanes = []
 for c in range(4):
     lanes += lane_block(c)
@@ -1551,7 +1483,6 @@ g += in_folder('Puntuacion, cuenta atras y final', [
     ev([X('$TSalN >= 3 && %s' % LIBRE)], [SET('IrA', '$VolverA')], level=1),
 ])
 
-# ---------------- shaders de pantalla ----------------
 GLOW = """precision mediump float;
 varying vec2 v_uv;
 uniform sampler2D u_tex;

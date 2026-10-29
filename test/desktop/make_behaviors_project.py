@@ -31,12 +31,11 @@ var want = { hp: 15, flashing: true, timer: true, fired: 1, enemies: 0, near: 1,
 var fails = Object.keys(want).filter(function (k) { return String(got[k]) !== String(want[k]); });
 console.log('S2DTEST ' + JSON.stringify({ ok: !fails.length, fails: fails, got: got }));'''
 for _sc in p['scenes']:
-    _sc['events'] = []          # solo los eventos de la prueba
+    _sc['events'] = []
 p['events'] = [
     dict(id='a', enabled=True, conditions=[C('atStart')], actions=[
         C('damage', dict(object=M, value=40)), C('heal', dict(object=M, value=5)), C('flash', dict(object=M, duration=5)),
         C('objTimerCtl', dict(object=M, name='t1', action='reset'))]),
-    # dispara dos veces seguidas: el enfriamiento de 10 s solo deja salir una bala
     dict(id='b', enabled=True, conditions=[C('atStart')], actions=[C('fireAngle', dict(object=M, bullet=E, angle=0, speed=3000)), C('fireAngle', dict(object=M, bullet=E, angle=0, speed=3000))]),
     dict(id='b2', enabled=True, conditions=[C('objectExists', dict(object=E)), C('triggerOnce')], actions=[C('addGlobal', dict(variable='fired', value=1))]),
     dict(id='c', enabled=True, conditions=[C('distance', dict(object=J, **{'with': M}, op='lt', value='50')), C('triggerOnce')], actions=[C('addGlobal', dict(variable='near', value=1))]),

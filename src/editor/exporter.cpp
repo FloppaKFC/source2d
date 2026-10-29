@@ -1,4 +1,3 @@
-// Source 2D - exportar juegos (ver exporter.hpp)
 #include "exporter.hpp"
 #include <algorithm>
 #include <cstdio>
@@ -16,7 +15,7 @@
 
 namespace exporter {
 
-static constexpr long kTail = 56;        // cola del juego ligero (src/stub.c)
+static constexpr long kTail = 56;
 
 struct Bin { const unsigned char *data; unsigned long len, raw, props; };
 static Bin binFor(const std::string &os, const char *what) {
@@ -39,14 +38,12 @@ std::string kb(long b) {
     return s;
 }
 
-/* ---------------- que necesita el proyecto ---------------- */
-// formato de un dato incrustado en base64 (con o sin "data:...,") por sus primeros bytes
 static const char *b64Kind(const std::string &s) {
     if (s.size() < 64) return nullptr;
     size_t c = s.rfind("data:", 0) == 0 ? s.find(',') : std::string::npos;
     const char *p = s.c_str() + (c == std::string::npos ? 0 : c + 1);
     static const struct { const char *magic, *kind; } K[] = {
-        {"iVBORw0KGgo", nullptr}, {"T2dnUw", nullptr}, {"UklGR", nullptr},          // PNG, OGG, WAV: los tiene el ligero
+        {"iVBORw0KGgo", nullptr}, {"T2dnUw", nullptr}, {"UklGR", nullptr},
         {"/9j/", "imágenes JPG"}, {"R0lGOD", "imágenes GIF"}, {"Qk", "imágenes BMP"}, {"cW9pZg", "imágenes QOI"},
         {"SUQz", "audio MP3"}, {"//u", "audio MP3"}, {"//s", "audio MP3"}, {"//v", "audio MP3"}, {"//7", "audio MP3"},
         {"ZkxhQw", "audio FLAC"}, {"cW9hZg", "audio QOA"},
@@ -69,14 +66,14 @@ static void scan(const json &j, std::string &why) {
     if (!why.empty()) return;
     if (j.is_object()) {
         for (auto it = j.begin(); it != j.end() && why.empty(); ++it)
-            if (it.key() != "chars") scan(it.value(), why);   // letras de las fuentes de pixeles: no usan la del motor
+            if (it.key() != "chars") scan(it.value(), why);
         return;
     }
     if (j.is_array()) { for (auto &v : j) { scan(v, why); if (!why.empty()) return; } return; }
     if (!j.is_string()) return;
     const std::string &s = j.get_ref<const std::string &>();
     if (const char *k = b64Kind(s)) { why = k; return; }
-    if (s.size() >= 64 && s.find(' ') == std::string::npos && s.find('\n') == std::string::npos) return;   // datos en base64
+    if (s.size() >= 64 && s.find(' ') == std::string::npos && s.find('\n') == std::string::npos) return;
     static const std::regex js("\\b(Date|Proxy|Atomics|BigInt)\\b");
     if (s.find("Date") != std::string::npos || s.find("Proxy") != std::string::npos || s.find("Atomics") != std::string::npos ||
         s.find("BigInt") != std::string::npos) {
@@ -87,7 +84,6 @@ static void scan(const json &j, std::string &why) {
 }
 bool needsFull(const json &doc, std::string &why) {
     why.clear();
-    // la musica puede ir en base64 sin "data:": su formato lo dice el campo mime
     if (doc.contains("music") && doc["music"].is_array())
         for (auto &m : doc["music"]) {
             std::string mime = m.is_object() ? m.value("mime", "") : "";
@@ -100,8 +96,6 @@ bool needsFull(const json &doc, std::string &why) {
     return !why.empty();
 }
 
-/* imagenes de pixeles (listas de "#rrggbb" o null) como paleta + un caracter por pixel: el runtime las vuelve a
-   expandir al cargar (unpackPixels en src/runtime.js). Indice i -> caracter 35 + i, saltando la barra invertida. */
 static void packPixels(json &j) {
     if (j.is_array()) { for (auto &v : j) if (v.is_structured()) packPixels(v); return; }
     if (!j.is_object()) return;
@@ -129,9 +123,6 @@ static void packPixels(json &j) {
     }
     for (auto &kv : j.items()) if (kv.value().is_structured()) packPixels(kv.value());
 }
-/* Datos en base64 (imagenes, audio, fuentes) -> binario aparte, sin perdida: en el proyecto queda una marca
-   "\u0001S2DB:<inicio>:<largo>:<prefijo>" que el jugador (src/main.c, expand_blobs) vuelve a cambiar por
-   prefijo + base64 de esos bytes. Solo se cambia si al volver a base64 sale exactamente el mismo texto. */
 static const char *kB64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 static bool b64Decode(const char *s, size_t n, std::string &out) {
     static int8_t inv[256];
@@ -149,11 +140,9 @@ static bool b64Decode(const char *s, size_t n, std::string &out) {
         if (s[i + 2] != '=') out += (char)(v >> 8 & 255);
         if (s[i + 3] != '=') out += (char)(v & 255);
     }
-    // sin perdida: el jugador lo vuelve a codificar con relleno '=' normal; si el original era distinto, no se toca
     size_t want = (out.size() + 2) / 3 * 4;
     return want == n && (n < 4 || (s[n - 1] == '=') == (out.size() % 3 != 0));
 }
-// formatos que ya vienen comprimidos: LZMA no los reduce y solo tardaria
 static bool alreadyCompressed(const std::string &b) {
     const unsigned char *p = (const unsigned char *)b.data();
     if (b.size() < 4) return false;
@@ -161,7 +150,7 @@ static bool alreadyCompressed(const std::string &b) {
            !memcmp(p, "fLaC", 4) || !memcmp(p, "qoaf", 4) || !memcmp(p, "ID3", 3) || (p[0] == 0xFF && (p[1] & 0xE0) == 0xE0) ||
            !memcmp(p, "qoif", 4) || !memcmp(p, "wOFF", 4) || !memcmp(p, "PK", 2);
 }
-struct Blobs { std::vector<std::pair<std::string *, std::string>> soft, hard; };   // (valor del proyecto, bytes)
+struct Blobs { std::vector<std::pair<std::string *, std::string>> soft, hard; };
 static void collectBlobs(json &j, Blobs &bl) {
     if (j.is_structured()) { for (auto &v : j) collectBlobs(v, bl); return; }
     if (!j.is_string()) return;
@@ -195,8 +184,7 @@ Packed packed(const json &doc, bool pixels) {
     return out;
 }
 
-/* LZMA propio (src/lzenc.h), comprobado al descomprimir; si algo no cuadra, deflate */
-static const unsigned kProjProps = 3;     // lc 3, lp 0, pb 0: lo mejor para texto
+static const unsigned kProjProps = 3;
 static std::vector<unsigned char> pack(const void *data, size_t len, bool &lzma) {
     std::vector<unsigned char> out(len + len / 2 + 64);
     size_t n = lz_encode((const uint8_t *)data, len, out.data(), out.size(), kProjProps);
@@ -216,10 +204,6 @@ static std::vector<unsigned char> pack(const void *data, size_t len, bool &lzma)
     return out;
 }
 
-/* .source2d (Exportar > Solo para Source 2D): el proyecto con los datos en base64 pasados a binario y todo en LZMA,
-   como la exportacion ligera, pero sin motor. Formato:
-     "S2DPAK1\n", largo del JSON, largo de "soft", largo de "hard", largo comprimido (8 bytes cada uno, little endian),
-     LZMA(JSON + soft) y "hard" tal cual (lo que ya viene comprimido, como OGG o PNG). */
 static const char kPak[] = "S2DPAK1\n";
 static void put64(std::string &o, unsigned long long v) { for (int i = 0; i < 8; i++) { o += (char)(v & 255); v >>= 8; } }
 static unsigned long long get64(const unsigned char *p) { unsigned long long v = 0; for (int i = 7; i >= 0; i--) v = v << 8 | p[i]; return v; }
@@ -236,7 +220,6 @@ std::string sourcePack(const json &doc) {
     return out;
 }
 bool isSourcePack(const std::string &b) { return b.size() >= 40 && !memcmp(b.data(), kPak, 8); }
-// vuelve a poner cada marca "\u0001S2DB:inicio:largo:prefijo" como prefijo + base64
 static void expandBlobs(json &j, const std::string &bin) {
     if (j.is_structured()) { for (auto &v : j) expandBlobs(v, bin); return; }
     if (!j.is_string()) return;
@@ -275,14 +258,10 @@ bool unpackPlayer(const std::string &os, std::vector<unsigned char> &out) {
 
 static void wr64(unsigned char *p, unsigned long long v) { for (int i = 0; i < 8; i++) { p[i] = (unsigned char)v; v >>= 8; } }
 
-/* ---------------- web (HTML) ----------------
-   Una pagina con todo dentro: el proyecto como JSON (datos, no codigo), src/web/gfx_web.js (lienzos, WebGL, audio y
-   archivos del navegador) y el runtime de siempre. Con .zip, la pagina va como index.html: lo que piden itch.io y las
-   game jams. */
 static std::string htmlPage(const json &doc) {
     std::string pj = doc.dump(), safe;
     safe.reserve(pj.size() + 64);
-    for (char c : pj) { if (c == '<') safe += "\\u003c"; else safe += c; }   // nada de "</script>" dentro del JSON
+    for (char c : pj) { if (c == '<') safe += "\\u003c"; else safe += c; }
     std::string name = jstr(doc, "name", "Juego"), title;
     for (char c : name) { if (c == '<') title += "&lt;"; else if (c == '&') title += "&amp;"; else title += c; }
     std::string out;
@@ -300,7 +279,6 @@ static std::string htmlPage(const json &doc) {
     out += "\n</script>\n<!-- hecho con Source 2D -->\n</body>\n</html>\n";
     return out;
 }
-/* .zip con un solo archivo (index.html), comprimido con deflate */
 static uint32_t crc32(const unsigned char *p, size_t n) {
     static uint32_t t[256];
     if (!t[1]) for (uint32_t i = 0; i < 256; i++) { uint32_t c = i; for (int k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320u ^ (c >> 1) : c >> 1; t[i] = c; }
@@ -310,7 +288,7 @@ static uint32_t crc32(const unsigned char *p, size_t n) {
 }
 static std::string zipOne(const std::string &name, const std::string &data) {
     int zn = 0;
-    unsigned char *z = CompressData((const unsigned char *)data.data(), (int)data.size(), &zn);   // deflate sin cabecera
+    unsigned char *z = CompressData((const unsigned char *)data.data(), (int)data.size(), &zn);
     std::string comp = z ? std::string((const char *)z, (size_t)zn) : std::string();
     MemFree(z);
     bool stored = comp.empty() || comp.size() >= data.size();
@@ -319,7 +297,7 @@ static std::string zipOne(const std::string &name, const std::string &data) {
     auto u16 = [](std::string &s, unsigned v) { s += (char)(v & 255); s += (char)(v >> 8 & 255); };
     auto u32 = [](std::string &s, uint32_t v) { for (int i = 0; i < 4; i++) s += (char)(v >> (8 * i) & 255); };
     std::string out, cd;
-    u32(out, 0x04034b50); u16(out, 20); u16(out, 0x0800); u16(out, stored ? 0 : 8); u16(out, 0); u16(out, 0x21);   // utf-8, 1980-01-01
+    u32(out, 0x04034b50); u16(out, 20); u16(out, 0x0800); u16(out, stored ? 0 : 8); u16(out, 0); u16(out, 0x21);
     u32(out, crc); u32(out, (uint32_t)body.size()); u32(out, (uint32_t)data.size()); u16(out, (unsigned)name.size()); u16(out, 0);
     out += name; out += body;
     u32(cd, 0x02014b50); u16(cd, 20); u16(cd, 20); u16(cd, 0x0800); u16(cd, stored ? 0 : 8); u16(cd, 0); u16(cd, 0x21);
@@ -349,11 +327,10 @@ bool exportGame(const json &doc, const std::string &out, const std::string &os, 
     if (!available(os, lite)) { err = std::string("Este editor no incluye el motor para ") + sys; return false; }
     Packed pk = packed(doc);
     std::string pj = pk.json;
-    if (!pk.soft.empty() || !pk.hard.empty()) { pj += '\0'; pj += pk.soft; }   /* el proyecto y despues sus datos en binario */
+    if (!pk.soft.empty() || !pk.hard.empty()) { pj += '\0'; pj += pk.soft; }
     FILE *f = nullptr;
     bool ok = false;
     if (!lite) {
-        /* motor completo tal cual + [proyecto][uint64 largo]["S2DPAYLD"] (lo lee src/main.c) */
         std::vector<unsigned char> pl;
         if (!unpackPlayer(os, pl)) { err = "No se pudo preparar el motor"; return false; }
         unsigned char tr[16];
@@ -363,8 +340,6 @@ bool exportGame(const json &doc, const std::string &out, const std::string &os, 
              fwrite(pk.hard.data(), 1, pk.hard.size(), f) == pk.hard.size() && fwrite(tr, 1, 16, f) == 16;
         info = "motor completo";
     } else {
-        /* [lanzador][motor en LZMA][proyecto y datos comprimibles en LZMA][datos ya comprimidos tal cual][cola de 56 bytes]
-           (lo lee src/stub.c) */
         std::string why;
         bool full = needsFull(doc, why) || !binFor(os, "lite").len;
         Bin stub = binFor(os, "stub"), pl = binFor(os, full ? "full" : "lite");
@@ -373,7 +348,7 @@ bool exportGame(const json &doc, const std::string &out, const std::string &os, 
         if (z.empty()) { err = "No se pudo comprimir el juego"; return false; }
         unsigned char tail[kTail];
         wr64(tail, pl.len); wr64(tail + 8, pl.raw); wr64(tail + 16, z.size()); wr64(tail + 24, pj.size() + pk.hard.size());
-        wr64(tail + 32, pl.props | (lz ? (unsigned long long)(256 + kProjProps) << 16 : 0));   // bits 16..24: proyecto en LZMA
+        wr64(tail + 32, pl.props | (lz ? (unsigned long long)(256 + kProjProps) << 16 : 0));
         wr64(tail + 40, pk.hard.size());
         memcpy(tail + 48, "S2DMINI3", 8);
         f = fopen(out.c_str(), "wb");
@@ -394,8 +369,6 @@ bool exportGame(const json &doc, const std::string &out, const std::string &os, 
 }
 
 namespace exporter {
-/* a una carpeta: el motor sin nada dentro y el juego al lado, en datos/juego.source2d.json (el motor lo busca ahi);
-   para la web, la pagina como index.html. Asi se puede cambiar el juego sin volver a exportar el motor. */
 bool exportFolder(const json &doc, const std::string &dir, const std::string &os, const std::string &name, std::string &err, std::string &info) {
     namespace fs = std::filesystem;
     std::error_code ec;

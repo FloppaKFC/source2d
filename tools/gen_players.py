@@ -15,15 +15,11 @@ out = sys.argv[1]
 names = ['stub_linux', 'full_linux', 'lite_linux', 'stub_win', 'full_win', 'lite_win']
 paths = dict(zip(names, sys.argv[2:8]))
 
-
-
 def read(p):
     return open(p, 'rb').read() if os.path.exists(p) else b''
 
-
 def lit(chunk):
     return '"' + ''.join(chr(b) if 32 <= b < 127 and chr(b) not in '\\"?' else '\\%03o' % b for b in chunk) + '"'
-
 
 with open(out, 'w') as f:
     f.write('/* generado por tools/gen_players.py - no editar */\n')

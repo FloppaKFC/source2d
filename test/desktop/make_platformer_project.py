@@ -8,14 +8,11 @@ import json, sys
 T = 32
 COLS, ROWS = 40, 12
 
-
 def C(t, inv=False, **p):
     return dict(type=t, enabled=True, invert=inv, params=p)
 
-
 def ev(conds, acts):
     return dict(id='e%d' % len(events), enabled=True, level=0, conditions=conds, actions=acts)
-
 
 solid_px = ['#556677'] * (T * T)
 spike_px = ['#ffffff'] * (T * T)
@@ -23,8 +20,7 @@ ts = dict(id='ts', name='t', tileSize=T, columns=2, rows=1, tiles=[dict(pixels=s
 ground = [-1] * (COLS * ROWS)
 for c in range(COLS):
     ground[(ROWS - 1) * COLS + c] = 0
-ground[(ROWS - 2) * COLS + 30] = 1                      # un pincho en la columna 30
-# capa decorativa no solida: un muro que no debe frenar al jugador
+ground[(ROWS - 2) * COLS + 30] = 1
 deco = [-1] * (COLS * ROWS)
 for r in range(ROWS - 4, ROWS - 1):
     deco[r * COLS + 12] = 0
@@ -36,7 +32,6 @@ player = dict(id='o_p', name='Jugador', type='sprite', spriteId='s_p', hitbox=di
               comportamientos=dict(plataformero=dict(airJumps=1, airJump=560, dash=True, dashSpeed=720, dashTime=0.16, dashCooldown=0.3,
                                                      jumpCut=True, coyote=0.08, jumpBuffer=0.1, maxFall=820)))
 GY = (ROWS - 1) * T - 13
-# guion de entradas: (desde, hasta, entrada)
 script = r'''var f = $.state.frame, p = null; $.state.instances.forEach(function (i) { if (i.objId === 'o_p') p = i; });
 var g = $.state.globals, s = {};
 if (f === 10) s = { jump: true };                                   // salto simple (mantenido)

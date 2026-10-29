@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<!-- Source 2D: el programa usa UTF-8 en todas las funciones de Windows con texto (rutas con tildes, nombres de
-     usuario como José...), y se declara compatible con Windows 7 a 11 -->
+
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
   <assemblyIdentity type="win32" name="Source2D" version="1.0.0.0"/>
   <application xmlns="urn:schemas-microsoft-com:asm.v3">

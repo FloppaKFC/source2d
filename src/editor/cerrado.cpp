@@ -1,4 +1,3 @@
-// Source 2D - juegos cerrados (ver cerrado.hpp).
 #include "cerrado.hpp"
 #include "sys.hpp"
 #include "../../third_party/monocypher/monocypher.h"
@@ -26,7 +25,6 @@ std::string toHex(const uint8_t *b, size_t n) {
     for (size_t i = 0; i < n; i++) { s += d[b[i] >> 4]; s += d[b[i] & 15]; }
     return s;
 }
-// cabecera + nonce + mac + cifrado de plain con key
 std::string seal(const char *magic, const uint8_t *extra, size_t extraN, const uint8_t key[32], const std::string &plain) {
     uint8_t nonce[24], mac[16];
     if (!sys::randomBytes(nonce, 24)) return "";
@@ -53,7 +51,7 @@ bool open(const std::string &data, size_t extraN, const uint8_t key[32], std::st
     return true;
 }
 bool derive(const std::string &pass, const uint8_t salt[16], uint8_t key[32]) {
-    crypto_argon2_config cfg = {CRYPTO_ARGON2_ID, 65536, 3, 1};   // 64 MB, como la firma de noticias
+    crypto_argon2_config cfg = {CRYPTO_ARGON2_ID, 65536, 3, 1};
     void *work = malloc((size_t)cfg.nb_blocks * 1024);
     if (!work) return false;
     crypto_argon2_inputs in = {(const uint8_t *)pass.data(), salt, (uint32_t)pass.size(), 16};
@@ -74,7 +72,7 @@ void stripComments(json &a) {
         for (auto &kv : a.items()) stripComments(kv.value());
     }
 }
-}  // namespace
+}
 
 bool claveValida(const std::string &pass, std::string &err) {
     size_t n = 0;
@@ -120,8 +118,8 @@ bool isLocked(const std::string &data) { return data.compare(0, 8, kLock) == 0; 
 json playCopy(const json &doc) {
     json d = doc;
     if (d.contains("sprites") && d["sprites"].is_array())
-        for (auto &sp : d["sprites"]) if (sp.is_object()) sp.erase("layers");   // el juego usa los fotogramas ya unidos
+        for (auto &sp : d["sprites"]) if (sp.is_object()) sp.erase("layers");
     for (const char *k : {"events", "scenes", "objects", "functions"}) if (d.contains(k)) stripComments(d[k]);
     return d;
 }
-}  // namespace cerrado
+}

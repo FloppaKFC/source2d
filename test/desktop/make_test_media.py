@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-# Crea los archivos de prueba para importar: una imagen PNG de 32x16 (mitad roja, mitad azul)
-# y un WAV corto de 0,5 s. Uso: make_test_media.py <carpeta>
 import math, os, struct, sys, zlib
 
 out = sys.argv[1]

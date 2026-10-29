@@ -16,36 +16,29 @@ OB = {o['name']: o for o in base['objects']}
 J, MON, ENE, TXT, BTN = (OB[n]['id'] for n in ('Jugador', 'Moneda', 'Enemigo', 'Puntuacion', 'BotonReiniciar'))
 _n = [0]
 
-
 def uid(p):
     _n[0] += 1
     return '%s_t%04d' % (p, _n[0])
 
-
 def C(t, **p):
     return dict(type=t, enabled=True, invert=False, params=p)
-
 
 def NOT(c):
     c['invert'] = True
     return c
 
-
 def comment(text):
     return dict(id=uid('nt'), kind='comment', text=text)
-
 
 def ev(conds, acts, level=0, **extra):
     d = dict(id=uid('ev'), enabled=True, level=level, conditions=list(conds), actions=list(acts))
     d.update(extra)
     return d
 
-
 def inst(obj, x, y, **kw):
     d = dict(id=uid('i'), objectId=obj, x=x, y=y, angle=0, scaleX=1, scaleY=1, opacity=100, frame=0)
     d.update(kw)
     return d
-
 
 def proyecto(nombre, objetos, escena, eventos, globales=('puntos',), ancho=960, alto=540):
     d = copy.deepcopy(base)
@@ -62,15 +55,12 @@ def proyecto(nombre, objetos, escena, eventos, globales=('puntos',), ancho=960, 
     d['files'] = []
     return d
 
-
 def texto(oid, nombre, contenido, size=24, color='#ffffff'):
     t = copy.deepcopy(OB['Puntuacion'])
     t.update(id=oid, name=nombre, hud=True)
     t['text'] = dict(content=contenido, size=size, color=color, align='left')
     return t
 
-
-# ---------------- 1. plataformas ----------------
 sc = copy.deepcopy(base['scenes'][0])
 sc['name'] = 'Nivel'
 sc['instances'] = [i for i in sc['instances'] if i['objectId'] != OB['Ayuda']['id']]
@@ -102,7 +92,6 @@ for o in plat['objects']:
     if o['id'] == TXT:
         o['text']['content'] = 'Puntos: {g:puntos}'
 
-# ---------------- 2. aventura (vista desde arriba) ----------------
 jug = copy.deepcopy(OB['Jugador'])
 jug['comportamientos'] = {}
 jug['behaviors'].update(movement='topdown', gravity=False, collide=True, speed=200)
@@ -133,7 +122,6 @@ avent = proyecto('Plantilla: Aventura', [jug, mon, ene, texto(TXT, 'Puntuacion',
     ev([C('keyPressed', key='r')], [C('restartScene')]),
 ])
 
-# ---------------- 3. disparos ----------------
 nave = copy.deepcopy(OB['Jugador'])
 nave['name'] = 'Nave'
 nave['comportamientos'] = {}
@@ -175,7 +163,6 @@ dispar = proyecto('Plantilla: Disparos', [nave, bala, roca, texto(TXT, 'Puntuaci
     ev([C('globalVar', variable='vidas', op='le', value='0'), C('triggerOnce')], [C('endGame', message='Fin. Puntos: {g:puntos}. Pulsa R')]),
 ], globales=('puntos', 'vidas'), ancho=540, alto=760)
 
-# ---------------- 4. clics y arrastrar ----------------
 pieza = copy.deepcopy(OB['Moneda'])
 pieza.update(name='Pieza')
 pieza['behaviorList'] = [dict(type='draggable')]

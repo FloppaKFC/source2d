@@ -13,7 +13,6 @@ from lzpack import pack
 stub_p, prog_p, out_p = sys.argv[1:4]
 stub, prog = open(stub_p, 'rb').read(), open(prog_p, 'rb').read()
 z, props = pack(prog)
-# cola: motor comprimido | motor | proyecto comprimido | proyecto entero | props | datos tal cual | marca
 tail = struct.pack('<6Q', len(z), len(prog), 0, 0, props, 0) + b'S2DMINI3'
 with open(out_p, 'wb') as f:
     f.write(stub + z + tail)

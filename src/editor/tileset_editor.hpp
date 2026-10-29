@@ -1,5 +1,3 @@
-// Source 2D - editor de conjuntos de tiles: rejilla de tiles, marcas (solido, traspasable, escalera) y dibujo
-// con el editor de sprites en modo tiles (cada tile es un frame).
 #pragma once
 #include <string>
 #include "assets.hpp"
@@ -14,8 +12,8 @@ public:
     SpriteEditor pix;
     void draw(Project &proj);
     std::string title(Project &proj);
-    void reload(Project &proj);              // vuelve a cargar los tiles desde el proyecto
-    void writeBack(Project &proj);           // guarda los pixeles en el proyecto
+    void reload(Project &proj);
+    void writeBack(Project &proj);
     void setGrid(Project &proj, int tileSize, int cols, int rows);
 private:
     bool loaded = false;

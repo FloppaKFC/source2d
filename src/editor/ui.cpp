@@ -8,7 +8,7 @@
 #include <filesystem>
 #include <map>
 #include "font_data.h"
-extern const char *(*GImGuiTranslate)(const char *, const char *, const char **);   // imgui_draw.cpp (Source 2D)
+extern const char *(*GImGuiTranslate)(const char *, const char *, const char **);
 #include "editor_fonts.h"
 
 namespace fs = std::filesystem;
@@ -45,14 +45,13 @@ void endFrameHistory() { g_histReq = 0; }
 void setupFontAndTheme() {
     ImGuiIO &io = ImGui::GetIO();
     ImFontConfig cfg;
-    cfg.FontDataOwnedByAtlas = false;          // los datos son estaticos (editor_fonts.h, font_data.h)
+    cfg.FontDataOwnedByAtlas = false;
     cfg.OversampleH = 2;
     ImFont *f = io.Fonts->AddFontFromMemoryTTF((void *)outfit_medium, (int)outfit_medium_len, 15.0f, &cfg);
     if (f) io.FontDefault = f;
     g_bold = io.Fonts->AddFontFromMemoryTTF((void *)outfit_semibold, (int)outfit_semibold_len, 15.0f, &cfg);
     g_game = io.Fonts->AddFontFromMemoryTTF((void *)font_data, (int)font_data_len, 15.0f, &cfg);
 
-    // estilo de GDevelop: botones y paneles con radio 8, pestanas de 30 px, colores de DefaultDarkTheme
     ImGuiStyle &s = ImGui::GetStyle();
     ImGui::StyleColorsDark(&s);
     s.WindowRounding = 8; s.ChildRounding = 8; s.FrameRounding = 8; s.PopupRounding = 8;
@@ -89,16 +88,16 @@ void setupFontAndTheme() {
     c[ImGuiCol_Button] = C(kPanel3);
     c[ImGuiCol_ButtonHovered] = rgb(0x60, 0x60, 0x66);
     c[ImGuiCol_ButtonActive] = C(kPrimaryLight);
-    c[ImGuiCol_Header] = rgb(0x3E, 0x44, 0x52);              // seleccion (selection.background-color)
-    c[ImGuiCol_HeaderHovered] = rgb(0x2F, 0x2F, 0x36);       // list-item.hover
+    c[ImGuiCol_Header] = rgb(0x3E, 0x44, 0x52);
+    c[ImGuiCol_HeaderHovered] = rgb(0x2F, 0x2F, 0x36);
     c[ImGuiCol_HeaderActive] = rgb(0x49, 0x50, 0x60);
     c[ImGuiCol_Separator] = C(kLine);
     c[ImGuiCol_SeparatorHovered] = C(kAccent);
     c[ImGuiCol_SeparatorActive] = C(kPrimaryLight);
-    c[ImGuiCol_Tab] = C(kPanel2);                            // tabs.background-color
+    c[ImGuiCol_Tab] = C(kPanel2);
     c[ImGuiCol_TabHovered] = rgb(0x3E, 0x3E, 0x48);
-    c[ImGuiCol_TabSelected] = C(kPanel3);                    // tabs.selected.background-color
-    c[ImGuiCol_TabSelectedOverline] = rgb(0xEA, 0xE3, 0xFF); // tabs.indicator-color
+    c[ImGuiCol_TabSelected] = C(kPanel3);
+    c[ImGuiCol_TabSelectedOverline] = rgb(0xEA, 0xE3, 0xFF);
     c[ImGuiCol_TabDimmed] = C(kPanel2);
     c[ImGuiCol_TabDimmedSelected] = C(kPanel3);
     c[ImGuiCol_TabDimmedSelectedOverline] = rgb(0xEA, 0xE3, 0xFF, 0.5f);
@@ -137,7 +136,6 @@ bool deleteButton(const char *label, const std::string &what) {
 }
 
 bool primaryButton(const char *label, ImVec2 size) {
-    // boton "raised primary" de GDevelop: morado lleno, texto semibold
     ImGui::PushStyleColor(ImGuiCol_Button, ImGui::ColorConvertU32ToFloat4(kPrimary));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::ColorConvertU32ToFloat4(kPrimaryLight));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::ColorConvertU32ToFloat4(kPrimaryDark));
@@ -159,10 +157,9 @@ void helpMarker(const char *text) {
     }
 }
 
-/* ---------------- idiomas ---------------- */
 static std::vector<std::string> g_langDirs;
 static std::unordered_map<std::string, std::string> g_tr;
-static uint64_t g_trLens[4];                           // longitudes que hay (bits de 0 a 255): filtro rapido
+static uint64_t g_trLens[4];
 static std::string unescape(const std::string &s) {
     std::string o;
     for (size_t i = 0; i < s.size(); i++) {
@@ -237,7 +234,6 @@ float animTo(ImGuiID id, float target, float speed) {
 }
 bool beginModal(const char *name, bool *open, ImGuiWindowFlags flags) {
     ImVec2 c = ImGui::GetMainViewport()->GetCenter();
-    /* entra deslizandose un poco hacia arriba */
     ImGuiID aid = ImGui::GetID((std::string("##modal_anim_") + name).c_str());
     bool shown = ImGui::IsPopupOpen(name);
     float k = animTo(aid, shown ? 1.0f : 0.0f, 16.0f);
@@ -337,13 +333,13 @@ void drawIcon(ImDrawList *dl, Icon ic, ImVec2 c, float s, ImU32 col) {
         dl->AddTriangleFilled(P(-0.5f, -0.15f), P(0, -0.85f), P(0.5f, -0.15f), col);
         dl->AddTriangle(P(-0.5f, 0.15f), P(0, 0.85f), P(0.5f, 0.15f), col, t);
         break;
-    case Icon::Folder: {   // carpeta con pestana
+    case Icon::Folder: {
         ImVec2 f[] = {P(-0.85f, -0.65f), P(-0.3f, -0.65f), P(-0.1f, -0.45f), P(0.85f, -0.45f), P(0.85f, 0.7f), P(-0.85f, 0.7f)};
         dl->AddPolyline(f, 6, col, ImDrawFlags_Closed, t);
         dl->AddLine(P(-0.85f, -0.2f), P(0.85f, -0.2f), col, t);
         break;
     }
-    case Icon::Save:   // disquete: cuerpo con esquina cortada, ventana arriba y etiqueta abajo
+    case Icon::Save:
     {
         ImVec2 b[] = {P(-0.8f, -0.8f), P(0.5f, -0.8f), P(0.8f, -0.5f), P(0.8f, 0.8f), P(-0.8f, 0.8f)};
         dl->AddPolyline(b, 5, col, ImDrawFlags_Closed, t);
@@ -352,7 +348,6 @@ void drawIcon(ImDrawList *dl, Icon ic, ImVec2 c, float s, ImU32 col) {
         break;
     }
     case Icon::Undo: case Icon::Redo: {
-        // flecha curva: sale hacia un lado, da la vuelta y baja (rehacer es el espejo exacto de deshacer)
         float d = ic == Icon::Undo ? 1.0f : -1.0f, r = 0.42f;
         ImVec2 ac = P(0.12f * d, 0.13f);
         dl->PathLineTo(P(-0.42f * d, -0.29f));
@@ -364,12 +359,12 @@ void drawIcon(ImDrawList *dl, Icon ic, ImVec2 c, float s, ImU32 col) {
         dl->AddTriangleFilled(P(-0.85f * d, -0.29f), P(-0.4f * d, -0.67f), P(-0.4f * d, 0.09f), col);
         break;
     }
-    case Icon::Create:   // "+" dentro de un cuadrado redondeado: crear algo nuevo
+    case Icon::Create:
         dl->AddRect(P(-0.8f, -0.8f), P(0.8f, 0.8f), col, h * 0.35f, 0, t);
         dl->AddLine(P(-0.38f, 0), P(0.38f, 0), col, t * 1.2f);
         dl->AddLine(P(0, -0.38f), P(0, 0.38f), col, t * 1.2f);
         break;
-    case Icon::Gamepad: {   // mando: cuerpo redondeado, cruceta y dos botones
+    case Icon::Gamepad: {
         dl->AddRect(P(-0.9f, -0.45f), P(0.9f, 0.55f), col, h * 0.45f, 0, t);
         dl->AddLine(P(-0.6f, 0.05f), P(-0.2f, 0.05f), col, t);
         dl->AddLine(P(-0.4f, -0.15f), P(-0.4f, 0.25f), col, t);
@@ -377,31 +372,31 @@ void drawIcon(ImDrawList *dl, Icon ic, ImVec2 c, float s, ImU32 col) {
         dl->AddCircleFilled(P(0.58f, 0.17f), h * 0.11f, col);
         break;
     }
-    case Icon::Spray:     // aerografo: bote y puntos
+    case Icon::Spray:
         dl->AddRect(P(-0.7f, -0.2f), P(-0.05f, 0.85f), col, 2, 0, t);
         dl->AddRectFilled(P(-0.55f, -0.45f), P(-0.2f, -0.2f), col);
         for (int i = 0; i < 6; i++) dl->AddCircleFilled(P(0.25f + 0.22f * (i % 3), -0.75f + 0.28f * (i / 3) + 0.1f * (i % 2)), h * 0.07f, col);
         break;
-    case Icon::Gradient:  // degradado: rectangulo con rayas que se aclaran
+    case Icon::Gradient:
         dl->AddRect(P(-0.85f, -0.6f), P(0.85f, 0.6f), col, 0, 0, t);
         for (int i = 0; i < 4; i++) dl->AddRectFilled(P(-0.85f + 0.42f * i, -0.6f), P(-0.85f + 0.42f * i + 0.42f * (1 - i * 0.22f), 0.6f), (col & 0x00FFFFFF) | ((ImU32)(255 - i * 60) << 24));
         break;
-    case Icon::Contour:   // contorno relleno a mano
+    case Icon::Contour:
         dl->PathLineTo(P(-0.8f, 0.3f)); dl->PathBezierCubicCurveTo(P(-0.9f, -0.8f), P(0.6f, -0.9f), P(0.8f, -0.1f));
         dl->PathBezierCubicCurveTo(P(0.9f, 0.6f), P(-0.2f, 0.9f), P(-0.8f, 0.3f));
         dl->PathFillConvex((col & 0x00FFFFFF) | 0x90000000);
         break;
-    case Icon::SelEllipse:   // seleccion eliptica: elipse discontinua
+    case Icon::SelEllipse:
         for (int i = 0; i < 12; i += 2) { float a0 = i * 3.14159f / 6, a1 = (i + 1) * 3.14159f / 6;
             dl->AddLine(P(0.85f * cosf(a0), 0.6f * sinf(a0)), P(0.85f * cosf(a1), 0.6f * sinf(a1)), col, t); }
         break;
-    case Icon::Bell:   // campana (noticias)
+    case Icon::Bell:
         dl->AddBezierCubic(P(-0.7f, 0.45f), P(-0.45f, 0.1f), P(-0.6f, -0.75f), P(0, -0.75f), col, t);
         dl->AddBezierCubic(P(0, -0.75f), P(0.6f, -0.75f), P(0.45f, 0.1f), P(0.7f, 0.45f), col, t);
         dl->AddLine(P(-0.8f, 0.45f), P(0.8f, 0.45f), col, t);
         dl->AddCircleFilled(P(0, 0.72f), h * 0.16f, col);
         break;
-    case Icon::Download:   // flecha hacia una bandeja
+    case Icon::Download:
         dl->AddLine(P(0, -0.85f), P(0, 0.3f), col, t);
         dl->AddLine(P(-0.45f, -0.15f), P(0, 0.3f), col, t);
         dl->AddLine(P(0.45f, -0.15f), P(0, 0.3f), col, t);
@@ -409,20 +404,20 @@ void drawIcon(ImDrawList *dl, Icon ic, ImVec2 c, float s, ImU32 col) {
         dl->AddLine(P(-0.8f, 0.8f), P(0.8f, 0.8f), col, t);
         dl->AddLine(P(0.8f, 0.8f), P(0.8f, 0.4f), col, t);
         break;
-    case Icon::People:   // dos personas (trabajar juntos)
+    case Icon::People:
         dl->AddCircle(P(-0.32f, -0.35f), h * 0.26f, col, 0, t);
         dl->AddBezierQuadratic(P(-0.85f, 0.75f), P(-0.32f, -0.15f), P(0.21f, 0.75f), col, t);
         dl->AddCircle(P(0.42f, -0.2f), h * 0.22f, col, 0, t);
         dl->AddBezierQuadratic(P(0.25f, 0.3f), P(0.42f, 0.05f), P(0.9f, 0.7f), col, t);
         break;
-    case Icon::Delete:   // papelera con tapa y lineas
+    case Icon::Delete:
         dl->AddLine(P(-0.75f, -0.55f), P(0.75f, -0.55f), col, t);
         dl->AddLine(P(-0.25f, -0.8f), P(0.25f, -0.8f), col, t);
         dl->AddQuad(P(-0.55f, -0.45f), P(0.55f, -0.45f), P(0.42f, 0.8f), P(-0.42f, 0.8f), col, t);
         dl->AddLine(P(-0.17f, -0.2f), P(-0.15f, 0.55f), col, t * 0.8f);
         dl->AddLine(P(0.17f, -0.2f), P(0.15f, 0.55f), col, t * 0.8f);
         break;
-    case Icon::Lasso: {  // lazo: contorno libre con la cuerda
+    case Icon::Lasso: {
         ImVec2 pts[9];
         for (int i = 0; i < 9; i++) {
             float a = i / 9.0f * 6.2832f;
@@ -432,18 +427,18 @@ void drawIcon(ImDrawList *dl, Icon ic, ImVec2 c, float s, ImU32 col) {
         dl->AddBezierQuadratic(P(-0.35f, 0.2f), P(-0.7f, 0.5f), P(-0.4f, 0.85f), col, t);
         break;
     }
-    case Icon::Wand:     // varita magica con destellos
+    case Icon::Wand:
         dl->AddLine(P(-0.75f, 0.75f), P(0.25f, -0.25f), col, t * 1.4f);
         dl->AddLine(P(0.55f, -0.85f), P(0.55f, -0.35f), col, t);
         dl->AddLine(P(0.3f, -0.6f), P(0.8f, -0.6f), col, t);
         dl->AddCircleFilled(P(-0.15f, -0.65f), h * 0.1f, col);
         dl->AddCircleFilled(P(0.75f, 0.15f), h * 0.1f, col);
         break;
-    case Icon::Close:    // X
+    case Icon::Close:
         dl->AddLine(P(-0.6f, -0.6f), P(0.6f, 0.6f), col, t * 1.2f);
         dl->AddLine(P(0.6f, -0.6f), P(-0.6f, 0.6f), col, t * 1.2f);
         break;
-    case Icon::Crop:     // dos escuadras cruzadas
+    case Icon::Crop:
         dl->AddLine(P(-0.45f, -0.85f), P(-0.45f, 0.45f), col, t);
         dl->AddLine(P(-0.45f, 0.45f), P(0.85f, 0.45f), col, t);
         dl->AddLine(P(-0.85f, -0.45f), P(0.45f, -0.45f), col, t);
@@ -498,11 +493,10 @@ void drawIcon(ImDrawList *dl, Icon ic, ImVec2 c, float s, ImU32 col) {
 
 bool iconButton(const char *id, Icon ic, bool active, const char *tooltip, float size) {
     ImGui::PushID(id);
-    // como los IconButton de GDevelop: transparentes, y lavanda con el icono oscuro si estan seleccionados
     ImVec2 p = ImGui::GetCursorScreenPos();
     ImGuiID hid = ImGui::GetID("##ibh");
     bool wasHov = ImGui::GetStateStorage()->GetBool(ImGui::GetID("##ibhv"), false);
-    float hk = animTo(hid, wasHov ? 1.0f : 0.0f, 18.0f);       // el fondo aparece poco a poco al pasar el raton
+    float hk = animTo(hid, wasHov ? 1.0f : 0.0f, 18.0f);
     ImVec4 hc = ImGui::ColorConvertU32ToFloat4(active ? kSecondary : kHover);
     ImVec4 base = active ? ImGui::ColorConvertU32ToFloat4(kSelectedIconBg) : ImVec4(hc.x, hc.y, hc.z, 0);
     ImVec4 now(base.x + (hc.x - base.x) * hk, base.y + (hc.y - base.y) * hk, base.z + (hc.z - base.z) * hk, base.w + (hc.w - base.w) * hk);
@@ -560,7 +554,6 @@ std::string homeDir() {
     return h ? h : ".";
 }
 
-// carpeta Documentos del usuario (XDG_DOCUMENTS_DIR de user-dirs.dirs; si no, Documentos o Documents)
 std::string documentsDir() {
     std::string home = homeDir();
 #ifdef _WIN32
@@ -594,7 +587,6 @@ std::string configDir() {
     return d;
 }
 
-// ext puede tener varias extensiones separadas por '|' (por ejemplo ".png|.jpg")
 static bool extMatches(const std::string &nm0, const std::string &ext) {
     if (ext.empty()) return true;
     std::string nm = nm0;
@@ -697,4 +689,4 @@ void FileDialog::draw() {
     ImGui::EndPopup();
 }
 
-} // namespace ui
+}

@@ -1,28 +1,13 @@
 #!/usr/bin/env python3
-# Source 2D - Source Play: revisar envios, aprobarlos o rechazarlos, y llevar el catalogo firmado.
-# Lo usa Controladores/Source-Play.sh (el menu); tambien se puede llamar a mano:
-#   source_play.py envios                     envios esperando revision (pull requests de FloppaKFC/source2d-envios)
-#   source_play.py probar N                   descarga el envio N, lo comprueba y lo abre en el jugador
-#   source_play.py aprobar N                  lo publica en Source Play y cierra el envio con "Aprobado"
-#   source_play.py rechazar N "motivo"        cierra el envio con "Rechazado: motivo" (el creador lo ve en el editor)
-#   source_play.py anadir CARPETA             publica un paquete guardado con "Guardar en una carpeta" (tus juegos)
-#   source_play.py probar-carpeta CARPETA     lo mismo que probar, con una carpeta
-#   source_play.py lista                      juegos publicados
-#   source_play.py retirar ID                 lo quita de Source Play y de los equipos que lo descargaron
-#   source_play.py denuncias                  incidencias "Denuncia:" abiertas en source2d-envios
-#   source_play.py destacar ID / no-destacar ID   lo pone (o lo quita) en Destacados, arriba en Source Play
-# El catalogo vive en una copia local de FloppaKFC/source2d-juegos (por defecto ../source2d-juegos, o
-# S2D_JUEGOS_DIR). Se firma con build/firma (pide la contrasena) y se sube con git. --sin-subir: firma pero no sube.
 import argparse, datetime, json, os, re, secrets, shutil, subprocess, sys, tempfile, urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from anunciar import AUTOR, RAIZ, guardar_y_firmar, huella  # noqa: E402
+from anunciar import AUTOR, RAIZ, guardar_y_firmar, huella
 
 ENVIOS = "FloppaKFC/source2d-envios"
-MAX_TAM = 95_000_000            # GitHub no deja archivos de mas de 100 MB en un repositorio
+MAX_TAM = 95_000_000
 ARCHIVOS = ("info.json", "portada.png", "juego.source2d", "juego.s2dplay", "original.s2dcerrado")
 CATEGORIAS = ("Plataformas", "Aventura", "Acción", "Puzles", "Ritmo", "Carreras", "Deportes", "Arcade", "Terror", "Otros")
-
 
 def gh():
     for p in (os.environ.get("S2D_GH"), os.path.join(RAIZ, "build", "toolchain", "gh", "gh"), shutil.which("gh")):
@@ -30,13 +15,11 @@ def gh():
             return p
     sys.exit("No encuentro gh (GitHub CLI). Instálalo o déjalo en build/toolchain/gh/gh")
 
-
 def editor():
     for p in (os.environ.get("S2D_EDITOR"), os.path.join(RAIZ, "build", "source2d"), os.path.join(RAIZ, "Release", "Linux", "Source2D")):
         if p and os.path.exists(p):
             return p
     sys.exit("No encuentro el editor: compila con make (build/source2d)")
-
 
 def repo():
     d = os.environ.get("S2D_JUEGOS_DIR") or os.path.join(os.path.dirname(RAIZ), "source2d-juegos")
@@ -44,7 +27,6 @@ def repo():
         sys.exit(f"No existe {d}. Clona alli el repositorio de juegos:\n"
                  f"  git clone https://github.com/FloppaKFC/source2d-juegos.git \"{d}\"")
     return d
-
 
 def cargar_catalogo(d):
     p = os.path.join(d, "catalogo.json")
@@ -55,7 +37,6 @@ def cargar_catalogo(d):
     j["tipo"] = "catalogo"
     j["autor"] = AUTOR
     return j
-
 
 def insignia(login):
     """[creador], [admin], [verificada] o "" segun cuentas.json (Controladores/Source-Cuentas.sh)"""
@@ -70,14 +51,12 @@ def insignia(login):
             return f" [{nombre}]"
     return " [cuenta normal]"
 
-
 def slug(s):
     s = s.lower()
     for a, b in zip("áéíóúñü", "aeiounu"):
         s = s.replace(a, b)
     s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")[:40].strip("-")
     return s or "juego"
-
 
 def subir(d, mensaje, sin_subir):
     if sin_subir:
@@ -92,8 +71,6 @@ def subir(d, mensaje, sin_subir):
     subprocess.run(["git", "-C", d, "push", "-q"], check=True)
     print("Subido. Los editores lo verán en Source Play al abrirse (o en menos de una hora).")
 
-
-# ---------- paquetes (lo que manda el editor) ----------
 def leer_paquete(carpeta):
     """Comprueba un paquete y devuelve su info. Sale con un mensaje claro si algo no cuadra."""
     p = os.path.join(carpeta, "info.json")
@@ -127,7 +104,6 @@ def leer_paquete(carpeta):
     info["_abierto"] = abierto
     return info
 
-
 def comprobar(carpeta, info, jugar):
     args = [editor(), "--jugar" if jugar else "--comprobar", os.path.join(carpeta, info["_juego"])]
     if not info["_abierto"]:
@@ -136,14 +112,12 @@ def comprobar(carpeta, info, jugar):
     if r.returncode != 0 and not jugar:
         sys.exit("El juego no se abre: recházalo o pide al creador que lo revise.")
 
-
 def mostrar(info):
     print(f"\n  {info['nombre']}  ·  por {info.get('autor', '?')}  ·  {info.get('categoria')}  ·  "
           f"{'abierto (se puede ver por dentro)' if info['_abierto'] else 'cerrado (con clave)'}  ·  motor {info.get('motor', '?')}")
     if info.get("descripcion"):
         print("  " + info["descripcion"].replace("\n", "\n  "))
     print()
-
 
 def descargar_envio(n, carpeta="envios", archivos=ARCHIVOS):
     """Baja los archivos del pull request N a una carpeta temporal. Devuelve (carpeta, autor)."""
@@ -172,18 +146,14 @@ def descargar_envio(n, carpeta="envios", archivos=ARCHIVOS):
             o.write(f.read(MAX_TAM + 1))
     return tmp, autor
 
-
-# ---------- catalogo ----------
 JUEGOS = "FloppaKFC/source2d-juegos"
 RELEASES = f"https://github.com/{JUEGOS}/releases/download/"
-
 
 def releases_de(gid):
     out = subprocess.run([gh(), "release", "list", "-R", JUEGOS, "--limit", "1000", "--json", "tagName"], capture_output=True, text=True)
     if out.returncode != 0:
         return []
     return [r["tagName"] for r in json.loads(out.stdout) if re.fullmatch(re.escape(gid) + r"-v\d+", r["tagName"])]
-
 
 def publicar(carpeta, info, autor, sin_subir):
     """Los archivos van como una Release de source2d-juegos (etiqueta <id>-v<version>): gratis, hasta 2 GB cada uno y
@@ -228,7 +198,6 @@ def publicar(carpeta, info, autor, sin_subir):
     cj["retirados"] = [r for r in cj["retirados"] if r != gid]
     guardar_y_firmar(d, {"catalogo.json": cj})
     subir(d, f"Source Play: {e['nombre']} v{version}", sin_subir)
-    # las versiones viejas se borran (los editores ya ven la nueva como "Actualizar")
     if sin_subir:
         for v in os.listdir(os.path.join(d, "juegos", gid)):
             if v != f"v{version}":
@@ -239,7 +208,6 @@ def publicar(carpeta, info, autor, sin_subir):
                 subprocess.run([gh(), "release", "delete", t, "-R", JUEGOS, "--yes", "--cleanup-tag"])
     print(f"Publicado: {e['nombre']} (id {gid}, versión {version})")
     return e
-
 
 def main():
     ap = argparse.ArgumentParser(description="Source Play: revisar y publicar juegos")
@@ -254,7 +222,7 @@ def main():
         out = subprocess.run([gh(), "pr", "list", "-R", ENVIOS, "--json", "number,title,author,createdAt"], capture_output=True, text=True)
         if out.returncode != 0:
             sys.exit(out.stderr.strip())
-        prs = [p for p in json.loads(out.stdout) if p["title"].startswith("Envío:")]   # los de sprites y sonidos van aparte
+        prs = [p for p in json.loads(out.stdout) if p["title"].startswith("Envío:")]
         if not prs:
             print("No hay envíos esperando revisión.")
         for p in prs:
@@ -269,7 +237,6 @@ def main():
         if not iss:
             print("No hay denuncias abiertas.")
         for i in iss:
-            # quien denuncia y, si es una cuenta, que insignia tiene la denunciada
             m = re.search(r"cuenta @([A-Za-z0-9-]+)", i["title"])
             print(f"{i['number']:>4}  {i['createdAt'][:10]}  {i['title']}" + (insignia(m.group(1)) if m else ""))
             print(f"      denuncia @{i['author']['login']}{insignia(i['author']['login'])}")
@@ -352,7 +319,6 @@ def main():
         guardar_y_firmar(d, {"catalogo.json": cj})
         subir(d, f"Source Play: retirar {a.arg}", a.sin_subir)
         print(f"Retirado {a.arg}: desaparece de Source Play y se borra de los equipos que lo tenían.")
-
 
 if __name__ == "__main__":
     main()

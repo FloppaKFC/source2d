@@ -33,17 +33,14 @@ std::string SceneEditor::title(Project &proj) {
     return "Escena: " + (sc ? jstr(*sc, "name") : std::string("?")) + "###scn_" + sceneId;
 }
 
-float SceneEditor::snapV(float v, float g) const { return snap && grid && g > 0 ? std::round(v / g) * g : std::round(v); }   // sin cuadricula, sin ajustar
+float SceneEditor::snapV(float v, float g) const { return snap && grid && g > 0 ? std::round(v / g) * g : std::round(v); }
 
-// Los objetos HUD se colocan en pixeles de la pantalla del juego. Con la camara a zoom Z se ven en el mundo
-// a 1/Z (posicion y escala), que es donde aparecen al jugar: k es ese factor (1 para el resto).
 static float camZoom(const json &sc) {
     float z = sc.contains("camera") && sc["camera"].is_object() ? (float)jnum(sc["camera"], "zoom", 1) : 1;
     return z > 0 ? z : 1;
 }
 static float hudK(const json &sc, const json *obj) { return obj && jbool(*obj, "hud", false) ? 1 / camZoom(sc) : 1; }
 
-/* ---------------- operaciones ---------------- */
 std::string SceneEditor::placeAt(Project &proj, json &sc, float wx, float wy) {
     if (placeObj.empty() || !findById(proj.doc["objects"], placeObj)) return "";
     float gw = (float)jnum(sc, "gridW", 16), gh = (float)jnum(sc, "gridH", 16), k = hudK(sc, findById(proj.doc["objects"], placeObj));
@@ -81,8 +78,6 @@ void SceneEditor::moveSelected(json &sc, float dx, float dy) {
     for (auto &id : sel) if (json *it = findById(sc["instances"], id)) { (*it)["x"] = jnum(*it, "x", 0) + dx; (*it)["y"] = jnum(*it, "y", 0) + dy; }
 }
 
-// instancia de paintObj que recibe los trazos: la seleccionada, si es de ese objeto; si no, la primera de la escena;
-// si no hay (o se pidio un mapa aparte) se crea una vacia en (0, 0), asi las celdas quedan en la rejilla del tile
 json *SceneEditor::paintTarget(Project &proj, json &sc, bool create) {
     json *obj = findById(proj.doc["objects"], paintObj);
     if (!isTileObj(obj)) return nullptr;
@@ -104,7 +99,7 @@ void SceneEditor::paintCell(Project &proj, json &sc, float wx, float wy, int til
     json *obj = findById(proj.doc["objects"], paintObj);
     json *it = paintTarget(proj, sc, tile >= 0);
     if (!it || !obj) return;
-    if (!tileInstPaint(proj, *it, *obj, wx, wy, tile)) {   // se borro todo: la instancia sobra
+    if (!tileInstPaint(proj, *it, *obj, wx, wy, tile)) {
         std::string id = jstr(*it, "id");
         json &arr = sc["instances"];
         for (size_t i = 0; i < arr.size(); i++) if (jstr(arr[i], "id") == id) { arr.erase(arr.begin() + i); break; }
@@ -116,7 +111,7 @@ static bool hitInstance(Project &proj, const json &inst, const json &obj, float 
     if (isTileObj(&obj)) {
         TileRect r;
         if (!tileInstRect(proj, inst, obj, r) || wx < r.x || wy < r.y || wx >= r.x + r.w || wy >= r.y + r.h) return false;
-        float T = tileSizeOf(proj, obj);   // solo las celdas pintadas
+        float T = tileSizeOf(proj, obj);
         int cols = (int)jnum(inst["tm"], "cols", 0), i = (int)((wy - r.y) / T) * cols + (int)((wx - r.x) / T);
         const json &d = inst["tm"]["data"];
         return i >= 0 && i < (int)d.size() && d[i].is_number() && d[i].get<int>() >= 0;
@@ -124,7 +119,7 @@ static bool hitInstance(Project &proj, const json &inst, const json &obj, float 
     ObjSize bs = objBaseSize(proj, obj);
     float hw = k * bs.w * std::fabs((float)jnum(inst, "scaleX", 1)) / 2, hh = k * bs.h * std::fabs((float)jnum(inst, "scaleY", 1)) / 2;
     float x = k * (float)jnum(inst, "x", 0), y = k * (float)jnum(inst, "y", 0);
-    if (jstr(obj, "type") == "text") {   // el texto se ancla a la izquierda, centro o derecha
+    if (jstr(obj, "type") == "text") {
         std::string al = obj.contains("text") ? jstr(obj["text"], "align", "left") : "left";
         if (al == "left") x += hw; else if (al == "right") x -= hw;
     }
@@ -151,7 +146,6 @@ std::string SceneEditor::pickAt(Project &proj, json &sc, float wx, float wy) {
     return best;
 }
 
-/* ---------------- interfaz ---------------- */
 void SceneEditor::drawObjectsPanel(Project &proj, json &) {
     ImGui::TextUnformatted("Objetos");
     ImGui::SetNextItemWidth(-1);
@@ -161,7 +155,7 @@ void SceneEditor::drawObjectsPanel(Project &proj, json &) {
     std::string q = search;
     std::transform(q.begin(), q.end(), q.begin(), ::tolower);
     for (auto &o : proj.doc["objects"]) {
-        if (!objectInScene(o, sceneId)) continue;   // los objetos de esta escena y los globales
+        if (!objectInScene(o, sceneId)) continue;
         std::string id = jstr(o, "id"), nm = jstr(o, "name"), lnm = nm;
         std::transform(lnm.begin(), lnm.end(), lnm.begin(), ::tolower);
         if (!q.empty() && lnm.find(q) == std::string::npos) continue;
@@ -170,12 +164,11 @@ void SceneEditor::drawObjectsPanel(Project &proj, json &) {
         bool tile = isTileObj(&o);
         bool selected = (mode != Tiles && placeObj == id) || (mode == Tiles && paintObj == id);
         if (ImGui::Selectable("##o", selected, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0, 34))) {
-            if (objView) editObject(id);   // con un objeto abierto, un clic pasa a ver el otro
+            if (objView) editObject(id);
             else if (tile) { paintObj = id; mode = Tiles; }
-            else { placeObj = id; if (mode == Tiles) mode = Select; }   // solo se elige: se coloca arrastrandolo a la escena
+            else { placeObj = id; if (mode == Tiles) mode = Select; }
             if (ImGui::IsMouseDoubleClicked(0)) editObject(id);
         }
-        // mantener y arrastrar hasta la escena para colocarlo (la vista previa la dibuja el lienzo)
         if (!tile && !objView && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
             ImGui::SetDragDropPayload("S2D_OBJ", id.c_str(), id.size() + 1);
             placeObj = id;
@@ -208,7 +201,7 @@ void SceneEditor::drawToolbar(Project &, json &sc) {
     school::anchorRect("scene.modes", modesA, ImGui::GetItemRectMax());
     ImGui::SameLine();
     ImGui::AlignTextToFramePadding();
-    ImGui::BeginDisabled(!grid);   // sin cuadricula no hay a que ajustarse
+    ImGui::BeginDisabled(!grid);
     bool snapShown = snap && grid;
     if (ImGui::Checkbox("Ajustar", &snapShown)) snap = snapShown;
     ImGui::EndDisabled();
@@ -246,7 +239,6 @@ void SceneEditor::drawCanvas(Project &proj, json &sc) {
     ImGui::InvisibleButton("##scene", avail, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
     school::anchor("scene.canvas");
     bool hovered = ImGui::IsItemHovered();
-    // objeto arrastrado desde la lista: se suelta aqui
     const ImGuiPayload *dragPl = ImGui::GetDragDropPayload();
     bool dropHover = false;
     std::string dropped;
@@ -285,7 +277,6 @@ void SceneEditor::drawCanvas(Project &proj, json &sc) {
         if (!nid.empty()) { sel = {nid}; popId = nid; popAt = ImGui::GetTime(); }
     }
 
-    /* ---- raton ---- */
     bool space = ImGui::IsKeyDown(ImGuiKey_Space) && hovered;
     if (hovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Middle) || (space && ImGui::IsMouseClicked(ImGuiMouseButton_Left)))) drag = DPan;
     if (drag == DPan) {
@@ -293,7 +284,6 @@ void SceneEditor::drawCanvas(Project &proj, json &sc) {
         if (!ImGui::IsMouseDown(ImGuiMouseButton_Middle) && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) drag = DNone;
     } else if (hovered && drag == DNone) {
         if (mode == Select) {
-            // asas de escala de la seleccion unica
             int handle = -1;
             if (sel.size() == 1) {
                 json *it = findById(insts, sel[0]);
@@ -350,7 +340,7 @@ void SceneEditor::drawCanvas(Project &proj, json &sc) {
         if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) drag = DNone;
         else {
             float dx = mw.x - dragStart.x, dy = mw.y - dragStart.y;
-            bool sn = snap && grid && !io.KeyAlt;   // sin cuadricula se mueve libre
+            bool sn = snap && grid && !io.KeyAlt;
             for (auto &kv : startPos) if (json *it = findById(insts, kv.first)) {
                 float k = hudK(sc, findById(proj.doc["objects"], jstr(*it, "objectId")));
                 float nx = kv.second.x + dx / k, ny = kv.second.y + dy / k;
@@ -400,12 +390,11 @@ void SceneEditor::drawCanvas(Project &proj, json &sc) {
         ImGui::EndPopup();
     }
 
-    /* ---- dibujo ---- */
     ImVec2 cend(canvasPos.x + avail.x, canvasPos.y + avail.y);
     dl->PushClipRect(canvasPos, cend, true);
     ImVec2 s0 = toScreen(0, 0), s1 = toScreen(SW, SH);
     Px bg = parseColor(jstr(sc, "background", "#202329"));
-    dl->AddRectFilled(canvasPos, cend, IM_COL32(bg.r, bg.g, bg.b, 255));   // el fondo es de todo, como en el juego
+    dl->AddRectFilled(canvasPos, cend, IM_COL32(bg.r, bg.g, bg.b, 255));
     if (grid && gw * zoom >= 6 && gh * zoom >= 6) {
         ImU32 gc = IM_COL32(255, 255, 255, 18);
         float x0 = std::max(0.0f, std::floor(toWorld(canvasPos).x / gw) * gw), x1 = std::min(SW, toWorld(cend).x);
@@ -413,13 +402,11 @@ void SceneEditor::drawCanvas(Project &proj, json &sc) {
         for (float x = x0; x <= x1; x += gw) dl->AddLine(toScreen(x, 0), toScreen(x, SH), gc);
         for (float y = y0; y <= y1; y += gh) dl->AddLine(toScreen(0, y), toScreen(SW, y), gc);
     }
-    // por capas (de la mas lejana a la mas cercana): sus mapas de tiles y luego sus objetos, como en el juego
     std::vector<std::pair<double, std::string>> lorder;
-    if (proj.doc.contains("layers") && proj.doc["layers"].is_array())   // solo leer: projectLayers() crearia la lista
+    if (proj.doc.contains("layers") && proj.doc["layers"].is_array())
         for (auto &L : proj.doc["layers"]) lorder.push_back({jnum(L, "z", 0), jstr(L, "id")});
     if (!findLayer(proj, "base")) lorder.push_back({0, "base"});
     std::stable_sort(lorder.begin(), lorder.end(), [](auto &a, auto &b) { return a.first < b.first; });
-    // instancias en el orden del juego: capa (z), z de la instancia y orden
     std::vector<std::pair<double, int>> order;
     for (int i = 0; i < (int)insts.size(); i++) {
         json *obj = findById(proj.doc["objects"], jstr(insts[i], "objectId"));
@@ -436,14 +423,14 @@ void SceneEditor::drawCanvas(Project &proj, json &sc) {
             if (!obj) continue;
             const json *L = layerOf(proj, *obj);
             if ((L ? jstr(*L, "id") : std::string("base")) != lo.second) continue;
-            if (isTileObj(obj)) {   // en modo pintar, los mapas de otros objetos se atenuan
+            if (isTileObj(obj)) {
                 bool dim = mode == Tiles && jstr(it, "objectId") != paintObj;
                 drawTileInst(dl, proj, it, *obj, toScreen(0, 0), zoom, toWorld(canvasPos), toWorld(cend), dim ? IM_COL32(255, 255, 255, 110) : IM_COL32_WHITE);
                 if (mode == Tiles && !dim) { TileRect r; if (tileInstRect(proj, it, *obj, r)) dl->AddRect(toScreen(r.x, r.y), toScreen(r.x + r.w, r.y + r.h), IM_COL32(157, 125, 255, 120), 0.0f, 0, 1.0f); }
                 continue;
             }
             float k = hudK(sc, obj), pop = 1;
-            if (popAt >= 0 && jstr(it, "id") == popId) {   // recien soltada: crece con un pequeno rebote
+            if (popAt >= 0 && jstr(it, "id") == popId) {
                 float t = (float)((ImGui::GetTime() - popAt) / 0.3);
                 if (t >= 1 || !ui::animations()) popAt = -1;
                 else { float u = t - 1; pop = 0.55f + 0.45f * (1 + 2.70158f * u * u * u + 1.70158f * u * u); }
@@ -453,12 +440,10 @@ void SceneEditor::drawCanvas(Project &proj, json &sc) {
         }
     }
     dl->AddRect(s0, s1, IM_COL32(120, 120, 140, 255));
-    // pantalla del juego (referencia de la interfaz y de la camara)
     ImVec2 v1 = toScreen(VW / camZoom(sc), VH / camZoom(sc));
     for (float x = s0.x; x < v1.x; x += 12) dl->AddLine(ImVec2(x, s0.y), ImVec2(std::min(x + 6, v1.x), s0.y), IM_COL32(255, 210, 120, 150), 1), dl->AddLine(ImVec2(x, v1.y), ImVec2(std::min(x + 6, v1.x), v1.y), IM_COL32(255, 210, 120, 150), 1);
     for (float y = s0.y; y < v1.y; y += 12) dl->AddLine(ImVec2(s0.x, y), ImVec2(s0.x, std::min(y + 6, v1.y)), IM_COL32(255, 210, 120, 150), 1), dl->AddLine(ImVec2(v1.x, y), ImVec2(v1.x, std::min(y + 6, v1.y)), IM_COL32(255, 210, 120, 150), 1);
     dl->AddText(ImVec2(v1.x - 64, v1.y + 3), IM_COL32(255, 210, 120, 180), "Pantalla");
-    // seleccion (la propia y la de quienes trabajan en esta escena, con su color)
     auto outline = [&](const std::string &id, ImU32 col, bool handles) {
         json *it = findById(insts, id);
         json *obj = it ? findById(proj.doc["objects"], jstr(*it, "objectId")) : nullptr;
@@ -496,7 +481,6 @@ void SceneEditor::drawCanvas(Project &proj, json &sc) {
         dl->AddRectFilled(a, io.MousePos, IM_COL32(157, 125, 255, 40));
         dl->AddRect(a, io.MousePos, IM_COL32(157, 125, 255, 200));
     }
-    // objeto arrastrado: su fantasma sigue al raton con suavidad y cae en la cuadricula
     if (dropHover) {
         if (json *obj = findById(proj.doc["objects"], placeObj)) {
             float k = hudK(sc, obj);
@@ -507,7 +491,7 @@ void SceneEditor::drawCanvas(Project &proj, json &sc) {
             ghost.x += (want.x - ghost.x) * t; ghost.y += (want.y - ghost.y) * t;
             float bob = 1 + 0.04f * std::sin((float)ImGui::GetTime() * 7);
             drawObjectAt(dl, proj, *obj, toScreen(ghost.x, ghost.y), bob, bob, 0, 60, zoom * k, 0);
-            if (!isTileObj(obj)) {   // su caja, para verlo aunque el dibujo este vacio
+            if (!isTileObj(obj)) {
                 ObjSize bs = objBaseSize(proj, *obj);
                 ImVec2 c = toScreen(ghost.x, ghost.y);
                 float hw = bs.w * bob * zoom * k / 2, hh = bs.h * bob * zoom * k / 2;
@@ -516,7 +500,6 @@ void SceneEditor::drawCanvas(Project &proj, json &sc) {
             }
         }
     } else ghostOn = false;
-    // vista previa al colocar / celda al pintar
     if (hovered && mode == Place && !placeObj.empty() && drag == DNone) {
         if (json *obj = findById(proj.doc["objects"], placeObj)) {
             float k = hudK(sc, obj);
@@ -531,7 +514,6 @@ void SceneEditor::drawCanvas(Project &proj, json &sc) {
             dl->AddRect(toScreen(cx, cy), toScreen(cx + T, cy + T), IM_COL32_WHITE, 0, 0, 1.5f);
         }
     }
-    // cursores de los demas (flecha con su nombre) y el propio para ellos
     for (auto &p : collab::peers()) {
         if (p.doc != myDoc || !p.cursor) continue;
         ImVec2 c = toScreen(p.x, p.y);
@@ -546,10 +528,10 @@ void SceneEditor::drawCanvas(Project &proj, json &sc) {
     if (collab::role() != collab::Role::None && (hovered || ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)))
         collab::setPresence(myDoc, mw.x, mw.y, hovered, sel);
     dl->PopClipRect();
-    if (dragPl && dragPl->IsDataType("S2D_OBJ") && !dropHover)   // arrastrando fuera del lienzo: la miniatura va con el raton
+    if (dragPl && dragPl->IsDataType("S2D_OBJ") && !dropHover)
         if (json *obj = findById(proj.doc["objects"], placeObj))
             objectThumbAt(ImGui::GetForegroundDrawList(), proj, *obj, ImVec2(io.MousePos.x + 8, io.MousePos.y + 8), 40);
-    if (hovered) {                                   // coordenadas del raton, solo con el raton sobre el lienzo
+    if (hovered) {
         char buf[96];
         snprintf(buf, sizeof buf, "%.0f, %.0f", mw.x, mw.y);
         dl->AddText(ImVec2(canvasPos.x + 8, cend.y - 22), IM_COL32(200, 200, 214, 255), buf);
@@ -678,7 +660,6 @@ void SceneEditor::sceneProps(Project &proj, json &sc) {
     }
 }
 
-// paleta para pintar con el objeto Tile elegido (su conjunto de tiles y su autotile)
 void SceneEditor::tilePaintProps(Project &proj, json &sc) {
     std::vector<json *> tiles;
     for (auto &o : proj.doc["objects"]) if (isTileObj(&o) && objectInScene(o, sceneId)) tiles.push_back(&o);
@@ -738,12 +719,12 @@ void SceneEditor::tilePaintProps(Project &proj, json &sc) {
 void SceneEditor::layersProps(Project &proj) {
     if (!ImGui::CollapsingHeader("Capas", ImGuiTreeNodeFlags_DefaultOpen)) return;
     static json justBase = json::array({{{"id", "base"}, {"name", "Principal"}, {"z", 0}}});
-    bool has = proj.doc.contains("layers") && proj.doc["layers"].is_array() && !proj.doc["layers"].empty();   // solo mirar: no crearla
+    bool has = proj.doc.contains("layers") && proj.doc["layers"].is_array() && !proj.doc["layers"].empty();
     json &layers = has ? proj.doc["layers"] : justBase;
     std::vector<int> idx(layers.size());
     for (size_t i = 0; i < idx.size(); i++) idx[i] = (int)i;
     std::stable_sort(idx.begin(), idx.end(), [&](int a, int b) { return jnum(layers[a], "z", 0) > jnum(layers[b], "z", 0); });
-    for (int i : idx) {   // resumen: ver u ocultar; el resto, en la ventana Capas
+    for (int i : idx) {
         json &L = layers[i];
         ImGui::PushID(i);
         bool hidden = jbool(L, "hidden", false);
@@ -822,7 +803,6 @@ void SceneEditor::draw(Project &proj) {
     if (!sc.contains("instances") || !sc["instances"].is_array()) sc["instances"] = json::array();
     json before = sc;
     json layersBefore = proj.doc.contains("layers") ? proj.doc["layers"] : json();
-    // seleccion valida
     sel.erase(std::remove_if(sel.begin(), sel.end(), [&](const std::string &id) { return !findById(sc["instances"], id); }), sel.end());
     shortcuts(proj, sc);
     drawToolbar(proj, sc);
@@ -833,7 +813,7 @@ void SceneEditor::draw(Project &proj) {
     ImGui::EndChild();
     ImGui::SameLine();
     if (objView && !findById(proj.doc["objects"], objView->objectId)) objView.reset();
-    if (objView) {   // el objeto se edita aqui mismo, en lugar del lienzo
+    if (objView) {
         ImGui::BeginChild("##objview", ImVec2(avail.x - left - 8, avail.y), ImGuiChildFlags_None);
         bool back = ui::primaryButton("< Volver a la escena");
         school::anchor("scene.back");

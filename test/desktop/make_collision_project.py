@@ -9,29 +9,25 @@ T = 16
 full = ['#808080'] * (T * T)
 ts = dict(id='ts', name='t', tileSize=T, columns=2, rows=1,
           tiles=[dict(pixels=full, solid=True),
-                 dict(pixels=full, solid=True, collision=dict(shape='poly', points=[[0, 16], [16, 0], [16, 16]]))])   # rampa /
-
+                 dict(pixels=full, solid=True, collision=dict(shape='poly', points=[[0, 16], [16, 0], [16, 16]]))])
 
 def spr(sid, w, h):
     return dict(id=sid, name=sid, width=w, height=h, frames=[dict(pixels=['#ffffff'] * (w * h))])
-
 
 def obj(oid, sid, coll=None, bh=None, anims=None):
     o = dict(id=oid, name=oid, type='sprite', spriteId=sid, behaviors=bh or {}, vars=[], animations=anims or [])
     if coll: o['collision'] = coll
     return o
 
-
 def inst(iid, oid, x, y):
     return dict(id=iid, objectId=oid, x=x, y=y, angle=0, scaleX=1, scaleY=1, opacity=100, frame=0)
-
 
 phys = dict(gravity=True, collide=True, friction=1, airFriction=1)
 COLS, ROWS = 40, 12
 data = [-1] * (COLS * ROWS)
-for c in range(COLS): data[(ROWS - 1) * COLS + c] = 0            # suelo en la fila de abajo (y 176..192)
-for c in range(20, 24): data[(ROWS - 2) * COLS + c] = 0          # a partir de la rampa, un escalon de un tile
-data[(ROWS - 2) * COLS + 19] = 1                                  # la rampa sube hasta el
+for c in range(COLS): data[(ROWS - 1) * COLS + c] = 0
+for c in range(20, 24): data[(ROWS - 2) * COLS + c] = 0
+data[(ROWS - 2) * COLS + 19] = 1
 agachado = dict(id='a1', name='Agachado', spriteId='s_hero', fps=8, loop=True, collision=dict(shape='rect', x=0, y=16, w=16, h=16))
 objects = [obj('Heroe', 's_hero', bh=phys, anims=[agachado]),
            obj('Bola', 's_ball', coll=dict(shape='circle', x=0, y=0, w=32, h=32)),

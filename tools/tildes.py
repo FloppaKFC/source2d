@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-# Pasada de tildes sobre los textos visibles del editor nativo (heredados del HTML sin acentos).
-# Solo toca literales de cadena de src/editor/*.cpp|hpp, los campos de texto de instructions.json
-# y las frases esperadas (lineas "ev.sentence") de test/editor_*.txt. No toca codigo GLSL/JS,
-# claves JSON ni valores que el runtime compara.
-# Uso: tools/tildes.py [--dry]
 import glob, json, re, sys
 
 WORDS = '''aberracion aberración|accion acción|acciones|alineacion alineación|anade añade|anaden añaden|anadir añadir
@@ -23,11 +18,8 @@ MAP = {}
 for item in re.split(r'[|\n]', WORDS):
     p = item.split()
     if len(p) == 2: MAP[p[0]] = p[1]
-# "esta" es verbo salvo delante de estas palabras
 ESTA_DEMOSTRATIVO = ('escena', 'instancia', 'instruccion', 'instrucción', 'vez', 'capa', 'variable', 'ventana')
 CODE = re.compile(r'uniform|void main|gl_|return \{|function|#include|mediump|varying')
-# literales que son datos y no texto visible: claves JSON, nombres por defecto de objetos (se usan en
-# expresiones como Boton1.X), textos que dibuja el juego y la salida de las pruebas
 SKIP = {'<extension>', 'Pixel perfect', 'Boton '}
 SKIP_RE = re.compile(r'^[a-z]+$|^S2DEDIT')
 PHRASES = {'La exportacion fallo': 'La exportación falló'}
@@ -54,7 +46,6 @@ dry = '--dry' in sys.argv
 changed = 0
 warn = []
 
-# literales C++
 LIT = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
 for f in sorted(glob.glob('src/editor/*.cpp') + glob.glob('src/editor/*.hpp')):
     src = open(f, encoding='utf-8').read()
@@ -73,7 +64,6 @@ for f in sorted(glob.glob('src/editor/*.cpp') + glob.glob('src/editor/*.hpp')):
     out.append(src[last:])
     if not dry: open(f, 'w', encoding='utf-8').write(''.join(out))
 
-# instructions.json: solo campos de texto
 p = 'src/editor/instructions.json'
 d = json.load(open(p, encoding='utf-8'))
 def fx(s):
@@ -102,7 +92,6 @@ d['oldCatGd'] = {fx(k): fx(v) for k, v in d['oldCatGd'].items()}
 if not dry:
     open(p, 'w', encoding='utf-8').write(json.dumps(d, ensure_ascii=False, indent=1) + '\n')
 
-# frases esperadas en los guiones de prueba
 for f in sorted(glob.glob('test/editor_*.txt')):
     lines = open(f, encoding='utf-8').read().split('\n')
     for i, l in enumerate(lines):

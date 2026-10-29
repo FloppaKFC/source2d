@@ -33,7 +33,7 @@ json *autotileOf(Project &proj, const json &obj) {
 int autotilePick(const json &at, int mask) {
     if (!at.contains("tiles") || !at["tiles"].is_array() || at["tiles"].size() < 16) return -1;
     int t = at["tiles"][mask & 15].is_number() ? at["tiles"][mask & 15].get<int>() : -1;
-    if (t < 0) t = at["tiles"][0].is_number() ? at["tiles"][0].get<int>() : -1;   // sin tile para esa forma: el suelto
+    if (t < 0) t = at["tiles"][0].is_number() ? at["tiles"][0].get<int>() : -1;
     return t;
 }
 
@@ -43,7 +43,6 @@ bool autotileHas(const json &at, int tile) {
     return false;
 }
 
-// recorta las filas y columnas vacias de los bordes (moviendo la esquina); false si no queda nada
 static bool trimMap(json &inst, float T) {
     json &tm = inst["tm"];
     int cols = (int)jnum(tm, "cols", 0), rows = (int)jnum(tm, "rows", 0);
@@ -63,11 +62,10 @@ static bool trimMap(json &inst, float T) {
     return true;
 }
 
-// agranda el mapa para que la celda (c, r) quede dentro; devuelve la celda en las coordenadas nuevas
 static void growTo(json &inst, float T, int &c, int &r) {
     json &tm = inst["tm"];
     int cols = (int)jnum(tm, "cols", 0), rows = (int)jnum(tm, "rows", 0);
-    if (cols <= 0 || rows <= 0) {   // mapa vacio: empieza en esa celda
+    if (cols <= 0 || rows <= 0) {
         inst["x"] = jnum(inst, "x", 0) + c * T; inst["y"] = jnum(inst, "y", 0) + r * T;
         tm["cols"] = 1; tm["rows"] = 1; tm["data"] = json::array({-1});
         c = r = 0;
@@ -103,7 +101,6 @@ bool tileInstPaint(Project &proj, json &inst, const json &obj, float wx, float w
     if (!at) {
         d[r * cols + c] = tile;
     } else {
-        // autotile: la celda y sus cuatro vecinas eligen su tile segun las vecinas que tambien son del autotile
         auto in = [&](int cc, int rr) { return cc >= 0 && rr >= 0 && cc < cols && rr < rows && d[rr * cols + cc].is_number() && autotileHas(*at, d[rr * cols + cc].get<int>()); };
         auto fix = [&](int cc, int rr) {
             if (!in(cc, rr)) return;
@@ -138,7 +135,6 @@ void drawTileInst(ImDrawList *dl, Project &proj, const json &inst, const json &o
 void starterTiles(json &ts) {
     int T = (int)jnum(ts, "tileSize", 16);
     if (!ts.contains("tiles") || !ts["tiles"].is_array() || ts["tiles"].size() < 2) return;
-    // 0: cesped sobre tierra, 1: tierra (los dos solidos); manchas en un patron fijo
     auto speck = [](int x, int y) { return ((x * 7 + y * 13) % 11) == 0; };
     for (int k = 0; k < 2; k++) {
         json px = json::array();
@@ -166,7 +162,6 @@ void migrateSceneTilemaps(json &doc) {
             if (layer.empty()) layer = "base";
             json *ts = doc.contains("tilesets") && doc["tilesets"].is_array() ? findById(doc["tilesets"], tsId) : nullptr;
             float T = ts ? std::max(1.0f, (float)jnum(*ts, "tileSize", 16)) : 16;
-            // dueno: un objeto Tile de ese conjunto y esa capa (de la escena o global); si no hay, uno nuevo
             json *owner = nullptr;
             for (auto &o : objs)
                 if (jstr(o, "type") == "tile" && jstr(o, "tilesetId") == tsId && jstr(o, "capa", "base") == layer &&

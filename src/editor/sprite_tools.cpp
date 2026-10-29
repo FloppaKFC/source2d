@@ -1,5 +1,3 @@
-// Source 2D - editor de sprites: seleccion por pixeles y herramientas de corte, paletas en archivos (compatibles con
-// Aseprite), abrir imagenes y exportar (imagenes, hojas de sprites con su JSON, GIF animado y .s2dsprite).
 #include "sprite_editor.hpp"
 #include <algorithm>
 #include <cmath>
@@ -9,7 +7,7 @@
 #include <fstream>
 #include <sstream>
 #include "raylib.h"
-#include "external/msf_gif.h"     // el codificador de GIF que raylib ya trae (implementado en rcore)
+#include "external/msf_gif.h"
 
 namespace fs = std::filesystem;
 
@@ -22,7 +20,6 @@ static std::string lowerExt(const std::string &path) {
     return e;
 }
 
-/* ================= seleccion ================= */
 void SpriteEditor::setSelection(const std::vector<uint8_t> &m, int mode) {
     int n = st.w * st.h;
     bool had = selPrev.size() == (size_t)n;
@@ -48,7 +45,6 @@ void SpriteEditor::selectRect(int x, int y, int w, int h, int mode) {
     setSelection(m, mode);
 }
 
-// varita magica: los pixeles de la capa actual parecidos al del punto (contiguos o en todo el lienzo)
 void SpriteEditor::selectByColor(int x, int y, bool contiguous, int mode) {
     if (x < 0 || y < 0 || x >= st.w || y >= st.h) return;
     int n = st.w * st.h, tol = spriteTools().wandTolerance;
@@ -86,7 +82,6 @@ void SpriteEditor::invertSelection() {
     setSelection(m, 0);
 }
 
-/* ================= recortes ================= */
 void SpriteEditor::cropTo(int x, int y, int w, int h) {
     for (auto &L : st.layers) for (auto &c : L.cels) {
         std::vector<Px> nc(w * h);
@@ -135,7 +130,6 @@ void SpriteEditor::cutToNewLayer() {
     status = "Selección cortada a una capa nueva";
 }
 
-// una imagen con varios dibujos (una hoja) pasa a ser un frame por celda, de izquierda a derecha y de arriba abajo
 void SpriteEditor::sliceToFrames(int cw, int ch, bool skipEmpty) {
     cw = std::clamp(cw, 1, st.w); ch = std::clamp(ch, 1, st.h);
     int cols = (st.w + cw - 1) / cw, rows = (st.h + ch - 1) / ch;
@@ -171,7 +165,6 @@ void SpriteEditor::sliceToFrames(int cw, int ch, bool skipEmpty) {
     status = "Cortado en " + std::to_string(cells.size()) + " frames de " + std::to_string(cw) + "x" + std::to_string(ch);
 }
 
-/* ================= hojas y exportar ================= */
 std::vector<Px> SpriteEditor::sheet(int layout, int &W, int &H, std::vector<SelRect> *cells) const {
     int F = (int)st.layers[0].cels.size();
     std::vector<int> frames;
@@ -198,7 +191,7 @@ static bool writeImage(const std::string &path, std::vector<Px> &px, int w, int 
 bool SpriteEditor::exportFile(const std::string &path, int layout, bool withJson, std::string &err) const {
     std::string ext = lowerExt(path);
     int F = (int)st.layers[0].cels.size();
-    if (ext == ".s2dsprite" || ext == ".s2sprite") { // formato propio (.s2sprite: el de exportar para Source): capas, frames, duraciones y paleta (se puede seguir editando)
+    if (ext == ".s2dsprite" || ext == ".s2sprite") {
         json j;
         j["format"] = "source2d-sprite";
         writeTo(j);
@@ -207,7 +200,7 @@ bool SpriteEditor::exportFile(const std::string &path, int layout, bool withJson
         if (!(o << j.dump())) { err = "No se pudo escribir " + path; return false; }
         return true;
     }
-    if (ext == ".gif") {                             // GIF animado con las duraciones de cada frame y transparencia
+    if (ext == ".gif") {
         MsfGifState g{};
         int oldThr = msf_gif_alpha_threshold;
         msf_gif_alpha_threshold = 128;
@@ -234,7 +227,7 @@ bool SpriteEditor::exportFile(const std::string &path, int layout, bool withJson
         err = "Formato no admitido: " + ext + " (usa .png, .gif, .bmp, .tga, .qoi, .jpg o .s2dsprite)";
         return false;
     }
-    if (layout == 4) {                               // un archivo por frame: nombre_1.png, nombre_2.png...
+    if (layout == 4) {
         fs::path p(path);
         std::vector<Px> comp;
         for (int f = 0; f < F; f++) {
@@ -248,7 +241,7 @@ bool SpriteEditor::exportFile(const std::string &path, int layout, bool withJson
     std::vector<SelRect> cells;
     std::vector<Px> img = sheet(layout, W, H, &cells);
     if (!writeImage(path, img, W, H)) { err = "No se pudo escribir " + path; return false; }
-    if (withJson && layout != 0) {                   // el JSON de la hoja en el formato de Aseprite (hash)
+    if (withJson && layout != 0) {
         json fr = json::object();
         for (size_t k = 0; k < cells.size(); k++) {
             const SelRect &c = cells[k];
@@ -302,7 +295,6 @@ bool SpriteEditor::loadImageFile(const std::string &path, std::string &err) {
     return true;
 }
 
-/* ================= paletas en archivos ================= */
 static Px rgb(int r, int g, int b) { return Px{(uint8_t)std::clamp(r, 0, 255), (uint8_t)std::clamp(g, 0, 255), (uint8_t)std::clamp(b, 0, 255), 255}; }
 
 static void addUnique(std::vector<Px> &out, Px c) {
@@ -315,7 +307,6 @@ static uint16_t be16(const unsigned char *p) { return (uint16_t)(p[0] << 8 | p[1
 static uint32_t be32(const unsigned char *p) { return (uint32_t)p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]; }
 static float beF(const unsigned char *p) { uint32_t u = be32(p); float f; memcpy(&f, &u, 4); return f; }
 
-// paleta de un archivo de Aseprite (.ase/.aseprite): chunk de paleta del primer frame
 static bool asepritePalette(const std::vector<unsigned char> &d, std::vector<Px> &out) {
     if (d.size() < 128 || le16(&d[4]) != 0xA5E0) return false;
     size_t pos = 128;
@@ -331,7 +322,7 @@ static bool asepritePalette(const std::vector<unsigned char> &d, std::vector<Px>
         uint16_t type = le16(&d[c + 4]);
         if (sz < 6 || c + sz > end) break;
         const unsigned char *q = &d[c + 6];
-        if (type == 0x2019 && sz >= 26) {            // paleta nueva: RGBA y nombre opcional
+        if (type == 0x2019 && sz >= 26) {
             uint32_t first = le32(q + 4), last = le32(q + 8);
             size_t e = 20;
             out.clear();
@@ -344,10 +335,10 @@ static bool asepritePalette(const std::vector<unsigned char> &d, std::vector<Px>
             }
             return !out.empty();
         }
-        if ((type == 0x0004 || type == 0x0011) && oldPal.empty()) {   // paletas antiguas (0-255 o 0-63)
+        if ((type == 0x0004 || type == 0x0011) && oldPal.empty()) {
             uint16_t packets = le16(q);
             size_t e = 2;
-            size_t idx = 0;                                    // cada paquete: cuantos colores saltar y cuantos vienen
+            size_t idx = 0;
             for (uint16_t pk = 0; pk < packets && c + 6 + e + 2 <= c + sz; pk++) {
                 idx += q[e];
                 int n = q[e + 1] ? q[e + 1] : 256;
@@ -365,7 +356,6 @@ static bool asepritePalette(const std::vector<unsigned char> &d, std::vector<Px>
     return false;
 }
 
-// Adobe Swatch Exchange (.ase que empieza por "ASEF")
 static bool swatchExchange(const std::vector<unsigned char> &d, std::vector<Px> &out) {
     if (d.size() < 12 || memcmp(d.data(), "ASEF", 4) != 0) return false;
     uint32_t blocks = be32(&d[8]);
@@ -404,7 +394,7 @@ bool loadPaletteFile(const std::string &path, std::vector<Px> &out, std::string 
         if (d.size() >= 772) { n = be16(&d[768]); if (n <= 0 || n > 256) n = 256; }
         for (int i = 0; i < n && (size_t)i * 3 + 2 < d.size(); i++) out.push_back(rgb(d[i * 3], d[i * 3 + 1], d[i * 3 + 2]));
     } else if (ext == ".pal" && d.size() >= 24 && memcmp(d.data(), "RIFF", 4) == 0 && memcmp(&d[8], "PAL ", 4) == 0) {
-        int n = le16(&d[22]);                        // RIFF PAL de Microsoft
+        int n = le16(&d[22]);
         for (int i = 0; i < n && 24 + (size_t)i * 4 + 3 <= d.size(); i++) out.push_back(rgb(d[24 + i * 4], d[25 + i * 4], d[26 + i * 4]));
     } else if (ext == ".gpl" || ext == ".pal" || ext == ".hex" || ext == ".txt") {
         std::istringstream ss(text);
@@ -424,7 +414,7 @@ bool loadPaletteFile(const std::string &path, std::vector<Px> &out, std::string 
             } else if (jasc) {
                 int r, g, b;
                 if (lineNo > 3 && sscanf(line.c_str(), "%d %d %d", &r, &g, &b) == 3) out.push_back(rgb(r, g, b));
-            } else {                                 // .hex de Lospec ("rrggbb") o .txt de Paint.NET ("aarrggbb", ';' comenta)
+            } else {
                 if (line[0] == ';') continue;
                 if (line[0] == '#') line = line.substr(1);
                 unsigned v = 0;
@@ -437,7 +427,7 @@ bool loadPaletteFile(const std::string &path, std::vector<Px> &out, std::string 
                 if (c.a) out.push_back(c);
             }
         }
-    } else {                                         // imagen: sus colores en orden de aparicion (como "cargar paleta" de Aseprite)
+    } else {
         Image im = LoadImage(path.c_str());
         if (!im.data) { err = "No se pudo abrir " + path; return false; }
         ImageFormat(&im, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);

@@ -9,13 +9,12 @@ import jsmin
 html, out = sys.argv[1:3]
 src = open(html, encoding='utf-8').read()
 if html.endswith('.js'):
-    runtime = jsmin.thin(src).encode('utf-8')   # sin comentarios ni sangria; mismas lineas
+    runtime = jsmin.thin(src).encode('utf-8')
 else:
     m = re.search(r'<script id="runtime-code" type="text/plain">(.*?)</script>', src, re.S)
     if not m:
         sys.exit('no encuentro el bloque runtime-code en ' + html)
     runtime = m.group(1).replace('window.PixelForge', 'window.Source2D').encode('utf-8')
-# QuickJS necesita el texto terminado en cero (JS_Eval lee hasta el): se anade un 0 que no cuenta en runtime_js_len
 data = runtime + b'\0'
 lines = []
 for i in range(0, len(data), 20):

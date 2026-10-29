@@ -6,9 +6,9 @@ Con --c genera un .c aparte con el dato como literal de cadena (para binarios gr
 como arreglo de numeros en C++ gasta varios GB de memoria); las declaraciones extern van aparte."""
 import sys
 src, name, out = sys.argv[1:4]
-optional = '--opcional' in sys.argv[4:]          # si el archivo no existe se genera un arreglo vacio (tamano 0)
+optional = '--opcional' in sys.argv[4:]
 as_c = '--c' in sys.argv[4:]
-deflate = '--deflate' in sys.argv[4:]           # comprimido con deflate; ademas de <nombre>_len va <nombre>_raw (tamano original)
+deflate = '--deflate' in sys.argv[4:]
 import os, zlib
 data = open(src, 'rb').read() if not (optional and not os.path.exists(src)) else b''
 raw_len = len(data)

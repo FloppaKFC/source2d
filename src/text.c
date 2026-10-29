@@ -1,22 +1,19 @@
 #define _POSIX_C_SOURCE 200809L
-/* Source 2D engine - letras: fuentes TrueType/OpenType (stb_truetype) rasterizadas a imagenes RGBA que el runtime
-   sube como texturas. Todo lo demas se dibuja en la GPU (platform_raylib.c). */
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include "text.h"
 #ifdef S2D_LITE
-#include "font_data_mini.h"   /* jugador ligero: solo ASCII, Latin-1 y € */
+#include "font_data_mini.h"
 #else
 #include "font_data.h"
 #endif
 
-/* Mezcla un píxel del glifo (r,g,b con cobertura a8 0..255) sobre p (alfa directo). */
 static inline void put_px(uint8_t *p, int r, int g, int b, int a8) {
     if (a8 <= 0) return;
     if (a8 >= 255) { p[0] = (uint8_t)r; p[1] = (uint8_t)g; p[2] = (uint8_t)b; p[3] = 255; return; }
     int da = p[3];
-    if (da == 255) {                         /* destino opaco: divisor constante */
+    if (da == 255) {
         int inv = 255 - a8;
         p[0] = (uint8_t)((r * a8 + p[0] * inv + 127) / 255);
         p[1] = (uint8_t)((g * a8 + p[1] * inv + 127) / 255);
@@ -25,7 +22,7 @@ static inline void put_px(uint8_t *p, int r, int g, int b, int a8) {
     }
     if (da == 0) { p[0] = (uint8_t)r; p[1] = (uint8_t)g; p[2] = (uint8_t)b; p[3] = (uint8_t)a8; return; }
     int inv = 255 - a8;
-    int dk = (da * inv) / 255;              /* peso del destino */
+    int dk = (da * inv) / 255;
     int oa = a8 + dk;
     if (oa <= 0) { p[0] = p[1] = p[2] = p[3] = 0; return; }
     p[0] = (uint8_t)((r * a8 + p[0] * dk) / oa);
@@ -38,7 +35,6 @@ static inline void put_px(uint8_t *p, int r, int g, int b, int a8) {
 #define STBTT_STATIC
 #include "stb_truetype.h"
 
-/* Fuente 0: la embebida. Las demas las carga el juego (fuentes TTF/OTF del proyecto) con tx_font_load. */
 #define MAX_FONTS 32
 static stbtt_fontinfo g_fonts[MAX_FONTS];
 static int g_font_ok[MAX_FONTS];
@@ -55,7 +51,7 @@ static stbtt_fontinfo *ft_get(int slot) {
 
 int tx_font_load(const uint8_t *data, size_t len) {
     if (!data || len < 12 || g_nfonts >= MAX_FONTS) return -1;
-    uint8_t *copy = malloc(len);                       /* stb_truetype lee de estos datos mientras se use la fuente */
+    uint8_t *copy = malloc(len);
     if (!copy) return -1;
     memcpy(copy, data, len);
     int off = stbtt_GetFontOffsetForIndex(copy, 0);
@@ -83,7 +79,6 @@ static int text_px(double size) {
     return px < 1 ? 1 : px;
 }
 
-/* escala con el tamano como em, igual que FT_Set_Pixel_Sizes(0, px) */
 static float font_scale(stbtt_fontinfo *f, double size) { return stbtt_ScaleForMappingEmToPixels(f, (float)text_px(size)); }
 
 double tx_text_width(const char *text, double size, int bold, int font) {
@@ -146,7 +141,6 @@ static int text_render(const char *text, double size, int bold, int font, int r,
     return 1;
 }
 
-/* Caché pequeña con reemplazo circular. */
 #define TEXT_CACHE 256
 typedef struct {
     char *text; double size; int bold, font, r, g, b;

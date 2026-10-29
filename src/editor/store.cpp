@@ -1,4 +1,3 @@
-// Source 2D - Source Store (ver store.hpp).
 #include "store.hpp"
 #include "exporter.hpp"
 #include "firma_publica.hpp"
@@ -34,7 +33,7 @@ struct Tienda {
     std::vector<Paquete> paquetes;
     std::vector<Bajada> meta, portadas, bajadas, cuentas, hits;
     std::map<std::string, std::string> errores;
-    std::map<std::string, std::pair<long long, long long>> cuenta;   // descargas, me gusta
+    std::map<std::string, std::pair<long long, long long>> cuenta;
     std::set<std::string> gustan;
     double cuentasAt = -1e9;
     time_t ultima = 0;
@@ -177,7 +176,7 @@ void guardarGustan(int t) {
     sys::writeDurable(dir(t) + "/local.json", json{{"gustan", g_t[t].gustan}}.dump());
 }
 std::string instDir(int t, const std::string &id) { return dir(t) + "/instalados/" + id; }
-}  // namespace
+}
 
 void iniciar(bool buscar, bool pruebas) {
     g_pruebas = pruebas;
@@ -349,7 +348,6 @@ bool valido(const json &pk, Tipo t, std::string &err) {
         if (pk.contains("sonidos")) { err = "Un paquete de sprites no puede llevar sonidos"; return false; }
     } else {
         if (!pk.contains("sonidos") || !pk["sonidos"].is_array()) { err = "Paquete dañado"; return false; }
-        // solo creaciones de Source Sound: notas, nunca audio grabado
         for (auto &x : pk["sonidos"]) {
             if (!x.is_object() || x.value("format", "") != "source2d-sound") { err = "Solo se aceptan sonidos hechos en Source Sound"; return false; }
             n++;
@@ -366,7 +364,6 @@ int anadirAlProyecto(Project &proj, const json &pk) {
         if (!proj.doc.contains(k) || !proj.doc[k].is_array()) proj.doc[k] = json::array();
         return proj.doc[k];
     };
-    // nombre libre: "Jugador", "Jugador 2"...
     auto libre = [](json &l, std::string nm) {
         auto usado = [&](const std::string &x) { for (auto &e : l) if (jstr(e, "name") == x) return true; return false; };
         if (!usado(nm)) return nm;
@@ -377,7 +374,7 @@ int anadirAlProyecto(Project &proj, const json &pk) {
         proj.rev++;
         return n;
     }
-    std::map<std::string, std::string> tsIds;   // id del paquete -> id nuevo
+    std::map<std::string, std::string> tsIds;
     if (pk.contains("tilesets")) for (auto x : pk["tilesets"]) {
         std::string nid = makeUid("ts");
         tsIds[jstr(x, "id")] = nid;
@@ -399,4 +396,4 @@ int anadirAlProyecto(Project &proj, const json &pk) {
 }
 std::string pack(const json &pk) { return exporter::sourcePack(pk); }
 bool unpack(const std::string &bytes, json &pk, std::string &err) { return exporter::sourceUnpack(bytes, pk, err); }
-}  // namespace store
+}

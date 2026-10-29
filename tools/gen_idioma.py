@@ -9,19 +9,17 @@ import json, os, re
 RAIZ = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 SRC = os.path.join(RAIZ, 'src', 'editor')
 
-
 def esc(s):
     return s.replace('\\', '\\\\').replace('\n', '\\n').replace('\t', '\\t')
-
 
 def visible(s):
     """lo que se ve de una etiqueta de ImGui (antes de ## o ###); descarta ids, rutas, claves y formatos"""
     s = s.split('###')[0].split('##')[0]
     if len(s) < 2 or not re.search(r'[A-Za-zÁÉÍÓÚáéíóúñÑ]', s):
         return None
-    if re.fullmatch(r'[a-z0-9_.\-/:]+', s):        # claves JSON, ids, nombres de archivo
+    if re.fullmatch(r'[a-z0-9_.\-/:]+', s):
         return None
-    if re.fullmatch(r'[a-z][A-Za-z0-9]*', s) or re.fullmatch(r'[a-z]+_[A-Za-z0-9_]+', s):   # nombres de campos (spriteId)
+    if re.fullmatch(r'[a-z][A-Za-z0-9]*', s) or re.fullmatch(r'[a-z]+_[A-Za-z0-9_]+', s):
         return None
     if re.search(r'\.(json|png|txt|h|cpp|js|zip|exe|wav|ogg)\b', s) or s.startswith(('#', 'http', '/', 'S2D')):
         return None
@@ -29,17 +27,14 @@ def visible(s):
         return None
     return s
 
-
 textos = []
 vistos = set()
-
 
 def add(s):
     v = visible(s)
     if v and v not in vistos:
         vistos.add(v)
         textos.append(v)
-
 
 lit = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
 for f in sorted(os.listdir(SRC)):
@@ -84,7 +79,6 @@ cab = ['# Source 2D - idioma: Español (el original)',
        '# Opciones > Idioma. Lo que esta entre llaves ({object}, {value}...) se deja igual: ahi va el dato.',
        '']
 open(os.path.join(carpeta, 'Español.txt'), 'w', encoding='utf-8').write('\n'.join(cab + ['%s = %s' % (esc(t), esc(t)) for t in textos]) + '\n')
-# los demas idiomas: se anaden los textos nuevos (sin traducir) y se quedan los que ya estaban
 for f in os.listdir(carpeta):
     if not f.endswith('.txt') or f.startswith('Espa'):
         continue

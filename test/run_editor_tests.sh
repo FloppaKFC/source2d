@@ -1,10 +1,6 @@
 #!/bin/sh
-# Pruebas automaticas del editor nativo (sprites, escena, eventos, tiles y documentos del proyecto) y del runtime en el jugador nativo.
-# Uso: test/run_editor_tests.sh   (desde source2d/, con build/ compilado)
 set -e
 cd "$(dirname "$0")/.."
-# editor y jugador: los de "make" (gcc del sistema) o, si no abren aqui (glibc mas vieja, como en Ubuntu), los
-# portables de Makefile.linux; S2D_EDITOR y S2D_PLAYER eligen otros
 ED=${S2D_EDITOR:-./build/source2d}
 PL=${S2D_PLAYER:-./build/source2d-player}
 if [ -z "$S2D_PLAYER" ] && ! "$PL" --help >/dev/null 2>&1 && [ -x build/lnx/source2d-player ]; then

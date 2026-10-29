@@ -1,9 +1,3 @@
-// Source 2D - noticias y actualizaciones firmadas (ver novedades.hpp).
-// En el repositorio publico hay noticias.json y versiones.json, cada uno con su .firma al lado (EdDSA de Monocypher,
-// hecha con tools/firma). Lo que no esta firmado con S2D_FIRMA_PUBLICA se ignora: aunque alguien entrara en el GitHub,
-// no podria poner un anuncio falso ni un ejecutable cambiado. Las imagenes y los ejecutables se comprueban con la huella
-// BLAKE2b que viene dentro del json firmado.
-// Lo ultimo que se bajo bien queda en <config>/noticias/, y es lo que se ve sin internet.
 #include "novedades.hpp"
 #include "firma_publica.hpp"
 #include "json.hpp"
@@ -32,16 +26,15 @@ const char *kSistema = "windows", *kExe = "Source2D.exe";
 const char *kSistema = "linux", *kExe = "Source2D";
 #endif
 const char *kBase = "https://raw.githubusercontent.com/FloppaKFC/source2d-versiones/main/";
-const time_t kCada = 3 * 3600;               // busqueda completa cada 3 h si el editor sigue abierto
-const double kSondeo = 5;                    // y cada 5 s se mira si cambio la firma de las noticias (un archivo de 128 bytes)
-// votos de las encuestas: contador publico sin cuenta. /get/<espacio>/<clave> lee, /hit/... suma 1 (y devuelve el total)
+const time_t kCada = 3 * 3600;
+const double kSondeo = 5;
 const char *kContador = "https://abacus.jasoncameron.dev/", *kEspacio = "source2d-floppa";
 const double kVotosCada = 20;
 
-struct Bajada { sys::Proc p; std::string dest, hash; bool vivo = false; int code = 0; };   // code: salida de curl (22 = no esta en el servidor)
-struct Conteo {                              // los votos de una encuesta
+struct Bajada { sys::Proc p; std::string dest, hash; bool vivo = false; int code = 0; };
+struct Conteo {
     std::vector<long long> n;
-    std::vector<Bajada> b;                   // una lectura por opcion
+    std::vector<Bajada> b;
     Bajada voto;
     double at = -1e9;
     std::string error;
@@ -55,18 +48,17 @@ std::vector<Noticia> g_news;
 std::vector<Version> g_vers;
 std::set<int> g_leidas, g_vistas, g_nuevas, g_notificadas;
 std::vector<Bajada> g_meta, g_imgs;
-Bajada g_sondeo;                             // la firma de noticias.json, para ver si hay algo nuevo
+Bajada g_sondeo;
 double g_sondeoAt = -1e9;
 std::map<std::string, DescargaVer> g_desc;
 std::map<int, Conteo> g_enc;
-std::map<int, int> g_votos;                  // id de noticia -> opcion que voto este editor
-std::set<int> g_enviados;                    // los votos que el contador ya recibio (los demas se reintentan)
+std::map<int, int> g_votos;
+std::set<int> g_enviados;
 time_t g_ultima = 0;
 
 std::string dir() { return ui::configDir() + "/noticias"; }
 std::string tmpDir() { return dir() + "/descarga"; }
 double reloj() { return (double)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count() / 1000.0; }
-// los archivos de las noticias pasan por la cache de GitHub (5 min): con ?t= se pide el de ahora mismo
 std::string sinCache(const std::string &url) {
     if (url.rfind("https://", 0) != 0) return url;
     return url + "?t=" + std::to_string((long long)time(nullptr));
@@ -89,7 +81,6 @@ std::string leer(const std::string &p) {
     ss << in.rdbuf();
     return ss.str();
 }
-// BLAKE2b de 32 bytes en hexadecimal, leyendo por trozos (los ejecutables ocupan decenas de MB)
 std::string huella(const std::string &p) {
     std::ifstream in(fs::u8path(p), std::ios::binary);
     if (!in) return "";
@@ -110,7 +101,6 @@ bool firmaValida(const std::string &data, const std::string &firma) {
     uint8_t sig[64];
     return fromHex(firma, sig, 64) && crypto_eddsa_check(sig, g_pub, (const uint8_t *)data.data(), data.size()) == 0;
 }
-// json firmado del tipo que toca ("noticias" o "versiones"); null si algo no cuadra
 json abrirFirmado(const std::string &data, const std::string &firma, const char *tipo) {
     if (data.empty() || !firmaValida(data, firma)) return nullptr;
     json j = json::parse(data, nullptr, false);
@@ -121,7 +111,6 @@ bool urlPermitida(const std::string &u) {
     if (u.rfind("https://", 0) == 0) return true;
     return g_pruebas && u.rfind("file://", 0) == 0;
 }
-// nombres que vienen del json (carpetas de versiones, imagenes): sin barras raras ni ".."
 bool rutaSegura(const std::string &s) {
     if (s.empty() || s.find("..") != std::string::npos || s[0] == '/') return false;
     for (char c : s) if (!(isalnum((unsigned char)c) || strchr("_-./ ", c))) return false;
@@ -163,7 +152,6 @@ void cargarCache() {
         if (!x.is_object()) continue;
         std::string hasta = x.value("hasta", "");
         if (!hasta.empty() && hasta < today) continue;
-        // "para": solo para estas versiones o sistemas
         if (x.contains("para") && x["para"].is_array() && !x["para"].empty()) {
             bool mine = false;
             for (auto &p : x["para"]) if (p.is_string() && (p == S2D_VERSION || p == kSistema)) mine = true;
@@ -180,7 +168,6 @@ void cargarCache() {
             en.cierra = e.contains("cierra") && e["cierra"].is_number() ? e["cierra"].get<long long>() : 0;
             if (e.contains("opciones") && e["opciones"].is_array())
                 for (auto &op : e["opciones"]) if (op.is_string() && en.opciones.size() < 10) en.opciones.push_back(op);
-            // la clave va en la direccion del contador: solo letras, numeros y guiones
             bool ok = !en.clave.empty() && en.clave.size() <= 40 && en.opciones.size() >= 2;
             for (char c : en.clave) if (!(isalnum((unsigned char)c) || c == '-')) ok = false;
             if (ok) { o.hayEncuesta = true; o.encuesta = en; }
@@ -227,10 +214,9 @@ void cargarCache() {
     std::sort(g_vers.begin(), g_vers.end(), [](const Version &a, const Version &b) { return a.num > b.num; });
 }
 
-// las 4 descargas de la busqueda acabaron: se queda con lo que venga bien firmado
 void procesarBusqueda() {
     int ok = 0, falta = 0;
-    bool conectado = false;   // el servidor contesto aunque fuera "no existe": hay internet
+    bool conectado = false;
     for (auto &b : g_meta) if (b.code == 0 || b.code == 22) conectado = true;
     for (const char *nm : {"noticias.json", "versiones.json"}) {
         std::string d = leer(tmpDir() + "/" + nm), f = leer(tmpDir() + "/" + nm + ".firma");
@@ -251,14 +237,13 @@ void procesarBusqueda() {
     else if (falta == 2) g_estado = g_hayCache ? "Sin conexión: se ven las últimas noticias descargadas." : "Sin conexión. Las noticias saldrán aquí cuando haya internet.";
     else g_estado = "Algunas noticias no se pudieron comprobar y no se muestran.";
 }
-}  // namespace
+}
 
 void iniciar(bool buscar, const std::string &versionsDir, bool pruebas) {
     g_versDir = versionsDir;
     g_pruebas = pruebas;
     std::string pub = S2D_FIRMA_PUBLICA;
     const char *url = getenv("S2D_NOVEDADES_URL");
-    // las pruebas automaticas usan una clave y un repositorio de prueba (file://) y no tocan la red
     if (pruebas) {
         const char *k = getenv("S2D_FIRMA_PUBLICA");
         pub = k ? k : "";
@@ -266,11 +251,11 @@ void iniciar(bool buscar, const std::string &versionsDir, bool pruebas) {
     }
     if (url && *url) g_base = url;
     if (const char *c = getenv("S2D_CONTADOR_URL")) g_contador = c;
-    else if (pruebas) g_contador.clear();   // las pruebas no votan de verdad
+    else if (pruebas) g_contador.clear();
     if (!fromHex(pub, g_pub, 32)) return;
     g_on = true;
     g_buscar = buscar;
-    if (pruebas) {   // carpeta de noticias limpia en cada prueba
+    if (pruebas) {
         std::error_code ec;
         fs::remove_all(fs::u8path(dir()), ec);
     }
@@ -316,7 +301,7 @@ void tick() {
     for (auto it = g_imgs.begin(); it != g_imgs.end();) {
         if (it->vivo && !sys::finished(it->p)) { ++it; continue; }
         std::error_code ec;
-        std::string fin = it->dest.substr(0, it->dest.size() - 8);   // sin ".parcial"
+        std::string fin = it->dest.substr(0, it->dest.size() - 8);
         if (huella(it->dest) == it->hash) { fs::rename(fs::u8path(it->dest), fs::u8path(fin), ec); img = true; }
         else fs::remove(fs::u8path(it->dest), ec);
         it = g_imgs.erase(it);
@@ -336,12 +321,11 @@ void tick() {
         } else if (sz < d.v.tam) d.error = "Se cortó la descarga. Pulsa otra vez para seguir donde se quedó.";
         else { fs::remove(fs::u8path(d.parcial), ec); d.error = "El archivo descargado no coincide con la firma y se borró."; }
     }
-    // votos: {"value": N}; si la clave aun no existe el contador dice 404 (curl 22) y es que hay 0
     auto valor = [](Bajada &b) -> long long {
         json j = json::parse(leer(b.dest), nullptr, false);
         std::error_code ec;
         fs::remove(fs::u8path(b.dest), ec);
-        if (b.code == 22 || (g_pruebas && b.code == 37)) return 0;   // 37: en las pruebas (file://) el archivo no existe
+        if (b.code == 22 || (g_pruebas && b.code == 37)) return 0;
         if (b.code != 0 || !j.is_object() || !j.contains("value") || !j["value"].is_number_integer()) return -1;
         return j["value"].get<long long>();
     };
@@ -369,7 +353,6 @@ void tick() {
         }
     }
     if (g_buscar && g_meta.empty() && time(nullptr) - g_ultima > kCada) buscarAhora();
-    // sondeo: si la firma de noticias.json cambio, hay noticias nuevas (o editadas): se buscan ya
     if (g_sondeo.vivo) {
         if (sys::finished(g_sondeo.p, &g_sondeo.code)) {
             g_sondeo.vivo = false;
@@ -439,7 +422,7 @@ void enviarVoto(const Noticia &n, Conteo &c) {
     c.voto.dest = dir() + "/encuestas/" + std::to_string(n.id) + "-voto.json";
     lanzarCurl(c.voto, urlVoto("hit", n.encuesta, it->second), {"--max-time", "15", "--max-filesize", "4096"});
 }
-}  // namespace
+}
 
 bool encuestaCerrada(const Noticia &n) { return n.encuesta.cierra > 0 && (long long)time(nullptr) >= n.encuesta.cierra; }
 
@@ -450,7 +433,6 @@ void mirarEncuesta(const Noticia &n) {
     if (!g_buscar || g_contador.empty() || c.voto.vivo || reloj() - c.at < kVotosCada) return;
     for (auto &b : c.b) if (b.vivo) return;
     c.at = reloj();
-    // un voto que no llego (sin internet al votar) se vuelve a mandar antes de leer
     if (g_votos.count(n.id) && !g_enviados.count(n.id) && !encuestaCerrada(n)) { enviarVoto(n, c); return; }
     std::error_code ec;
     fs::create_directories(fs::u8path(dir() + "/encuestas"), ec);
@@ -474,7 +456,7 @@ void votar(const Noticia &n, int opcion) {
     guardarLeidas();
     Conteo &c = g_enc[n.id];
     if (c.n.size() != n.encuesta.opciones.size()) c.n.assign(n.encuesta.opciones.size(), -1);
-    if (c.n[opcion] >= 0) c.n[opcion]++;   // se ve ya; el contador confirma el total al contestar
+    if (c.n[opcion] >= 0) c.n[opcion]++;
     if (g_buscar) enviarVoto(n, c);
     else c.error = "Buscar noticias está apagado en Opciones: el voto se enviará al activarlo.";
 }
@@ -494,7 +476,6 @@ void descargar(const Version &v) {
     fs::create_directories(fs::u8path(carpeta), ec);
     d.final_ = carpeta + "/" + kExe;
     d.parcial = d.final_ + ".parcial";
-    // -C -: si ya hay un trozo bajado, sigue desde ahi; se corta si pasa un minuto sin recibir nada
     std::vector<std::string> a = {"curl", "-fsL", "--proto", g_pruebas ? "=https,file" : "=https", "--proto-redir", "=https",
                                   "-C", "-", "--speed-limit", "1", "--speed-time", "60", "-o", d.parcial, v.url};
     d.vivo = sys::spawn(a, &d.p, true);
@@ -516,4 +497,4 @@ bool instalada(const std::string &nombre) {
     std::error_code ec;
     return fs::exists(fs::u8path(g_versDir + "/" + nombre + "/" + kExe), ec);
 }
-}  // namespace novedades
+}

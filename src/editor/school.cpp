@@ -16,7 +16,6 @@ std::function<void(const std::string &name)> onNewProject;
 std::function<void(const std::string &msg)> onNotify;
 std::function<void()> onAddSong;
 
-/* ---------------- lo que se mira en el proyecto ---------------- */
 static const json &arrOf(const json &d, const char *k) { static const json empty = json::array(); return d.contains(k) && d[k].is_array() ? d[k] : empty; }
 static bool isSprite(const json &o) { return jstr(o, "type", "sprite") == "sprite"; }
 static bool painted(const json &doc, const std::string &spriteId, int minFrames = 1) {
@@ -42,7 +41,6 @@ static bool platformer(const json &o) {
     return (o.contains("comportamientos") && o["comportamientos"].contains("plataformero")) || jstr(o.value("behaviors", json::object()), "movement") == "platform";
 }
 static bool solid(const json &o) { return jbool(o.value("behaviors", json::object()), "solid", false); }
-/* cada evento (de todas las escenas y los globales): sus tipos de condiciones y acciones */
 static void eachEvent(const json &doc, const std::function<void(const std::set<std::string> &, const std::set<std::string> &)> &f) {
     auto run = [&](const json &L) {
         for (auto &e : L) {
@@ -69,7 +67,7 @@ static bool hasEvent(const json &doc, std::vector<std::string> conds, std::vecto
 }
 static std::set<std::string> g_notes;
 
-static bool tileCells(const json &d, int n) {   // algun objeto Tile con al menos n celdas pintadas en una escena
+static bool tileCells(const json &d, int n) {
     for (auto &o : arrOf(d, "objects")) if (jstr(o, "type") == "tile")
         for (auto &sc : arrOf(d, "scenes")) for (auto &i : arrOf(sc, "instances")) {
             if (jstr(i, "objectId") != jstr(o, "id") || !i.contains("tm")) continue;
@@ -80,13 +78,12 @@ static bool tileCells(const json &d, int n) {   // algun objeto Tile con al meno
     return false;
 }
 
-/* ---------------- "hazlo por mi": lo que hace Floppa cuando se lo pides ---------------- */
 static json *firstScene(Project &proj) { return proj.doc["scenes"].is_array() && !proj.doc["scenes"].empty() ? &proj.doc["scenes"][0] : nullptr; }
 static json *objBy(Project &proj, const std::function<bool(const json &)> &f) {
     for (auto &o : proj.doc["objects"]) if (f(o)) return &o;
     return nullptr;
 }
-static json *newestSprite(Project &proj) {   // el ultimo objeto Sprite creado
+static json *newestSprite(Project &proj) {
     json *r = nullptr;
     for (auto &o : proj.doc["objects"]) if (isSprite(o)) r = &o;
     return r;
@@ -96,7 +93,6 @@ static void placeIn(Project &proj, const std::string &objId, float x, float y) {
         (*sc)["instances"].push_back({{"id", makeUid("i")}, {"objectId", objId}, {"x", x}, {"y", y}, {"angle", 0}, {"scaleX", 1}, {"scaleY", 1}, {"opacity", 100}, {"frame", 0}});
     proj.dirty = true; proj.rev++;
 }
-// un dibujo sencillo en el sprite del objeto (kind 0: personaje, 1: moneda)
 static void paintSimple(Project &proj, json &o, int kind) {
     json *sp = proj.spriteById(jstr(o, "spriteId"));
     if (!sp) {
@@ -111,11 +107,11 @@ static void paintSimple(Project &proj, json &o, int kind) {
     json px = json::array();
     for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
         std::string c;
-        if (kind == 0) {   // cuadrado azul con ojos
+        if (kind == 0) {
             bool in = x >= w / 8 && x < w - w / 8 && y >= h / 8 && y < h;
             bool eye = (y >= h / 3 && y < h / 3 + h / 8) && ((x >= w / 3 && x < w / 3 + w / 10) || (x >= 2 * w / 3 - w / 10 && x < 2 * w / 3));
             c = eye ? "#ffffff" : in ? (y > h * 3 / 4 ? "#2f5fd0" : "#4c86f0") : "";
-        } else {           // moneda amarilla
+        } else {
             float dx = x - w / 2.0f + 0.5f, dy = y - h / 2.0f + 0.5f, r = w * 0.38f;
             c = dx * dx + dy * dy <= r * r ? (dx * dx + dy * dy <= r * r * 0.45f ? "#ffe066" : "#e0a020") : "";
         }
@@ -130,7 +126,6 @@ static std::string makeSpriteObj(Project &proj, const std::string &name) {
     if (json *o = findById(proj.doc["objects"], id)) {
         (*o)["name"] = name;
         if (json *sc = firstScene(proj)) (*o)["scene"] = jstr(*sc, "id");
-        // su propio sprite (createObject reutiliza el primero del proyecto si ya hay)
         std::string sid = makeUid("s");
         json px = json::array();
         for (int i = 0; i < 32 * 32; i++) px.push_back("");
@@ -153,7 +148,6 @@ static void paintFloor(Project &proj, json &tileObj) {
     for (float x = 0; x < 30 * T; x += T) tileInstPaint(proj, *it, tileObj, x + T / 2, y + T / 2, 0);
     proj.dirty = true; proj.rev++;
 }
-// lo de la leccion Principal ya hecho: personaje dibujado, con plataformero y puesto, y un suelo (para las demas)
 static void ensurePlatformer(Project &proj) {
     json *pl = objBy(proj, [](const json &o) { return isSprite(o) && platformer(o); });
     if (!pl) {
@@ -206,9 +200,6 @@ static int instancesNamed(const json &d, const char *lowerPart) {
     return k;
 }
 
-/* ---------------- lecciones ---------------- */
-// Cada paso: lo que dice Floppa, una pista, cuando se cumple, a donde senala ("a|b": el primero que se vea), si espera
-// "Estoy listo", que decir si no se ve lo que senala (te perdiste: como volver y a donde senalar) y "Hazlo por mi".
 struct Step {
     const char *text, *hint;
     std::function<bool(const json &)> check;
@@ -385,8 +376,7 @@ static const std::vector<Lesson> &lessons() {
     return L;
 }
 
-/* ---------------- progreso ---------------- */
-static std::map<std::string, int> g_done;      // pasos hechos de cada leccion
+static std::map<std::string, int> g_done;
 static bool g_loaded = false;
 static std::string progressFile() { return ui::configDir() + "/escuela.json"; }
 static void load() {
@@ -397,14 +387,14 @@ static void load() {
     json j = json::parse(in, nullptr, false);
     if (j.is_object()) for (auto it = j.begin(); it != j.end(); ++it) if (it.value().is_number()) g_done[it.key()] = it.value().get<int>();
 }
-bool saveProgress = true;                         // las pruebas no tocan el progreso de verdad
+bool saveProgress = true;
 static void save() {
     if (!saveProgress) return; json j = json::object(); for (auto &kv : g_done) j[kv.first] = kv.second; std::ofstream(progressFile()) << j.dump(1); }
 
 static int g_lesson = -1, g_step = 0;
-static double g_doneAt = -1;                    // cuando se cumplio el paso actual (para la animacion)
+static double g_doneAt = -1;
 static bool g_hint = false, g_min = false, g_needSetup = false;
-static double g_farewellAt = -1;                // cerraste el proyecto: Floppa se despide y se va
+static double g_farewellAt = -1;
 bool active() { return g_lesson >= 0; }
 int stepIndex() { return g_step; }
 void note(const std::string &what) { g_notes.insert(what); }
@@ -415,16 +405,14 @@ void start(const std::string &id) {
         g_lesson = i; g_step = std::min(g_done[id], (int)L[i].steps.size() - 1); g_doneAt = -1; g_hint = false; g_min = false;
         if (g_done[id] >= (int)L[i].steps.size()) g_step = 0;
         g_notes.clear();
-        g_needSetup = true;   // lo que la leccion necesita en el proyecto (se prepara en drawPanel)
+        g_needSetup = true;
     }
 }
 
-/* ---------------- puntos que Floppa senala ---------------- */
 struct Anchor { ImVec2 a, b; int frame; };
 static std::map<std::string, Anchor> g_anchors;
 void anchorRect(const char *id, ImVec2 a, ImVec2 b) { g_anchors[id] = {a, b, ImGui::GetFrameCount()}; }
 void anchor(const char *id) { anchorRect(id, ImGui::GetItemRectMin(), ImGui::GetItemRectMax()); }
-// el primero de "a|b|c" que se haya dibujado en este fotograma o en el anterior
 static const Anchor *findAnchor(const char *list) {
     if (!list) return nullptr;
     std::string l = list;
@@ -449,7 +437,7 @@ void drawSection() {
     std::string group;
     for (int i = 0; i < (int)L.size(); i++) {
         const Lesson &l = L[i];
-        if (group != l.group) {   // las notas van por temas
+        if (group != l.group) {
             group = l.group;
             ImGui::PushFont(ui::boldFont(), 19.0f);
             ImGui::TextUnformatted(l.group);
@@ -481,8 +469,6 @@ void drawSection() {
     }
 }
 
-/* ---------------- Floppa ---------------- */
-// Las dos caras (normal y contenta) van dentro del editor (src/editor/presets/floppa*.s2dsprite)
 static ui::PixTexture *floppaFace(int k) {
     static ui::PixTexture tex[2];
     static bool loaded[2] = {false, false};
@@ -502,7 +488,6 @@ static ui::PixTexture *floppaFace(int k) {
     }
     return tex[k].tex.id ? &tex[k] : nullptr;
 }
-// cuantos bytes ocupan los primeros n caracteres (UTF-8)
 static size_t utf8Prefix(const char *s, size_t n) {
     size_t i = 0;
     while (s[i] && n) { unsigned char c = (unsigned char)s[i]; i += c < 0x80 ? 1 : c < 0xE0 ? 2 : c < 0xF0 ? 3 : 4; n--; }
@@ -510,23 +495,22 @@ static size_t utf8Prefix(const char *s, size_t n) {
 }
 
 static double g_stepAt = 0, g_startAt = 0, g_nopeAt = -10, g_lostFor = 0;
-static float g_fx = -1;                          // posicion x de Floppa (se desliza hacia su sitio)
-static bool g_left = false;                      // Floppa a la izquierda (si lo que senala esta abajo a la derecha)
-static int g_lastStep = -1, g_wrong = 0;         // clics fuera de lo que senala en este paso
-static float g_arrowA = 1;                       // la flecha se aparta mientras dibujas o arrastras
+static float g_fx = -1;
+static bool g_left = false;
+static int g_lastStep = -1, g_wrong = 0;
+static float g_arrowA = 1;
 
 static bool g_pressReady = false;
 void pressReady() { g_pressReady = true; }
-static bool g_reached = false;                   // ya pulsaste donde senalaba: la flecha no vuelve en este paso
-static bool g_pressAuto = false;                 // pruebas: "Hazlo por mi"
+static bool g_reached = false;
+static bool g_pressAuto = false;
 void projectClosed() { if (g_lesson >= 0 && g_farewellAt < 0) g_farewellAt = ImGui::GetTime(); }
 
-// Floppa y su globo (comun a la leccion y a la despedida); body dibuja el contenido del globo
 static void floppaFrame(double now, bool happy, bool typing, ImVec2 &bubA, ImVec2 &bubB, const std::function<void()> &body, bool leaving) {
     ImGuiViewport *vp = ImGui::GetMainViewport();
     const float F = 96, W = 380, M = 18;
     float wantX = leaving ? vp->WorkPos.x + vp->WorkSize.x + 60 : g_left ? vp->WorkPos.x + M : vp->WorkPos.x + vp->WorkSize.x - M - F;
-    if (g_fx < 0) { g_fx = vp->WorkPos.x + vp->WorkSize.x + 40; g_startAt = now; }   // entra desde el borde
+    if (g_fx < 0) { g_fx = vp->WorkPos.x + vp->WorkSize.x + 40; g_startAt = now; }
     g_fx += (wantX - g_fx) * std::min(1.0f, ImGui::GetIO().DeltaTime * (leaving ? 3.0f : 6.0f));
     float bob = typing ? (float)std::sin(now * 14) * 2 : happy ? -(float)std::fabs(std::sin(now * 8)) * 8 : (float)std::sin(now * 2) * 2;
     float fy = vp->WorkPos.y + vp->WorkSize.y - M - F + bob;
@@ -553,14 +537,13 @@ static void floppaFrame(double now, bool happy, bool typing, ImVec2 &bubA, ImVec
     float tailY = std::min(bubB.y - 22, fy + F * 0.45f);
     if (g_left) fg->AddTriangleFilled(ImVec2(bubA.x + 1, tailY - 9), ImVec2(bubA.x + 1, tailY + 9), ImVec2(g_fx + F + 2, fy + F * 0.5f), ui::kPanel);
     else fg->AddTriangleFilled(ImVec2(bubB.x - 1, tailY - 9), ImVec2(bubB.x - 1, tailY + 9), ImVec2(g_fx - 2, fy + F * 0.5f), ui::kPanel);
-    fg->AddCircleFilled(ImVec2(g_fx + F / 2, vp->WorkPos.y + vp->WorkSize.y - M + 2), F * 0.36f, IM_COL32(0, 0, 0, 70), 24);   // sombra
+    fg->AddCircleFilled(ImVec2(g_fx + F / 2, vp->WorkPos.y + vp->WorkSize.y - M + 2), F * 0.36f, IM_COL32(0, 0, 0, 70), 24);
     if (ui::PixTexture *t = floppaFace(happy || blink ? 1 : 0)) {
-        if (g_left) fg->AddImage(t->id(), ImVec2(g_fx + F, fy), ImVec2(g_fx, fy + F), ImVec2(0, 0), ImVec2(1, 1));   // mira hacia el globo
+        if (g_left) fg->AddImage(t->id(), ImVec2(g_fx + F, fy), ImVec2(g_fx, fy + F), ImVec2(0, 0), ImVec2(1, 1));
         else fg->AddImage(t->id(), ImVec2(g_fx, fy), ImVec2(g_fx + F, fy + F));
     }
 }
 
-// recuadro que late y flecha curva desde Floppa hasta lo que hay que pulsar
 static void pointAt(const Anchor *tg, double now, bool arrow, const char *label) {
     ImGuiViewport *vp = ImGui::GetMainViewport();
     ImDrawList *fg = ImGui::GetForegroundDrawList();
@@ -570,7 +553,6 @@ static void pointAt(const Anchor *tg, double now, bool arrow, const char *label)
     ImVec2 a(tg->a.x - 5, tg->a.y - 5), b(tg->b.x + 5, tg->b.y + 5);
     fg->AddRect(a, b, IM_COL32(157, 125, 255, (int)(140 + 115 * pulse)), 8.0f, 0, 3.0f);
     fg->AddRect(ImVec2(a.x - 4 * pulse, a.y - 4 * pulse), ImVec2(b.x + 4 * pulse, b.y + 4 * pulse), IM_COL32(157, 125, 255, (int)(90 * (1 - pulse))), 10.0f, 0, 2.0f);
-    // mientras dibujas o arrastras, la flecha se aparta (no tapa lo que haces)
     g_arrowA += ((ImGui::IsMouseDown(0) || ImGui::IsMouseDown(1) ? 0.08f : 1.0f) - g_arrowA) * std::min(1.0f, ImGui::GetIO().DeltaTime * 10);
     if (!arrow || g_arrowA < 0.05f) return;
     int al = (int)(230 * g_arrowA);
@@ -601,7 +583,7 @@ void drawPanel(Project *proj) {
     double now = ImGui::GetTime();
     ImVec2 bubA, bubB;
     if (!proj && g_farewellAt < 0) g_farewellAt = now;
-    if (g_farewellAt >= 0) {   // cerraste el proyecto: se despide y se va
+    if (g_farewellAt >= 0) {
         double t = now - g_farewellAt;
         floppaFrame(now, false, false, bubA, bubB, [] {
             ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kAccent), "Floppa");
@@ -620,34 +602,32 @@ void drawPanel(Project *proj) {
     if (g_step >= n) g_step = n - 1;
     const Step &s = l.steps[g_step];
     static int lastLesson = -1;
-    if (lastLesson != g_lesson) { lastLesson = g_lesson; g_fx = -1; g_lastStep = -1; g_left = false; }   // otra leccion: Floppa vuelve a entrar
+    if (lastLesson != g_lesson) { lastLesson = g_lesson; g_fx = -1; g_lastStep = -1; g_left = false; }
     if (g_lastStep != g_step) { g_lastStep = g_step; g_stepAt = now; g_nopeAt = -10; g_reached = false; g_wrong = 0; g_lostFor = 0; }
     auto complete = [&]() {
         g_doneAt = now;
         g_done[l.id] = std::max(g_done[l.id], g_step + 1);
         save();
     };
-    if (g_doneAt < 0 && !s.ready && s.check && s.check(proj->doc)) complete();   // paso cumplido
-    if (g_doneAt >= 0 && now - g_doneAt > 1.2) {                    // tras un momento, el siguiente
+    if (g_doneAt < 0 && !s.ready && s.check && s.check(proj->doc)) complete();
+    if (g_doneAt >= 0 && now - g_doneAt > 1.2) {
         g_doneAt = -1; g_hint = false;
         if (g_step + 1 < n) g_step++;
         else { g_lesson = -1; g_fx = -1; if (onNotify) onNotify("Lección terminada: " + std::string(l.title)); return; }
     }
     ImGuiViewport *vp = ImGui::GetMainViewport();
     const Anchor *tg = g_doneAt < 0 ? findAnchor(s.target) : nullptr;
-    // te perdiste: lo que tiene que senalar no esta a la vista (otra pestana, un panel cerrado...)
     if (!tg && s.target && !g_reached && g_doneAt < 0) g_lostFor += ImGui::GetIO().DeltaTime; else g_lostFor = 0;
     bool lost = g_lostFor > 1.2;
     const Anchor *lostTg = lost ? findAnchor(s.lostTarget ? s.lostTarget : "tab.scene|menu.proyecto") : nullptr;
-    static ImVec2 lastBubA, lastBubB;            // globo del fotograma anterior (los clics en el no cuentan)
+    static ImVec2 lastBubA, lastBubB;
     if (tg && !g_reached && ImGui::IsMouseClicked(0)) {
         ImVec2 m = ImGui::GetIO().MousePos;
         bool onBubble = m.x >= lastBubA.x && m.x < lastBubB.x && m.y >= lastBubA.y && m.y < lastBubB.y;
         bool onTarget = m.x >= tg->a.x - 5 && m.x < tg->b.x + 5 && m.y >= tg->a.y - 5 && m.y < tg->b.y + 5;
         if (onTarget) g_reached = true;
-        else if (!onBubble) g_wrong++;           // pulsaste en otro sitio: la flecha sigue ahi
+        else if (!onBubble) g_wrong++;
     }
-    // lado: si lo que senala queda abajo a la derecha, Floppa se va a la izquierda (cruza la pantalla deslizandose)
     if (const Anchor *pt = tg ? tg : lostTg) {
         float cx = (pt->a.x + pt->b.x) / 2, cy = (pt->a.y + pt->b.y) / 2;
         bool under = cy > vp->WorkPos.y + vp->WorkSize.y * 0.55f;
@@ -657,7 +637,6 @@ void drawPanel(Project *proj) {
     bool happy = g_doneAt >= 0 || (s.ready && !s.check && g_step + 1 == n);
     size_t total = strlen(s.text), shown = std::min(total, utf8Prefix(s.text, (size_t)std::max(0.0, (now - g_stepAt) * 45)));
     bool typing = shown < total;
-    // "Hazlo por mi": si te equivocaste, si Floppa dijo "todavia no" o si llevas un rato en el paso
     bool offerAuto = s.autoDo && g_doneAt < 0 && (g_wrong >= 2 || now - g_nopeAt < 30 || now - g_stepAt > 25 || lost);
     Project &P = *proj;
     floppaFrame(now, happy, typing, bubA, bubB, [&] {
@@ -678,7 +657,7 @@ void drawPanel(Project *proj) {
         ImGui::PushFont(nullptr, ImGui::GetFontSize() + 1.5f);
         ImGui::TextUnformatted(s.text, s.text + shown);
         ImGui::PopFont();
-        if (ImGui::IsItemClicked()) g_stepAt = -1e9;   // clic: el texto sale entero
+        if (ImGui::IsItemClicked()) g_stepAt = -1e9;
         if (lost) ImGui::TextColored(ImVec4(1, 0.78f, 0.45f, 1), "¿Te perdiste? %s", s.lost ? s.lost : kToScene);
         else if (g_wrong >= 2 && tg && !g_reached) ImGui::TextColored(ImVec4(1, 0.78f, 0.45f, 1), "¡Casi! Es donde brilla el recuadro morado.");
         if (now - g_nopeAt < 3) ImGui::TextColored(ImVec4(1, 0.75f, 0.4f, 1), "¡Todavía no! %s", s.hint && *s.hint ? s.hint : "Hazlo y vuelve a pulsar.");
@@ -714,8 +693,7 @@ void drawPanel(Project *proj) {
     if (tg) pointAt(tg, now, !g_reached, "¡Aquí!");
     else if (lostTg) pointAt(lostTg, now, true, "Por aquí");
 }
-// pruebas: "Hazlo por mi" del paso actual
-bool autoStep(Project &) {   // como pulsar el boton (en el siguiente fotograma)
+bool autoStep(Project &) {
     if (g_lesson < 0 || !lessons()[g_lesson].steps[g_step].autoDo) return false;
     g_pressAuto = true;
     return true;

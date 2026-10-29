@@ -1,4 +1,3 @@
-// Source 2D - Source Play (ver tienda.hpp).
 #include "tienda.hpp"
 #include "cerrado.hpp"
 #include "exporter.hpp"
@@ -24,7 +23,7 @@ namespace {
 const char *kBase = "https://raw.githubusercontent.com/FloppaKFC/source2d-juegos/main/";
 const char *kContador = "https://abacus.jasoncameron.dev/", *kEspacio = "source2d-floppa";
 const char *kReleases = "https://github.com/FloppaKFC/source2d-juegos/releases/download/";
-const time_t kCada = 3600;                   // el catalogo se vuelve a mirar cada hora si el editor sigue abierto
+const time_t kCada = 3600;
 const double kContadoresCada = 60;
 
 struct Bajada { sys::Proc p; std::string dest, hash, id; long long tam = 0; bool vivo = false; int code = 0; };
@@ -35,12 +34,12 @@ std::string g_base = kBase, g_contador = kContador, g_estado;
 uint8_t g_pub[32];
 std::vector<Juego> g_juegos;
 std::set<std::string> g_retirados;
-std::map<std::string, int> g_insignias;     // login en minusculas -> 1 verificada, 2 admin
+std::map<std::string, int> g_insignias;
 std::vector<Bajada> g_meta, g_portadas, g_juegosBaj, g_fuentes, g_cuentas, g_hits;
 std::map<std::string, std::string> g_errores;
 std::map<std::string, Cuenta> g_cuenta;
-std::set<std::string> g_gustan;              // "me gusta" que dio este editor
-std::set<std::string> g_favs;                // favoritos de esta persona
+std::set<std::string> g_gustan;
+std::set<std::string> g_favs;
 std::set<std::string> g_destacados;
 double g_cuentasAt = -1e9;
 time_t g_ultima = 0;
@@ -85,7 +84,6 @@ std::string huella(const std::string &p) {
     for (int i = 0; i < 32; i++) snprintf(x + 2 * i, 3, "%02x", h[i]);
     return x;
 }
-// rutas e ids que vienen del catalogo: sin "..", sin barras al principio ni caracteres raros
 bool rutaSegura(const std::string &s) {
     if (s.empty() || s.find("..") != std::string::npos || s[0] == '/') return false;
     for (char c : s) if (!(isalnum((unsigned char)c) || strchr("_-./", c))) return false;
@@ -114,7 +112,6 @@ Archivo archivoDe(const json &x) {
     std::string url = x.value("url", "");
     uint8_t tmp[32];
     if (!rutaSegura(a.ruta) || !fromHex(a.blake2b, tmp, 32)) return Archivo{};
-    // solo las Releases de source2d-juegos (en las pruebas, la carpeta file:// del catalogo)
     if (url.empty()) a.url = g_base + a.ruta;
     else if ((url.rfind(kReleases, 0) == 0 || (g_pruebas && url.rfind("file://", 0) == 0)) && url.find("..") == std::string::npos) a.url = url;
     else return Archivo{};
@@ -197,7 +194,6 @@ void cargarCache() {
         if (a.fecha != b.fecha) return a.fecha > b.fecha;
         return a.nombre < b.nombre;
     });
-    // los retirados se borran tambien de este equipo (por ejemplo, un juego que resulto peligroso)
     std::error_code ec;
     for (auto &id : g_retirados) if (fs::exists(fs::u8path(instDir(id)), ec)) fs::remove_all(fs::u8path(instDir(id)), ec);
 }
@@ -216,7 +212,6 @@ void procesarBusqueda() {
         sys::writeDurable(dir() + "/catalogo.json", d);
         sys::writeDurable(dir() + "/catalogo.json.firma", f);
     } else if (!d.empty()) fprintf(stderr, "Source 2D: el catalogo de Source Play no viene firmado por " S2D_FIRMA_AUTOR ", se ignora\n");
-    // las cuentas (verificadas y admins) van aparte: si aun no hay archivo, nadie tiene insignia
     std::string cd = leer(dir() + "/descarga/cuentas.json"), cf = leer(dir() + "/descarga/cuentas.json.firma");
     json cj;
     if (firmado(cd, cf, "cuentas", cj)) { sys::writeDurable(dir() + "/cuentas.json", cd); sys::writeDurable(dir() + "/cuentas.json.firma", cf); }
@@ -247,7 +242,7 @@ void sumar(const std::string &clave, const std::string &id, char que) {
     Bajada b; b.dest = dir() + "/contadores/hit-" + id + "-" + que + ".json"; b.id = id; b.hash = std::string(1, que);
     if (lanzar(b, urlContador("hit", clave + "-" + que), {"--max-time", "15", "--max-filesize", "4096"})) g_hits.push_back(b);
 }
-}  // namespace
+}
 
 void iniciar(bool buscar, bool pruebas) {
     g_pruebas = pruebas;
@@ -305,7 +300,6 @@ void tick() {
         it = g_portadas.erase(it);
     }
     if (portada) for (auto &j : g_juegos) if (j.portadaLocal.empty()) pedirPortada(j);
-    // juegos: se comprueban tamano y huella; despues se guarda info.json (version, llave) y se cuenta la descarga
     for (auto it = g_juegosBaj.begin(); it != g_juegosBaj.end();) {
         if (it->vivo && !sys::finished(it->p, &it->code)) { ++it; continue; }
         const Juego *j = buscarJuego(it->id);
@@ -397,7 +391,6 @@ bool leer(const std::string &id, json &doc, std::string &err) {
     std::string data = leer(instDir(id) + "/juego.dat");
     if (data.empty()) { err = "El juego no está descargado"; return false; }
     json info = infoInstalado(id);
-    // la huella del catalogo, otra vez: por si el archivo cambio en el disco despues de descargarlo
     if (const Juego *j = buscarJuego(id); j && versionInstalada(id) == j->version && huella(instDir(id) + "/juego.dat") != j->juego.blake2b) {
         err = "El juego descargado está dañado: bórralo y descárgalo otra vez";
         return false;
@@ -485,4 +478,4 @@ std::vector<const Juego *> juegosDe(const std::string &login) {
     for (auto &j : g_juegos) if (minus(j.autor) == minus(login)) r.push_back(&j);
     return r;
 }
-}  // namespace tienda
+}

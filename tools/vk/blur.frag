@@ -1,5 +1,4 @@
 #version 450
-// desenfoque de caja en una direccion; fuera de la zona cuenta como transparente
 layout(push_constant) uniform PC { vec2 inv; vec2 res; vec4 rect; vec4 blur; } pc;
 layout(set = 0, binding = 0) uniform sampler2D u_tex;
 layout(location = 0) in vec2 v_uv;

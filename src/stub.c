@@ -1,23 +1,9 @@
-/* Source 2D - lanzador de la exportacion ligera (y del editor comprimido de la Release).
- *
- * Archivo exportado:
- *   [este lanzador][jugador comprimido (LZMA + filtro x86)][proyecto comprimido (LZMA o deflate)][datos tal cual][cola de 56 bytes]
- *   cola = uint64 LE: jugador comprimido | jugador | proyecto comprimido | proyecto entero (con los datos) | props |
- *          datos tal cual, y "S2DMINI3". props: bits 0..7 los del LZMA del jugador, bit 8 = filtro x86; bits 16..23 los
- *          del LZMA del proyecto y bit 24 = el proyecto va en LZMA (si no, en deflate). Los "datos tal cual" son los que
- *          ya venian comprimidos (OGG, PNG...): van detras del proyecto descomprimido (src/editor/exporter.cpp)
- *
- * Al abrirse descomprime el jugador y el proyecto, les pone detras la cola normal del jugador
- * ([proyecto][uint64 len]["S2DPAYLD"]) y lo ejecuta: en Linux desde memoria (memfd), en Windows desde un archivo
- * temporal. El motor puede ser el ligero o el completo (src/editor/exporter.cpp elige).
- * En Windows no usa la biblioteca de C (solo kernel32 y user32): asi el lanzador ocupa unos pocos KB. */
 #define _GNU_SOURCE
 #include <stddef.h>
 #include <stdint.h>
 #ifdef _WIN32
 #define LZ_NO_MALLOC
 #include <windows.h>
-/* sin CRT: lo que el compilador y sinfl esperan de string.h */
 void *memset(void *d, int c, size_t n) { volatile unsigned char *p = d; while (n--) *p++ = (unsigned char)c; return d; }
 void *memcpy(void *d, const void *s, size_t n) {
     volatile unsigned char *p = d; const unsigned char *q = s;
@@ -54,7 +40,6 @@ extern char **environ;
 static uint64_t rd64(const unsigned char *p) { uint64_t v = 0; for (int i = 7; i >= 0; i--) v = (v << 8) | p[i]; return v; }
 static void wr64(unsigned char *p, uint64_t v) { for (int i = 0; i < 8; i++) { p[i] = (unsigned char)v; v >>= 8; } }
 
-/* jugador + proyecto + cola del jugador en 'img' (reservado por 'alloc'); devuelve el tamano o 0 y el error en *err */
 static size_t unpack(const unsigned char *all, size_t n, unsigned char *(*alloc)(size_t), unsigned char **img, const char **err) {
     *err = "el juego esta incompleto o danado";
     if (n < TAIL || memcmp(all + n - 8, MINI_MAGIC, 8) != 0) return 0;
@@ -71,7 +56,7 @@ static size_t unpack(const unsigned char *all, size_t n, unsigned char *(*alloc)
     if (props & 256) lz_x86_decode(b, (size_t)plen);
     *err = "no se pudo descomprimir el juego";
     size_t zl = (size_t)(rl - raw);
-    if (!zl) {}                                             /* sin proyecto: el editor comprimido (tools/pack_exe.py) */
+    if (!zl) {}
     else if ((props >> 16) & 256) { if (lz_decode(b + plen, zl, proj, (size_t)cl, (unsigned)(props >> 16) & 255) != 0) return 0; }
     else if (sinflate(b + plen, (int)zl, proj, (int)cl) != (int)zl) return 0;
     memcpy(b + plen + zl, t - raw, (size_t)raw);
@@ -100,7 +85,6 @@ void __stdcall start(void) {
     DWORD got = 0;
     if (!all || !ReadFile(f, all, (DWORD)n, &got, NULL) || got != n) fail("no se pudo leer el juego");
     CloseHandle(f);
-    /* la carpeta de verdad del ejecutable, para el programa que se abre desde la copia temporal */
     WCHAR dir[MAX_PATH * 2];
     int last = -1;
     for (int i = 0; me[i]; i++) { dir[i] = me[i]; dir[i + 1] = 0; if (me[i] == L'\\' || me[i] == L'/') last = i; }
@@ -111,8 +95,6 @@ void __stdcall start(void) {
     size_t total = unpack(all, n, walloc, &img, &err);
     if (!total) fail(err);
     VirtualFree(all, 0, MEM_RELEASE);
-    /* el motor va a un archivo temporal (se reutiliza si ya esta igual): el nombre lleva un hash de todos los bytes,
-       asi una version nueva del juego con el mismo tamano no abre la vieja */
     uint32_t h = 2166136261u;
     for (size_t i = 0; i < total; i++) h = (h ^ img[i]) * 16777619u;
     char name[40] = "s2d_", *p = name + 4;
@@ -154,7 +136,6 @@ static unsigned char *read_all(const char *p, size_t *len) {
     return b;
 }
 static unsigned char *lalloc(size_t n) { return malloc(n); }
-/* con doble clic no hay terminal: el error tambien sale en una ventanita (zenity, kdialog o xmessage) */
 static int fail(const char *m) {
     fprintf(stderr, "Source 2D: %s\n", m);
     char cmd[600];
@@ -172,7 +153,6 @@ int main(int argc, char **argv) {
     size_t total = all ? unpack(all, n, lalloc, &img, &err) : 0;
     if (!total) return fail(err);
     free(all);
-    /* la carpeta de verdad del ejecutable, para el programa que se abre desde memoria */
     char me[4096];
     ssize_t ml = readlink("/proc/self/exe", me, sizeof me - 1);
     if (ml > 0) {
@@ -181,7 +161,6 @@ int main(int argc, char **argv) {
         char *sl = strrchr(me, '/');
         if (sl) { sl[1] = 0; setenv("S2D_EXE_DIR", me, 1); }
     }
-    /* desde memoria; si el nucleo es muy viejo (sin memfd), desde un archivo temporal */
     int fd = (int)syscall(SYS_memfd_create, "source2d", 0);
     if (fd >= 0) {
         if (write(fd, img, total) == (ssize_t)total) {
@@ -191,7 +170,6 @@ int main(int argc, char **argv) {
         }
         close(fd);
     }
-    /* sin memfd (nucleo muy viejo): un archivo temporal en la primera carpeta donde se pueda ejecutar */
     const char *home = getenv("HOME");
     char cache[4096];
     snprintf(cache, sizeof cache, "%s/.cache", home ? home : "/tmp");
@@ -207,7 +185,7 @@ int main(int argc, char **argv) {
         if (!ok) { remove(path); continue; }
         chmod(path, 0700);
         execve(path, argv, environ);
-        remove(path);                          /* esa carpeta no deja ejecutar (noexec): la siguiente */
+        remove(path);
     }
     return fail("no hay ninguna carpeta temporal donde se pueda ejecutar");
 }

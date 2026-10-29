@@ -1,15 +1,3 @@
-/* Source 2D - descompresor LZMA (formato LZMA1 en crudo, el de Python lzma.FORMAT_RAW con FILTER_LZMA1) y filtro
- * x86 para el lanzador de la exportacion ligera y el editor. Los motores se comprimen con LZMA al generar el editor (tools/gen_players.py):
- * ocupa bastante menos que con deflate y deja mas sitio para el juego.
- *
- * Solo descomprime a un bufer que ya tiene el tamano final (el diccionario es la propia salida). Sin memoria
- * dinamica con LZ_NO_MALLOC (el lanzador de Windows, que no lleva CRT); si no, las probabilidades van en el monton
- * y se puede usar desde varios hilos (el editor).
- *
- *   lz_decode(out, out_len, in, in_len, props)  props = lc + lp*9 + pb*45 (como el primer byte de un .lzma)
- *                                               devuelve 0 si salio bien
- *   lz_x86_decode(buf, len)                     deshace el filtro de llamadas x86 (tools/gen_players.py: x86_encode)
- */
 #ifndef S2D_LZDEC_H
 #define S2D_LZDEC_H
 #include <stddef.h>
@@ -60,7 +48,6 @@ static uint32_t lz_direct(LzRc *rc, int bits) {
     return r;
 }
 
-/* decodificador de longitudes: choice, choice2, low[16][8], mid[16][8], high[256] */
 enum { LZ_LEN_CHOICE = 0, LZ_LEN_CHOICE2 = 1, LZ_LEN_LOW = 2, LZ_LEN_MID = LZ_LEN_LOW + 16 * 8, LZ_LEN_HIGH = LZ_LEN_MID + 16 * 8,
        LZ_LEN_SIZE = LZ_LEN_HIGH + 256 };
 
@@ -70,7 +57,6 @@ static unsigned lz_len(LzRc *rc, uint16_t *p, unsigned ps) {
     return 16 + lz_tree(rc, p + LZ_LEN_HIGH, 8);
 }
 
-/* tabla de probabilidades: todo en un bloque (con lc + lp <= 4 cabe en 'probs' de 0x300 << 4) */
 enum { LZ_IS_MATCH = 0, LZ_IS_REP = LZ_IS_MATCH + 12 * 16, LZ_IS_REP_G0 = LZ_IS_REP + 12, LZ_IS_REP_G1 = LZ_IS_REP_G0 + 12,
        LZ_IS_REP_G2 = LZ_IS_REP_G1 + 12, LZ_IS_REP0_LONG = LZ_IS_REP_G2 + 12, LZ_POS_SLOT = LZ_IS_REP0_LONG + 12 * 16,
        LZ_SPEC_POS = LZ_POS_SLOT + 4 * 64, LZ_ALIGN = LZ_SPEC_POS + 115, LZ_LEN_CODER = LZ_ALIGN + 16,
@@ -84,7 +70,7 @@ static int lz_decode(uint8_t *out, size_t out_len, const uint8_t *in, size_t in_
     unsigned lc = props % 9, lp = (props / 9) % 5, pb = props / 45;
     if (pb > 4 || lc + lp > 4) return -1;
 #ifdef LZ_NO_MALLOC
-    static uint16_t P[LZ_PROBS];          /* lanzador de Windows, sin CRT (un solo hilo) */
+    static uint16_t P[LZ_PROBS];
 #else
     uint16_t *P = (uint16_t *)malloc(sizeof(uint16_t) * LZ_PROBS);
     if (!P) return -1;
@@ -157,7 +143,7 @@ static int lz_run(uint8_t *out, size_t out_len, const uint8_t *in, size_t in_len
                 rep0 = (2 | (slot & 1)) << nd;
                 if (slot < 14) rep0 += lz_rtree(&rc, P + LZ_SPEC_POS + rep0 - slot, nd);
                 else rep0 += (lz_direct(&rc, nd - 4) << 4) + lz_rtree(&rc, P + LZ_ALIGN, 4);
-                if (rep0 == 0xFFFFFFFFu) break;        /* marca de fin */
+                if (rep0 == 0xFFFFFFFFu) break;
             }
             if (rep0 >= pos) return -1;
         }
@@ -168,9 +154,6 @@ static int lz_run(uint8_t *out, size_t out_len, const uint8_t *in, size_t in_len
     return pos == out_len ? 0 : -1;
 }
 
-/* filtro x86: en cada E8/E9 (call/jmp rel32) cuyo desplazamiento cabe en 25 bits con signo, el compresor lo guarda como
- * direccion absoluta (mas repetida, comprime mejor); aqui se vuelve a relativa. Tras cualquier E8/E9 se saltan siempre
- * 5 bytes: asi el recorrido solo depende de bytes que el filtro no toca y es el mismo al comprimir y al descomprimir. */
 static void lz_x86_decode(uint8_t *b, size_t n) {
     for (size_t i = 0; i + 5 <= n;) {
         if ((b[i] & 0xFE) != 0xE8) { i++; continue; }

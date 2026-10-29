@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-# Source 2D - menu de Source Play (la tienda de juegos): revisar los envios de los creadores, probarlos, aprobarlos o
-# rechazarlos, publicar tus propios juegos, retirar uno y ver las denuncias. Cada opcion explica lo que hace.
-# Usa tools/source_play.py: firma el catalogo con tu clave (pide la contrasena), lo sube con git y usa gh para los envios.
-#   Controladores/Source-Play.sh                 (desde cualquier carpeta)
-#   S2D_SIN_SUBIR=1 Controladores/Source-Play.sh firma pero no sube (para probar)
 set -u
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SP=(python3 "$RAIZ/tools/source_play.py")
@@ -12,7 +7,7 @@ EXTRA=()
 
 if [ -t 1 ]; then B=$'\e[1m'; D=$'\e[2m'; V=$'\e[38;5;141m'; R=$'\e[31m'; N=$'\e[0m'; else B= D= V= R= N=; fi
 titulo() { printf '\n%s== %s ==%s\n' "$V$B" "$1" "$N"; }
-pedir() {   # pedir "Pregunta" variable [por defecto]
+pedir() {
     local p="$1" def="${3:-}" r
     if [ -n "$def" ]; then read -e -r -p "$p [$def]: " r; r="${r:-$def}"; else read -e -r -p "$p: " r; fi
     printf -v "$2" '%s' "$r"

@@ -8,9 +8,6 @@ using ui::Icon;
 
 static void row(const char *l, float w = 150) { ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted(l); ImGui::SameLine(w); ImGui::SetNextItemWidth(-1); }
 
-/* ---------------- capas ---------------- */
-// Cada capa es una tarjeta con todas sus opciones; la lista se recorre con la rueda (de la mas cercana a la mas lejana,
-// como las capas de Source Sprite)
 void LayersEditor::draw(Project &proj) {
     if (focusMe) { ImGui::SetNextWindowFocus(); focusMe = false; }
     ImGui::SetNextWindowSize(ImVec2(800, 620), ImGuiCond_FirstUseEver);
@@ -78,7 +75,6 @@ void LayersEditor::draw(Project &proj) {
         ImGui::PopID();
     }
     ImGui::EndChild();
-    // subir o bajar: intercambia el z con la vecina (si tienen el mismo, se separan)
     auto swapZ = [&](int a, int b) {
         double za = jnum(layers[a], "z", 0), zb = jnum(layers[b], "z", 0);
         if (za == zb) zb = za + (b == idx[0] ? 1 : -1);
@@ -95,7 +91,6 @@ void LayersEditor::draw(Project &proj) {
     ImGui::End();
 }
 
-/* ---------------- autotiles ---------------- */
 std::string createAutotile(Project &proj) {
     json &ats = projectAutotiles(proj);
     std::string id = makeUid("at"), ts;
@@ -103,13 +98,12 @@ std::string createAutotile(Project &proj) {
     json tiles = json::array();
     int n = 0;
     if (!ts.empty()) if (json *t = findById(proj.doc["tilesets"], ts)) n = t->contains("tiles") ? (int)(*t)["tiles"].size() : 0;
-    for (int m = 0; m < 16; m++) tiles.push_back(n >= 16 ? m : (n > 0 ? 0 : -1));   // con 16 tiles: en orden
+    for (int m = 0; m < 16; m++) tiles.push_back(n >= 16 ? m : (n > 0 ? 0 : -1));
     ats.push_back({{"id", id}, {"name", "Autotile " + std::to_string(ats.size() + 1)}, {"tilesetId", ts}, {"tiles", tiles}});
     proj.dirty = true;
     return id;
 }
 
-// dibujo de una forma: el centro y los brazos hacia los vecinos que tiene (arriba 1, derecha 2, abajo 4, izquierda 8)
 static void drawMask(ImDrawList *dl, ImVec2 p, float s, int m, ImU32 col) {
     float u = s / 3;
     dl->AddRectFilled(ImVec2(p.x + u, p.y + u), ImVec2(p.x + 2 * u, p.y + 2 * u), col);
@@ -126,7 +120,6 @@ void AutotilesEditor::draw(Project &proj) {
     ui::noteFocus("autotiles");
     json &ats = projectAutotiles(proj);
     json before = ats;
-    // lista
     ImGui::BeginChild("##atlist", ImVec2(220, 0), ImGuiChildFlags_None);
     if (ui::primaryButton("+ Nuevo autotile", ImVec2(-1, 0))) { cur = createAutotile(proj); test.clear(); }
     int del = -1;

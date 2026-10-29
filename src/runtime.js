@@ -1,11 +1,7 @@
-/* Source 2D engine - runtime de los juegos: eventos, comportamientos, fisica, camara, sonido y dibujo.
-   Corre sobre src/gfx.js (S2D: superficies de la GPU, imagenes, entrada y fotogramas) y __native (main.c). */
 (function () {
   'use strict';
   var GRAVITY = 1900, MAX_FALL = 2400;
   var N = __native;
-  /* errores que no deben parar el juego (un audio que no carga, un guardado roto...): se avisan en la consola una vez
-     por mensaje, para que quede rastro */
   var quietSeen = {};
   function quiet(e) {
     var m = String(e && e.message || e);
@@ -17,8 +13,6 @@
   function n(v, d) { var x = parseFloat(v); return isNaN(x) ? (d || 0) : x; }
   function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
 
-  /* al exportar, cada imagen de pixeles va como paleta (pal) + un caracter por pixel (ix); aqui vuelve a
-     ser la lista de colores de siempre (el editor la empaqueta en src/editor/mini.cpp) */
   function unpackPixels(o) {
     if (Array.isArray(o)) { for (var i = 0; i < o.length; i++) if (o[i] && typeof o[i] === 'object') unpackPixels(o[i]); return; }
     if (typeof o.ix === 'string' && Array.isArray(o.pal)) {
@@ -29,7 +23,6 @@
     for (var key in o) if (o[key] && typeof o[key] === 'object') unpackPixels(o[key]);
   }
 
-  /* imagen desde la lista de colores de un sprite, tile o glifo ('' o null = transparente); color fuerza un color */
   function pixelImage(w, h, pixels, color) {
     var img = S2D.image(w, h), d = img.data, last = null, c = color ? S2D.parseColor(color) : null;
     if (pixels) for (var i = 0, n = w * h; i < n; i++) {
@@ -39,7 +32,7 @@
       var k = i * 4;
       d[k] = c[0]; d[k + 1] = c[1]; d[k + 2] = c[2]; d[k + 3] = Math.round(c[3] * 255);
     }
-    img.update();                 /* los pixeles cambiaron (en el navegador se copian al lienzo aqui) */
+    img.update();
     return img;
   }
   function buildSpriteFrame(sprite, idx) {
@@ -55,7 +48,6 @@
     return pixelImage(T, T, tile && tile.pixels);
   }
 
-  /* ---------------- curvas de suavizado ---------------- */
   var EASINGS = {
     linear: function (t) { return t; },
     easeIn: function (t) { return t * t; },
@@ -79,11 +71,9 @@
     options = options || {};
     if (project && typeof project === 'object') unpackPixels(project);
     var settings = project.settings || {};
-    /* como en el editor: de 160x120 a 4096x4096 (una resolucion enorme no cabe en memoria ni en la GPU) */
     var VW = clamp(Math.round(n(settings.width, 960)) || 960, 160, 4096);
     var VH = clamp(Math.round(n(settings.height, 540)) || 540, 120, 4096);
 
-    /* la pantalla (lo que se presenta en la ventana), el lienzo auxiliar y las capas con shader son superficies de la GPU */
     var canvas = S2D.surface(VW, VH), ctx = canvas.ctx;
     function shaderCodeOf(id) {
       var out = '';
@@ -94,7 +84,6 @@
       var sc = scenes[state.sceneId];
       return sc && sc.shaderId ? shaderCodeOf(sc.shaderId) : '';
     }
-    /* shaders de pantalla: el de la escena y los que se activan con la accion "Shader de pantalla" */
     function screenShaderList() {
       var out = [], s0 = sceneShaderSrc(), i;
       if (s0) out.push({ code: s0, amount: 1 });
@@ -116,8 +105,6 @@
     function layerOf(inst) { return layers[layerIdOf(inst)]; }
     (project.scenes || []).forEach(function (s) { scenes[s.id] = s; });
     (project.tilesets || []).forEach(function (t) { tilesets[t.id] = t; });
-    /* objetos Tile: cada instancia lleva su mapa (it.tm, con la esquina en x, y) y se juega como un mapa de tiles
-       en la capa del objeto */
     (project.scenes || []).forEach(function (s) {
       if (s._tileInst) return;
       s._tileInst = true;
@@ -168,8 +155,6 @@
       state.globals[g.name] = g.value;
     });
 
-    /* ---------------- sonido ----------------
-       La musica la reproduce la plataforma (raylib, en streaming); los pitidos y efectos son voces sintetizadas. */
     function normMime(m) {
       var x = String(m || '').toLowerCase();
       if (/mp3|mpeg/.test(x)) return 'audio/mpeg';
@@ -198,16 +183,12 @@
     }
     function stopMusicTrack() { try { N.musicStop(); } catch (e) { quiet(e); } }
     var musicVol = 0.6;
-    /* volumen (0-1) de la musica: se aplica a la que suena y a las siguientes */
     function setMusicVolume(v) {
       musicVol = clamp(v, 0, 1);
       try { N.musicVolume(musicVol); } catch (e) { quiet(e); }
     }
-    /* salta a ese segundo de la musica que suena */
     function seekMusic(sec) { try { N.musicSeek(Math.max(0, sec)); } catch (e) { quiet(e); } }
     function musicIsPlaying() { try { return !!N.musicPlaying(); } catch (e) { return false; } }
-    /* sonidos de archivo (la lista de audio del proyecto) que pueden sonar varios a la vez, en canales con su volumen.
-       vari: variacion al azar del tono (0.1 = +-10 %), para que un sonido repetido no canse. */
     var soundLoaded = {};
     function playSoundTrack(name, vol, pitch, pan, ch, vari) {
       var tr = findTrack(name);
@@ -219,7 +200,6 @@
         N.soundPlay(tr.id, clamp(vol, 0, 1), pitch > 0 ? pitch : 1, clamp(pan, -1, 1), clamp(ch | 0, 0, 7));
       } catch (e) { quiet(e); }
     }
-    /* sonido en la posicion de un objeto: mas bajo cuanto mas lejos del centro de la pantalla y a la izquierda o derecha */
     function playSoundAt(name, inst, vol, range, ch) {
       var cam = state.camera, z = cam.zoom || 1, cx = cam.x + VW / z / 2, cy = cam.y + VH / z / 2;
       var dx = inst.x - cx, dy = inst.y - cy, d = Math.sqrt(dx * dx + dy * dy), r = Math.max(1, range || 600);
@@ -237,11 +217,8 @@
         N.musicVolume(musicVol);
       } catch (e) { quiet(e); }
     }
-    /* pitido de onda cuadrada */
     function beep(freq, dur) { try { N.tone(freq || 440, Math.max(0.02, (dur || 0.12) + 0.03), 1); } catch (e) { quiet(e); } }
 
-    /* efecto de sonido sintetizado: onda (sine, square, triangle, sawtooth) cuya frecuencia va de f0 a f1
-       (curva exponencial) mientras el volumen (0-1) se apaga hasta casi cero en dur segundos */
     var WAVES = { sine: 0, square: 1, triangle: 2, sawtooth: 3, saw: 3 };
     function sfxTone(wave, f0, f1, dur, vol) {
       f0 = Math.max(1, f0 || 440); f1 = Math.max(1, f1 || f0); dur = Math.max(0.01, dur || 0.1); vol = clamp(vol, 0, 1);
@@ -249,8 +226,6 @@
       try { N.sfx(f0, f1, dur, WAVES[wave] || 0, vol); } catch (e) { quiet(e); }
     }
 
-    /* ---------------- entrada ----------------
-       S2D.onInput recibe teclas y raton ya en pixeles del juego (gfx.js); el raton solo dentro del area de juego. */
     function keyName(e) { return e.key === ' ' ? ' ' : String(e.key).toLowerCase(); }
     function toggleFullscreen() { S2D.setFullscreen(!S2D.isFullscreen()); }
     function onKeyDown(e) {
@@ -263,7 +238,7 @@
         return;
       }
       if (!state.keys[k]) { state.pressed[k] = true; state.lastKey = k; }
-      if (String(e.key).length === 1) state.typed += state.keys.shift ? String(e.key).toUpperCase() : e.key;   /* para escribir textos (nombres...) */
+      if (String(e.key).length === 1) state.typed += state.keys.shift ? String(e.key).toUpperCase() : e.key;
       state.keys[k] = true;
     }
     function onKeyUp(e) { var k = keyName(e); state.keys[k] = false; state.released[k] = true; }
@@ -284,17 +259,12 @@
       }
     }
 
-    /* el mando cuenta como estas teclas (cruceta = flechas, A = espacio, Start = Enter...): cualquier juego hecho con
-       teclado se juega tambien con mando sin cambiar nada */
     var PAD_ALIAS = { arrowleft: 'pad_left', arrowright: 'pad_right', arrowup: 'pad_up', arrowdown: 'pad_down', ' ': 'pad_a',
                       enter: 'pad_start', escape: 'pad_select', shift: 'pad_x', control: 'pad_b' };
     function key(k) { return !!state.keys[k] || (PAD_ALIAS[k] !== undefined && !!state.keys[PAD_ALIAS[k]]); }
-    /* la tecla puede venir de una variable ("{= $TeclaSaltar}"): asi los controles se pueden cambiar en el juego */
     function keyParam(k) { k = String(k == null ? '' : k); return k.indexOf('{') >= 0 ? resolveStr(k).toLowerCase() : k; }
     function pressedKey(k) { return !!state.pressed[k] || (PAD_ALIAS[k] !== undefined && !!state.pressed[PAD_ALIAS[k]]); }
 
-    /* ---------------- objetos e instancias ---------------- */
-    /* la definicion del objeto se guarda en la instancia al crearla (_od): se pide cientos de miles de veces por fotograma */
     var NODEF = Object.freeze({});
     function objDef(inst) { return inst._od || objects[inst.objId] || NODEF; }
     function behav(inst) { return (inst._od || objects[inst.objId] || NODEF).behaviors || NODEF; }
@@ -304,7 +274,6 @@
       return null;
     }
     function kname(v) { v = String(v == null ? '' : v).toLowerCase(); return (v === 'space' || v === 'espacio') ? ' ' : v; }
-    /* "#rrggbb" o "#rgb" -> [r, g, b] */
     function hexRGB(c) {
       var h = String(c || '#ffffff').replace('#', '');
       if (h.length === 3) h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
@@ -325,7 +294,6 @@
         if (pf.keyDown) b.keyDown = kname(pf.keyDown);
         b.run = !!pf.run; b.runSpeed = n(pf.runSpeed, 0); b.crouch = !!pf.crouch;
         b.wall = !!pf.wall; b.wallJump = !!pf.wallJump; b.climbSpeed = n(pf.climb, 0);
-        /* doble salto, dash, salto variable, tiempo de coyote, bufer de salto y caida maxima */
         b.airJumps = Math.max(0, n(pf.airJumps, 0) | 0); b.airJump = n(pf.airJump, 0);
         b.dash = !!pf.dash; b.keyDash = pf.keyDash ? kname(pf.keyDash) : ''; b.dashSpeed = n(pf.dashSpeed, 720);
         b.dashTime = n(pf.dashTime, 0.16); b.dashCooldown = n(pf.dashCooldown, 0.35);
@@ -351,7 +319,6 @@
         inst.y = inst.oy + pm.dy * inst.pp;
       }
     }
-    /* ---------------- comportamientos de la lista (estilo GDevelop) ---------------- */
     function bhOf(inst, type) {
       var l = objDef(inst).behaviorList || [];
       for (var i = 0; i < l.length; i++) if (l[i].type === type) return l[i];
@@ -361,8 +328,6 @@
       var sz = instSize(inst);
       return Math.abs(x - inst.x) * 2 <= sz.w && Math.abs(y - inst.y) * 2 <= sz.h;
     }
-    /* antes de los eventos: temporizadores de objeto, arrastrar, sinusoidal, parpadeo y enfriamientos */
-    /* patrullar, seguir y mantener en pantalla */
     function behaviorsMove(inst, dt) {
       var pt = bhOf(inst, 'patrol');
       if (pt) {
@@ -431,7 +396,6 @@
           inst.flashHide = inst.flashT > 0 && Math.floor(inst.flashT / iv) % 2 === 0;
         } else inst.flashHide = false;
       }
-      /* arrastrar con el raton (el de mas arriba bajo el cursor) */
       if (m.pressed && m.button === 0 && state.dragId == null) {
         for (i = state.instances.length - 1; i >= 0; i--) {
           inst = state.instances[i];
@@ -452,7 +416,6 @@
         }
       }
     }
-    /* despues de la fisica: destruir fuera de la pantalla */
     var anyOnUpdate = (project.objects || []).some(function (o) { return o.hooks && String(o.hooks.onUpdate || '').trim(); });
     var anyDestroyOutside = (project.objects || []).some(function (o) { return (o.behaviorList || []).some(function (x) { return x.type === 'destroyOutside'; }); });
     function updateBehaviorsPost() {
@@ -476,7 +439,6 @@
       if (fb) shooter.fireCD = Math.max(0, n(fb.cooldown, 0.25));
       return b;
     }
-    /* quien esta de pie sobre algo que se movio se mueve con ello (una pasada: cada uno mira solo su suelo) */
     function carryRiders() {
       var L = state.instances, moved = [], i;
       for (i = 0; i < L.length; i++) {
@@ -522,14 +484,13 @@
         if (obj.flipOnMove !== false && inst.faceX) inst.flipX = inst.faceX < 0 ? -1 : 1;
         var want = pickAnim(inst, obj, b, moving);
         if (want.name !== inst.animName) { inst.animName = want.name; inst.animT = 0; }
-        inst._mask = want.collision || obj.collision || null; inst._maskSp = want.spriteId;   /* su colision */
+        inst._mask = want.collision || obj.collision || null; inst._maskSp = want.spriteId;
         if (!inst.animPaused) inst.animT += dt * (inst.animSpeed != null ? inst.animSpeed : 1);
         inst.animLen = Math.max(1, sprites[want.spriteId] && sprites[want.spriteId].frames ? sprites[want.spriteId].frames.length : 1);
         inst.animDone = want.loop === false && Math.floor(inst.animT * n(want.fps, 8)) >= inst.animLen;
         var sp = sprites[want.spriteId], len = sp && sp.frames ? sp.frames.length : 1;
         var idx = Math.floor(inst.animT * n(want.fps, 8));
         var nf = want.loop === false ? Math.min(idx, len - 1) : idx % len;
-        /* eventos de la animacion ("3:paso, 7:golpe"): se avisan al entrar en ese fotograma */
         if (want.events && (nf !== inst.animFrame || inst.animEvName !== want.name)) {
           var em = want._ev;
           if (!em) {
@@ -543,9 +504,6 @@
       }
     }
 
-    /* ---------------- fuentes del proyecto ----------------
-       "ttf": TTF/OTF importada (data en base64). "pixel": dibujada en el editor, un glifo por caracter de
-       chars, de cellW x cellH; con tint (por defecto) los pixeles toman el color del texto. */
     var fontDefs = {};
     (project.fonts || []).forEach(function (f) { if (f && f.id) fontDefs[f.id] = f; });
     function fontB64(f) { var raw = String(f.data || ''), i = raw.indexOf(','); return i >= 0 ? raw.slice(i + 1) : raw; }
@@ -574,7 +532,7 @@
     function pfAdvance(f, gi) {
       if (!f._adv) f._adv = [];
       if (f._adv[gi] !== undefined) return f._adv[gi];
-      if (f.glyphs[gi] && f.glyphs[gi].adv != null) return (f._adv[gi] = n(f.glyphs[gi].adv));   /* avance propio del glifo */
+      if (f.glyphs[gi] && f.glyphs[gi].adv != null) return (f._adv[gi] = n(f.glyphs[gi].adv));
       var W = Math.max(1, f.cellW | 0), H = Math.max(1, f.cellH | 0), px = (f.glyphs[gi] && f.glyphs[gi].pixels) || [], right = -1, x, y;
       for (y = 0; y < H; y++) for (x = 0; x < W; x++) if (px[y * W + x] && x > right) right = x;
       return (f._adv[gi] = f.mono ? W : right < 0 ? Math.max(1, Math.round(W / 2)) : right + 1);
@@ -594,9 +552,6 @@
       var W = Math.max(1, f.cellW | 0), H = Math.max(1, f.cellH | 0);
       return (f._cv[key] = pixelImage(W, H, (f.glyphs[gi] && f.glyphs[gi].pixels) || [], tint ? color : null));
     }
-    /* texto de pixeles con contorno en una imagen (cache): w y h sin el margen pad del contorno.
-       El color del texto no va en la clave: si cambia (un titulo que cambia de color cada fotograma) se redibuja la
-       misma imagen y en la GPU solo se actualiza su textura, sin crear una nueva cada vez. */
     var olTextCache = {}, olTextCount = 0;
     function outlinedText(f, text, size, color, ocolor, od) {
       var key = f.id + '|' + size + '|' + ocolor + '|' + od + '|' + text, e = olTextCache[key];
@@ -619,7 +574,6 @@
       ctx = main;
       return (olTextCache[key] = { cv: cv, w: w, h: h, pad: pad, color: color });
     }
-    /* texto con fuente de pixeles centrado en vertical en (0, 0) con la transformacion actual */
     function drawPixelText(f, text, size, color, align) {
       var sc = size / Math.max(1, f.cellH | 0), w = pfWidth(f, text) * sc, x = align === 'center' ? -w / 2 : align === 'right' ? -w : 0;
       var y = -f.cellH * sc / 2, sp = f.spacing != null ? n(f.spacing) : 1, cs = Array.from(String(text));
@@ -631,7 +585,6 @@
       }
     }
 
-    /* tamano de una instancia; el de los sprites se guarda en la instancia mientras no cambien su escala ni su sprite */
     function instSize(inst) {
       var obj = objDef(inst), c = inst._sz;
       if (c && c.obj === obj && c.sx === inst.scaleX && c.sy === inst.scaleY && c.mk === inst._mask && c.fx === inst.flipX) return c;
@@ -639,10 +592,6 @@
       if (!obj.type || obj.type === 'sprite') { r.obj = obj; r.sx = inst.scaleX; r.sy = inst.scaleY; r.mk = inst._mask; r.fx = inst.flipX; inst._sz = r; }
       return r;
     }
-    /* Colision con forma propia (pestana Animaciones > Colision): la de la animacion que se ve o, si no tiene, la del
-       objeto. {shape: rect|square|circle|ellipse|poly, x, y, w, h, points: [[x, y]...]} en pixeles del sprite, con el
-       origen arriba a la izquierda. Para moverse y chocar con el escenario cuenta su caja (que puede no estar centrada:
-       agachado, la caja baja); las condiciones de colision entre objetos usan la forma exacta. */
     function maskOf(inst, obj) {
       var m = inst._mask !== undefined ? inst._mask : obj.collision;
       return m && m.shape && m.shape !== 'none' ? m : null;
@@ -659,7 +608,6 @@
       var x = n(m.x, 0), y = n(m.y, 0);
       return [x, y, x + Math.max(0, n(m.w, 0)), y + Math.max(0, n(m.h, 0))];
     }
-    /* contorno de la forma en pixeles del sprite (circulos y elipses como poligonos de 16 lados) */
     function maskOutline(m) {
       if (m.shape === 'poly' && m.points && m.points.length >= 3) return m.points.map(function (q) { return [n(q[0], 0), n(q[1], 0)]; });
       var b = maskBounds(m);
@@ -676,7 +624,6 @@
         var content = (inst.textOverride != null ? inst.textOverride : (obj.text && obj.text.content) || 'Texto');
         var size = n(obj.text && obj.text.size, 24), pf = pixelFont(obj.text && obj.text.font);
         var tl = resolveStr(content).replace(/\[\/?(color|wave|shake)(=[^\]]*)?\]/g, '').split('\n'), tw = 0;
-        /* ancho de verdad (la misma medida que al dibujar), no una estimacion por numero de letras */
         var of = ctx.font;
         if (!pf) ctx.font = fontCss(obj.text && obj.text.font, size, !obj.text || obj.text.bold !== false);
         for (var tk = 0; tk < tl.length; tk++) tw = Math.max(tw, pf ? pfWidth(pf, tl[tk]) * size / Math.max(1, pf.cellH | 0) : ctx.measureText(tl[tk]).width);
@@ -695,18 +642,14 @@
                    oy: ((bb[1] + bb[3]) / 2 - h / 2) * sy, mask: mk, sw: w, sh: h };
         }
       }
-      /* caja de colision propia (ancho/alto en pixeles, centrada; 0 = la del sprite). No cambia con la escala: asi
-         estirar y aplastar al saltar o aterrizar es solo visual y no altera la fisica */
       var hb = obj.hitbox, hw = hb ? n(hb.w, 0) : 0, hh = hb ? n(hb.h, 0) : 0;
       return { w: hw > 0 ? hw : Math.abs(w * (inst.scaleX || 1)), h: hh > 0 ? hh : Math.abs(h * (inst.scaleY || 1)) };
     }
     function boxesOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
       return Math.abs(ax - bx) * 2 < aw + bw && Math.abs(ay - by) * 2 < ah + bh;
     }
-    /* centro de la caja de colision (con forma propia puede no estar en el centro del dibujo) */
     function cX(inst, s) { return s.ox ? inst.x + s.ox : inst.x; }
     function cY(inst, s) { return s.oy ? inst.y + s.oy : inst.y; }
-    /* la forma en el mundo (girada con la instancia) */
     function worldShape(inst, s) {
       var pts, sx = inst.scaleX || 1, sy = inst.scaleY || 1, fl = inst.flipX === -1 ? -1 : 1;
       if (s.mask) pts = maskOutline(s.mask).map(function (q) { return [(q[0] - s.sw / 2) * sx * fl, (q[1] - s.sh / 2) * sy]; });
@@ -718,7 +661,6 @@
       }
       return pts;
     }
-    /* separacion de ejes entre dos poligonos convexos (los de puntos sueltos cuentan como su envolvente) */
     function polysOverlap(A, B) {
       for (var pass = 0; pass < 2; pass++) {
         var P = pass ? B : A;
@@ -732,7 +674,6 @@
       }
       return true;
     }
-    /* dos instancias se tocan: por su caja y, si alguna tiene forma propia, por la forma exacta */
     function instOverlap(a, b) {
       var sa = instSize(a), sb = instSize(b);
       if (!boxesOverlap(cX(a, sa), cY(a, sa), sa.w, sa.h, cX(b, sb), cY(b, sb), sb.w, sb.h)) return false;
@@ -748,7 +689,7 @@
     }
     function hitTest(inst, mx, my) {
       var p = instScreenPos(inst), r = objDef(inst).hud ? 0 : n(state.camera.rot, 0) * Math.PI / 180;
-      if (r) {                                   /* camara girada: el raton se lleva al marco sin giro (alrededor del centro) */
+      if (r) {
         var dx = mx - VW / 2, dy = my - VH / 2, co = Math.cos(r), si = Math.sin(r);
         mx = co * dx + si * dy + VW / 2; my = -si * dx + co * dy + VH / 2;
       }
@@ -756,7 +697,6 @@
       var z = objDef(inst).hud ? 1 : state.camera.zoom;
       return Math.abs(mx - p.x) * 2 < s.w * z && Math.abs(my - p.y) * 2 < s.h * z;
     }
-    /* Textos con {g:var} (variable) y {= expresion}; cada plantilla se analiza una sola vez. */
     var tplCache = Object.create(null);
     function fmtVal(v) {
       if (v == null) return '';
@@ -767,7 +707,7 @@
       if (s.indexOf('{') < 0) return s;
       var parts = [], i = 0, lit = '';
       while (i < s.length) {
-        if (s.substr(i, 3) === '{t:') {                          /* {t:clave}: el texto de esa clave en el idioma actual */
+        if (s.substr(i, 3) === '{t:') {
           var tj = s.indexOf('}', i);
           if (tj > i) { if (lit) { parts.push(lit); lit = ''; } parts.push({ v: null, e: 'T(' + JSON.stringify(s.slice(i + 3, tj).trim()) + ')' }); i = tj + 1; continue; }
         }
@@ -832,7 +772,7 @@
         ox: n(x), oy: n(y), pp: 0, pdir: 1, prevX: n(x), prevY: n(y), groundRef: null
       };
       (obj.vars || []).forEach(function (v) { inst.vars[v.name] = v.value; });
-      if (extra.vars) for (var vk in extra.vars) inst.vars[vk] = extra.vars[vk];   /* variables de la instancia en la escena */
+      if (extra.vars) for (var vk in extra.vars) inst.vars[vk] = extra.vars[vk];
       inst.timers = {}; inst.fireCD = 0; inst.sim = {}; inst.simNext = {};
       var hb = (obj.behaviorList || []).filter(function (x) { return x.type === 'health'; })[0];
       if (hb) { inst.hpMax = n(hb.max, 100); inst.hp = hb.start != null && hb.start !== '' ? n(hb.start, inst.hpMax) : inst.hpMax; }
@@ -840,8 +780,6 @@
       if (obj.hooks && obj.hooks.onCreate) runCode(obj.hooks.onCreate, inst, 'onCreate');
       return inst;
     }
-    /* Mientras se evalua una condicion, condScope limita las instancias candidatas a las ya
-       seleccionadas por condiciones anteriores (o por el evento padre), como en GDevelop. */
     var condScope = null;
     function objInstances(objId) {
       instIndex();
@@ -854,7 +792,6 @@
       clearParticles(); invalidateTiles();
       var sc = scenes[id]; if (!sc) return;
       state.sceneId = id; state.instances = []; state.frame = 0;
-      /* variables de escena: se quitan al salir de la escena anterior y se cargan las de esta */
       (state.sceneVarNames || []).forEach(function (k) { delete state.globals[k]; });
       state.sceneVarNames = [];
       (sc.vars || []).forEach(function (g) {
@@ -867,10 +804,8 @@
         else state.globals[k] = g.value;
       });
       (sc.instances || []).forEach(function (it) { createInstance(it.objectId, it.x, it.y, it); });
-      /* eventos comunes (de todas las escenas) y luego los de esta escena */
       state.eventState = (project.events || []).concat(sc.events || []).filter(function (ev) { return !ev.kind; }).map(function (ev) { return { ref: ev, acc: {}, once: {} }; });
       objIdByName = null;
-      /* las funciones (eventos de tipo "function" de primer nivel) salen del arbol y se guardan por nombre */
       fnTable = {};
       state.eventTree = buildEventTree(state.eventState).filter(function (node) {
         var ev = node.es.ref;
@@ -894,7 +829,6 @@
       if (!keepTransition) state.transition = null;
     }
 
-    /* ---------------- codigo personalizado ---------------- */
     var codeCache = {};
     function compile(code) {
       if (codeCache[code] === undefined) {
@@ -945,7 +879,7 @@
           restart: function () { loadScene(state.sceneId, true); }
         },
         tween: function (i, prop, to, dur, easing) { startTween(i, prop, to, dur, easing); },
-        call: function (name) { return callFn(name, Array.prototype.slice.call(arguments, 1)); },   /* funcion de eventos */
+        call: function (name) { return callFn(name, Array.prototype.slice.call(arguments, 1)); },
         beep: beep,
         playMusic: playMusicTrack,
         stopMusic: stopMusicTrack
@@ -961,9 +895,6 @@
       }
     }
 
-    /* ---------------- variables: locales de la funcion en curso o globales ----------------
-       Una variable se busca primero entre las locales de la funcion que se esta ejecutando y si no, en las
-       globales (que incluyen las de la escena). "nombre[i]" es un elemento de un array. */
     var frames = [];
     function varHome(name) {
       if (frames.length) { var f = frames[frames.length - 1].vars; if (name in f) return f; }
@@ -996,13 +927,8 @@
       if (!Array.isArray(a)) a = h[lv.name] = [];
       return a;
     }
-    /* los textos que son numeros se guardan como numeros (las comparaciones y los arrays van mas rapido) */
     function autoNum(s) { return s !== '' && /^\s*-?(\d+\.?\d*|\.\d+)\s*$/.test(s) ? parseFloat(s) : s; }
 
-    /* ---------------- funciones de eventos ----------------
-       Un evento de tipo "function" con nombre y parametros no se ejecuta solo: se llama con la accion
-       "Llamar a la funcion" o con Fn.nombre(...) en una expresion. Cada llamada tiene sus variables locales
-       (los parametros incluidos), asi que puede ser recursiva. */
     var FLOW_BREAK = 2, FLOW_RETURN = 3, flow = 0, fnTable = {}, warnedFn = {};
     function callFn(name, args) {
       var node = fnTable[name];
@@ -1022,10 +948,6 @@
       return fr.ret;
     }
 
-    /* ---------------- expresiones ----------------
-       Cada texto se traduce una sola vez a una funcion de JavaScript y se guarda: $var, $array[i] (o el nombre
-       sin $), {g:var}, Objeto.Propiedad, Fn.funcion(...), cursor.X(), textos entre comillas, las funciones
-       de EXPR_FN y los operadores de JS (tambien los de bits: & | ^ ~ << >>). */
     var EXPR_FN = {
       abs: Math.abs, min: Math.min, max: Math.max, floor: Math.floor, ceil: Math.ceil, round: Math.round, sqrt: Math.sqrt,
       sin: Math.sin, cos: Math.cos, tan: Math.tan, atan2: Math.atan2, pow: Math.pow, PI: Math.PI, random: Math.random, clamp: clamp,
@@ -1043,12 +965,9 @@
       RayoDistancia: function () { return state.ray ? state.ray.dist : 0; },
       EjeMando: function (pad, axis) { try { return N.pad ? N.pad(0, (pad || 1) - 1, axis || 0) : 0; } catch (e) { return 0; } },
       lerp: function (a, b, t) { return a + (b - a) * t; },
-      /* segundos que duro el ultimo fotograma (para mover o girar a velocidad constante) */
       TiempoDelta: function () { return state.dt; },
-      /* teclado: nombre de la tecla que se acaba de pulsar (o "") y letras escritas en este fotograma */
       UltimaTecla: function () { return state.lastKey || ''; },
       Tecleado: function () { return state.typed || ''; },
-      /* textos */
       lower: function (s) { return String(s == null ? '' : s).toLowerCase(); },
       upper: function (s) { return String(s == null ? '' : s).toUpperCase(); },
       trim: function (s) { return String(s == null ? '' : s).trim(); },
@@ -1059,10 +978,8 @@
       replace: function (s, a, b) { return String(s == null ? '' : s).split(String(a)).join(String(b)); },
       padStart: function (s, k, c) { s = String(s == null ? '' : s); c = String(c == null ? ' ' : c) || ' '; while (s.length < k) s = c + s; return s; },
       fixed: function (v, d) { return Number(v || 0).toFixed(d | 0); },
-      /* numero de un texto hexadecimal ("ff" -> 255); con i, el byte i de un color "#rrggbb" */
       toHex: function (v, d) { var t = Math.max(0, Math.round(Number(v) || 0)).toString(16); while (t.length < (d || 0)) t = '0' + t; return t; },
       hex: function (s, i) { s = String(s == null ? '' : s).replace(/^#/, ''); if (i != null) s = s.substr((i | 0) * 2, 2); var v = parseInt(s, 16); return isNaN(v) ? 0 : v; },
-      /* carpetas del usuario (en el jugador nativo; en el navegador, "") */
       DirUsuario: function () { return nativePaths()[0]; },
       DirDatos: function () { return nativePaths()[1]; },
       DirDocumentos: function () { return nativePaths()[2]; },
@@ -1074,7 +991,6 @@
       if (!pathsCache) { var nt = nativeFS(); try { pathsCache = nt ? nt.paths() : ['', '', '']; } catch (e) { pathsCache = ['', '', '']; } }
       return pathsCache;
     }
-    /* texto de un archivo inicial del proyecto (project.files: { name, text } o { name, data: base64 }) */
     function utf8Decode(bin) {
       var out = '', i = 0, c;
       while (i < bin.length) {
@@ -1096,7 +1012,6 @@
       }
       return null;
     }
-    /* JSON <-> variables: los objetos se aplanan en variables hijas (prefijo.clave.subclave); los arrays quedan como arrays */
     function clearVars(prefix) {
       var pre = prefix + '.', k;
       for (k in state.globals) if (k.indexOf(pre) === 0) delete state.globals[k];
@@ -1115,7 +1030,6 @@
       }
       return out;
     }
-    /* imagen (PNG/JPG en base64) para una instancia: se decodifica una vez por clave */
     var imageCache = {};
     function imageFromB64(key, b64) {
       if (key && imageCache[key]) return imageCache[key];
@@ -1141,8 +1055,6 @@
       }
       return -1;
     }
-    /* cx (opcional): traduccion para una funcion compilada a JS (ver compileFunctionJS): las variables locales
-       son variables de JS (cx.loc[nombre]) y el resto se lee de G (las globales). */
     function exVar(name, cx) {
       if (!cx) return 'V(' + JSON.stringify(name) + ')';
       return cx.loc[name] || '(G[' + JSON.stringify(name) + '] ?? 0)';
@@ -1169,7 +1081,6 @@
           j = dollar ? i + 1 : i;
           while (j < L && IDENT.test(s.charAt(j))) j++;
           var word = s.slice(dollar ? i + 1 : i, j);
-          /* el nombre de una variable puede llevar puntos (variables hijas): $padre.hija */
           if (dollar) while (s.charAt(j) === '.' && IDENT.test(s.charAt(j + 1) || '')) { k = j + 1; while (k < L && IDENT.test(s.charAt(k))) k++; word = s.slice(i + 1, k); j = k; }
           var prop = '';
           if (!dollar && s.charAt(j) === '.' && IDENT.test(s.charAt(j + 1) || '')) {
@@ -1191,7 +1102,7 @@
           if (prop && word === 'Math') { i = j + 1; continue; }
           if (prop && objNameSet[word]) {
             if (cx) cx.obj = true;
-            if (!cx && hoistCtx) {                     /* cada objeto se busca una sola vez por evaluacion (o0, o1...) */
+            if (!cx && hoistCtx) {
               var hi = hoistCtx.indexOf(word);
               if (hi < 0) { hi = hoistCtx.length; hoistCtx.push(word); }
               out += propCode('o' + hi, prop);
@@ -1210,7 +1121,6 @@
       }
       return out;
     }
-    /* Objeto.Prop: X/Y directos, propiedades del motor por exprProp y variables de instancia directas */
     var hoistCtx = null;
     var BUILTIN_PROPS = { X: 1, x: 1, Y: 1, y: 1, Angulo: 1, angle: 1, Ancho: 1, width: 1, Alto: 1, height: 1, Opacidad: 1, opacity: 1,
       VelX: 1, vx: 1, VelY: 1, vy: 1, Salud: 1, health: 1 };
@@ -1251,7 +1161,6 @@
       exprCache[raw] = f;
       return f;
     }
-    /* valor de una expresion tal cual (numero o texto) */
     function evalExpr(raw) {
       if (typeof raw === 'number') return raw;
       var f = compileExpr(raw == null ? '' : raw);
@@ -1261,27 +1170,21 @@
     function resolveVal(raw) {
       if (typeof raw === 'number') return raw;
       var v = evalExpr(raw);
-      if (typeof v === 'number') return v - v === 0 ? v : 0;   /* descarta NaN e infinitos */
+      if (typeof v === 'number') return v - v === 0 ? v : 0;
       if (typeof v === 'boolean') return v ? 1 : 0;
       return n(v);
     }
     function evalNum(raw) { return resolveVal(raw); }
-    /* valor de una expresion que no cambia de una instancia a otra: se calcula una vez por accion en vez de una vez por
-       instancia (con miles de objetos se nota). Con azar o funciones de eventos se sigue calculando en cada una. */
     function once(raw) {
       if (typeof raw === 'number') return raw;
       return /rand|Fn\./.test(String(raw == null ? '' : raw)) ? null : resolveVal(raw);
     }
-    /* lista de argumentos "a, b, c" de una llamada */
     function evalArgs(raw) {
       if (raw == null || String(raw).trim() === '') return [];
       var v = evalExpr('[' + raw + ']');
       return Array.isArray(v) ? v : [v];
     }
-    /* Objeto.Prop en una expresion: la primera instancia elegida por las condiciones del evento (o por
-       "Para cada objeto"); si no hay ninguna elegida, la primera de la escena. */
     var exprPicks = null, objIdByName = null;
-    /* nombre de objeto -> id: primero los de la escena actual, luego los globales y por ultimo los de otras escenas */
     function objIdNamed(name) {
       if (!objIdByName) {
         objIdByName = {};
@@ -1294,9 +1197,7 @@
       }
       return objIdByName[name] || null;
     }
-    /* indice de instancias (por id y por objeto); se rehace cuando cambia la lista de instancias */
     var ixArr = null, ixLen = -1, ixById = null, ixByObj = null;
-    /* grupo: las instancias de todos sus objetos (se guarda en el indice hasta que cambien las instancias) */
     function objMatches(it, id) {
       if (it.objId === id) return true;
       var g = objects[id];
@@ -1320,7 +1221,6 @@
       ixArr = state.instances; ixLen = state.instances.length;
     }
     function onlyKey(set) { var k1 = null; for (var k in set) { if (k1 !== null) return null; k1 = k; } return k1; }
-    /* la instancia unica de una seleccion, memorizada por conjunto (pick() la olvida al cambiarlo) */
     var oneMemo = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
     function onlyKeyMemo(set) {
       if (!oneMemo) return onlyKey(set);
@@ -1331,7 +1231,7 @@
     function exprInst(name) {
       var id = objIdNamed(name), set = exprPicks && id ? exprPicks[id] : null, j;
       if (!id) return null;
-      if (set) {                                     /* lo habitual: una sola instancia elegida (Para cada objeto) */
+      if (set) {
         var k1 = onlyKeyMemo(set);
         if (k1 !== null) { instIndex(); var one = ixById[k1]; if (one && objMatches(one, id)) return one; }
       }
@@ -1363,13 +1263,12 @@
       var wx = state.mouse.wx, wy = state.mouse.wy;
       if (k === 'X') return wx;
       if (k === 'Y') return wy;
-      if (k === 'SX') return state.mouse.x;      /* en la pantalla (sin camara) */
+      if (k === 'SX') return state.mouse.x;
       if (k === 'SY') return state.mouse.y;
       if (k === 'CX') return Math.floor(wx / gw);
       return Math.floor(wy / gh);
     }
 
-    /* ---------------- extensiones (JavaScript propio) ---------------- */
     var extCache = null;
     function allExtRt() {
       return (project.extensions || []).concat((project.plugins || []).filter(function (p) { return p.enabled !== false; }));
@@ -1392,12 +1291,10 @@
       a.params = p || {};
       a.text = function (k) { return resolveStr((p || {})[k]); };
       a.arg = function (k) { return evalNum(resolveStr((p || {})[k])); };
-      a.snapshot = snapshotGame;                             /* la partida entera como texto (extension Steam: nube) */
+      a.snapshot = snapshotGame;
       a.restore = restoreGame;
       return a;
     }
-    /* acciones y condiciones que este motor no conoce (de un editor mas nuevo, o una extension que ya no esta): se avisa
-       una vez por tipo en la consola, en vez de ignorarlas en silencio */
     var warnedType = {};
     function unknownType(kind, t) {
       if (!t || warnedType[kind + t]) return;
@@ -1418,7 +1315,6 @@
       catch (e) { console.warn('Source 2D [extension]: ' + e.message); }
     }
 
-    /* ---------------- tweens ---------------- */
     function startTween(inst, prop, to, dur, easing) {
       if (!inst) return;
       to = n(to);
@@ -1453,12 +1349,7 @@
       }
     }
 
-    /* ---------------- colision con tiles ---------------- */
-    /* Solidos. Los de los mapas de tiles se calculan una vez por escena (filas de tiles juntas en una caja) y se
-       guardan por zonas de 128 px: cada objeto solo mira los de su zona. Las acciones de tiles invalidan la cache.
-       Solo chocan los mapas de capas solidas (layer.solid !== false). */
     var TILE_CHUNK = 128, tileSolids = null, solidStamp = 0;
-    /* clave numerica de una celda de la rejilla (mas rapida que un texto "fila,columna") */
     function GK(r, c) { return (r + 4096) * 8192 + c + 4096; }
     function invalidateTiles() { tileSolids = null; tileRev++; }
     function tilemapSolid(tm) { var L = layers[tm.layer || 'base']; return !L || L.solid !== false; }
@@ -1482,7 +1373,7 @@
             }
             if (!tl || c >= tm.cols) continue;
             var cx = tm.x + (c + 0.5) * T, cy = tm.y + (r + 0.5) * T;
-            if (shaped) {   /* forma propia: escalones y rampas (tiras horizontales); escalera y peligro, su caja */
+            if (shaped) {
               var tx0 = tm.x + c * T, ty0 = tm.y + r * T, tsz = T, k = 1;
               if (tl.solid || tl.oneway) tileSlices(tl.collision, tsz).forEach(function (sl) {
                 if (!tl.oneway) anySteps = true;
@@ -1496,7 +1387,6 @@
             }
             if (tl.oneway) boxes.push({ x: cx, y: cy, w: T, h: T, oneway: true });
             if (tl.ladder) ladders.push({ x: cx, y: cy, w: T, h: T, src: null });
-            /* los peligros (pinchos) perdonan un poco: su caja es mas pequena que el tile */
             if (tl.danger) danger.push({ x: cx, y: cy, w: T * 0.7, h: T * 0.7 });
           }
         }
@@ -1511,9 +1401,7 @@
       tileSolids = { boxes: boxes, grid: grid, ladders: ladders, danger: danger, sceneId: state.sceneId };
       return tileSolids;
     }
-    /* forma de un tile en tiras horizontales [centro x, centro y, ancho, alto] (en pixeles del tile): asi una rampa o
-       unos escalones son cajas, y el personaje sube por ellos (ver "step" en la fisica) */
-    var STEP_MAX = 40, anySteps = false;   /* margen de busqueda para los escalones (el limite de cada caja va en box.step) */
+    var STEP_MAX = 40, anySteps = false;
     function tileSlices(m, T) {
       var N = Math.max(2, Math.min(16, Math.round(T / 2))), hS = T / N, out = [], pts = maskOutline(m), b = maskBounds(m);
       var ell = m.shape === 'circle' || m.shape === 'ellipse', rect = m.shape === 'rect' || m.shape === 'square';
@@ -1531,14 +1419,12 @@
         }
         if (x1 - x0 < 0.5) continue;
         var last = out[out.length - 1];
-        if (last && Math.abs(last[0] - (x0 + x1) / 2) < 0.01 && Math.abs(last[2] - (x1 - x0)) < 0.01) { last[1] += hS / 2; last[3] += hS; }   /* misma tira: se juntan */
+        if (last && Math.abs(last[0] - (x0 + x1) / 2) < 0.01 && Math.abs(last[2] - (x1 - x0)) < 0.01) { last[1] += hS / 2; last[3] += hS; }
         else out.push([(x0 + x1) / 2, y, x1 - x0, hS]);
       }
       return out;
     }
     function tilesNow() { return tileSolids && tileSolids.sceneId === state.sceneId ? tileSolids : buildTileCache(); }
-    /* objetos solidos de este fotograma, tambien en una rejilla de celdas de TILE_CHUNK px (como los tiles): asi cada
-       objeto que se mueve solo mira los solidos de su zona, no todos (con cientos de cajas eran n x n comparaciones) */
     function buildInstanceSolids() {
       var out = [], grid = {};
       for (var i = 0; i < state.instances.length; i++) {
@@ -1569,9 +1455,7 @@
       }
       return out;
     }
-    /* todos los solidos (para quien los necesite enteros) */
     function buildSolidBoxes() { return buildInstanceSolids().concat(tilesNow().boxes); }
-    /* toca un tile con la marca indicada (danger, solid, ladder, oneway) */
     function touchesTileFlag(inst, flag) {
       var s = instSize(inst), tc = tilesNow(), i, ix = cX(inst, s), iy = cY(inst, s);
       if (flag === 'danger') {
@@ -1591,21 +1475,15 @@
       return false;
     }
 
-    /* ---------------- fisica realista ---------------- */
-    /* cuerpo libre (cae o choca y no lo mueve el teclado): entre dos cuerpos libres el choque reparte la velocidad segun
-       la masa (una piedra empuja a una pelota; una pelota apenas mueve a una piedra) */
     function freeBody(o) { var b = behav(o); return (b.gravity || b.collide) && (!b.movement || b.movement === 'none'); }
-    /* choque en un eje entre dos cuerpos libres: conserva el momento, rebote = el mayor de los dos */
     function impulse(A, B, axis, bounceA) {
       var mA = Math.max(0.01, n(behav(A).mass, 1)), mB = Math.max(0.01, n(behav(B).mass, 1));
       var e = Math.max(bounceA, clamp(n(behav(B).bounce, 0), 0, 1));
       var vA = A[axis], vB = B[axis], P = mA * vA + mB * vB;
-      if (Math.abs(vA - vB) < 60) e = 0;                           /* choque suave: quedan juntos (apilar sin temblar) */
+      if (Math.abs(vA - vB) < 60) e = 0;
       A[axis] = (P + mB * e * (vB - vA)) / (mA + mB);
       B[axis] = (P + mA * e * (vA - vB)) / (mA + mB);
     }
-    /* rayo desde el centro de un objeto: avanza a pasos de 4 px y para en el primer solido (tiles y objetos solidos) o
-       en la primera instancia del objeto pedido. Devuelve { x, y, dist } del choque o null. */
     function castRay(from, dx, dy, dist, target) {
       var solids = target ? null : buildInstanceSolids(), others = target ? objInstances(target) : null;
       for (var d = 4; d <= dist; d += 4) {
@@ -1623,9 +1501,6 @@
       }
       return null;
     }
-    /* ---------------- idiomas ----------------
-       project.i18n = { langs: ['es', 'en'], strings: { clave: { es: '...', en: '...' } } }. En textos: {t:clave};
-       en expresiones: T("clave"). Si falta la traduccion se usa la del primer idioma y si no, la clave. */
     function curLang() {
       var i18 = project.i18n || {}, langs = i18.langs || [];
       return state.lang || (project.settings && project.settings.lang) || langs[0] || '';
@@ -1637,9 +1512,6 @@
       return v != null && v !== '' ? v : (row[(i18.langs || [])[0]] != null ? row[(i18.langs || [])[0]] : String(k));
     }
 
-    /* ---------------- buscar caminos (A*) ----------------
-       Rejilla del tamano de los tiles de la escena (o 32 px); una celda esta bloqueada si toca un tile solido o un
-       objeto solido que no se mueve. Diagonales sin cortar esquinas. Devuelve la lista de centros de celda o null. */
     var anyPath = false;
     function findPath(inst, tx, ty) {
       var sc = scenes[state.sceneId], tms = (sc && sc.tilemaps) || [], cs = 32;
@@ -1682,14 +1554,13 @@
           if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
           var ni = ny * W + nx;
           if (blocked[ni] || closed[ni]) continue;
-          if (DIRS[di][2] > 1 && (blocked[cy * W + nx] || blocked[ny * W + cx])) continue;   /* sin cortar esquinas */
+          if (DIRS[di][2] > 1 && (blocked[cy * W + nx] || blocked[ny * W + cx])) continue;
           var ng = g[cur] + DIRS[di][2];
           if (ng < g[ni]) { g[ni] = ng; from[ni] = cur; f[ni] = ng + Math.hypot(gx - nx, gy - ny); open.push(ni); }
         }
       }
       return null;
     }
-    /* sigue su camino: va al siguiente punto a su velocidad */
     function updatePaths(dt) {
       if (!anyPath) return;
       anyPath = false;
@@ -1704,7 +1575,6 @@
         o.x += dx / d * sp * dt; o.y += dy / d * sp * dt; o.faceX = dx < 0 ? -1 : 1;
       }
     }
-    /* la partida como texto: variables y escena; con all, tambien los objetos, la camara y los temporizadores */
     function snapshotGame(all) {
       var sv = { globals: state.globals, scene: state.sceneId };
       if (all) { sv.instances = state.instances; sv.camera = state.camera; sv.timers = state.timers; sv.nextId = state.nextId; sv.lang = state.lang; }
@@ -1722,7 +1592,7 @@
         if (ld.camera) Object.keys(ld.camera).forEach(function (k) { state.camera[k] = ld.camera[k]; });
         state.timers = ld.timers || {}; state.nextId = Math.max(state.nextId, n(ld.nextId, 1)); if (ld.lang) state.lang = ld.lang;
         Object.keys(ld.globals || {}).forEach(function (k) { state.globals[k] = ld.globals[k]; });
-        state.frame = Math.max(2, lfr);                         /* el reloj sigue; no repite "al inicio de la escena" */
+        state.frame = Math.max(2, lfr);
       } else if (ld.scene && ld.scene !== state.sceneId) changeScene(ld.scene);
       return true;
     }
@@ -1731,16 +1601,11 @@
       for (var q = 0; q < state.instances.length; q++) {
         var inst = state.instances[q], b = behav(inst);
         if (inst.spin) inst.angle += inst.spin * dt;
-        /* cuerpo dormido: libre, en reposo en el suelo desde hace un rato y sin que nada lo toque. No se calcula (una pila
-           de cajas quieta no cuesta nada). Despierta si algo le da velocidad, si se mueve su suelo, si cambian los tiles,
-           o cada 20 fotogramas para comprobar que su suelo sigue ahi. */
         if (inst.sleepT > 0.5 && inst.vx === 0 && inst.vy === 0 && inst.sleepRev === tileRev && (state.frame + inst.id) % 20) {
           var sg = inst.groundRef;
           if (!sg || (sg.x === sg.prevX && sg.y === sg.prevY)) { inst.grounded = true; continue; }
         }
         var x0 = inst.x, y0 = inst.y;
-        /* peso: multiplica la gravedad (0.2 = cae como una hoja, negativo = sube como un globo); resistencia del aire
-           (drag): frena la caida, el papel o una pluma llegan pronto a su velocidad maxima */
         if (b.gravity && !inst.climbing && !(inst.dashT > 0)) {
           var wgt = b.weight != null ? n(b.weight, 1) : 1;
           inst.vy = clamp(inst.vy + GRAVITY * wgt * dt, -MAX_FALL, b.maxFall > 0 ? b.maxFall : MAX_FALL);
@@ -1761,7 +1626,6 @@
         inst.grounded = false; inst.groundRef = null; inst.wallL = false; inst.wallR = false;
         var sz = instSize(inst), hw = sz.w / 2, hh = sz.h / 2, ox = sz.ox || 0, oy = sz.oy || 0;
         var prevBottom = inst.y + oy + hh;
-        /* solo los solidos cerca del recorrido de este fotograma (los mapas de tiles van por zonas) */
         var mx = Math.abs(inst.vx * dt) + 4, my = Math.abs(inst.vy * dt) + 4 + (wasGrounded && anySteps ? STEP_MAX : 0);
         var solids = solidsNear(instSolids, inst.x + ox - hw - mx, inst.y + oy - hh - my, inst.x + ox + hw + mx, inst.y + oy + hh + my);
 
@@ -1770,7 +1634,6 @@
           var s = solids[i];
           if (s.oneway || s.src === inst) continue;
           if (boxesOverlap(inst.x + ox, inst.y + oy, sz.w, sz.h, s.x, s.y, s.w, s.h)) {
-            /* escalones y rampas de tiles con forma: si el borde de arriba esta a poca altura de los pies, se sube */
             var rise = inst.y + oy + hh - (s.y - s.h / 2);
             if (s.step && wasGrounded && inst.vy >= 0 && rise > 0 && rise <= s.step) { inst.y -= rise + 0.01; continue; }
             if (inst.vx > 0) inst.wallR = true; else if (inst.vx < 0) inst.wallL = true;
@@ -1791,13 +1654,10 @@
             if (inst.vy > 0) {
               inst.y = u.y - u.h / 2 - hh - oy;
               inst.groundRef = u.src || null;
-              /* contra otro cuerpo libre en el aire: se reparten la velocidad segun la masa. Si el de abajo esta apoyado, el
-                 suelo se lleva el golpe y este cae encima como sobre algo fijo (asi las pilas se quedan quietas) */
               if (free && u.src && freeBody(u.src) && !u.src.grounded) {
                 impulse(inst, u.src, 'vy', bounce);
                 if (inst.vy >= u.src.vy - 1) { inst.vy = u.src.vy; inst.grounded = true; if (!wasGrounded) inst.evLandPending = true; }
               }
-              /* rebota mientras el rebote se note; los saltitos muy pequenos se quedan quietos (no tiembla en el suelo) */
               else if (bounce > 0.08 && inst.vy * bounce > 40) { inst.vy = -inst.vy * bounce; }
               else { inst.vy = 0; inst.grounded = true; if (!wasGrounded) inst.evLandPending = true; }
             } else if (inst.vy < 0) {
@@ -1807,7 +1667,6 @@
             }
           }
         }
-        /* bajando una rampa o unos escalones: se queda pegado al suelo en vez de ir dando saltitos */
         if (wasGrounded && !inst.grounded && inst.vy >= 0 && !(inst.dropT > 0)) {
           var feet = inst.y + oy + hh, best = null;
           for (var q2 = 0; q2 < solids.length; q2++) {
@@ -1848,7 +1707,6 @@
       return false;
     }
 
-    /* toca una pared solida (de tiles) por el lado dir (-1 izquierda, 1 derecha) a media altura */
     function nearWall(inst, dir) {
       var s = instSize(inst), x = cX(inst, s) + dir * 3, y = cY(inst, s), h = s.h * 0.6;
       var near = solidsNear([], x - s.w / 2 - 1, y - h / 2, x + s.w / 2 + 1, y + h / 2);
@@ -1859,13 +1717,11 @@
       return false;
     }
 
-    /* ---------------- movimiento automatico ---------------- */
     var NOSIM = Object.freeze({});
     function applyMovement() {
-      var ladders = null;                      /* solo si alguien se mueve con el teclado */
+      var ladders = null;
       for (var i = 0; i < state.instances.length; i++) {
         var inst = state.instances[i], b = behav(inst);
-        /* objetos sin movimiento propio (lo mas comun: monedas, bloques, clones): nada que hacer */
         if (!b.movement || b.movement === 'none') {
           if (inst.simNext) inst.simNext = null;
           if (inst.climbing || inst.wallSliding || inst.running || inst.crouching) { inst.climbing = false; inst.wallSliding = false; inst.running = false; inst.crouching = false; }
@@ -1882,17 +1738,14 @@
           var dn = key(b.keyDown || 'arrowdown') || (!b.keyDown && key('s'));
           var jumpPressed = pressedKey(b.keyJump || ' ') || (!b.keyJump && (pressedKey('arrowup') || pressedKey('w'))) || !!sim.jump;
           var jumpHeld = key(b.keyJump || ' ') || (!b.keyJump && (key('arrowup') || key('w'))) || !!sim.jump || !!sim.jumpHeld;
-          /* "Detener la plataforma" sobre un plataformero: sin control (dialogos, escenas, muerte); la gravedad sigue */
           if (inst.platOff) { L = R = up = dn = jumpPressed = jumpHeld = false; sim = {}; }
           var pdt = state.dt || 0;
-          /* habilidades que los eventos activan o quitan durante el juego (accion "Habilidad del plataformero") */
           var ab = inst.abil || {}, canDash = ab.dash != null ? ab.dash : b.dash, wallOn = ab.wall != null ? ab.wall : b.wall;
           var airN = ab.air === false ? 0 : ab.air === true ? Math.max(1, b.airJumps) : b.airJumps;
           if (inst.grounded) { inst.coyoteT = b.coyote; inst.airJumpsLeft = airN; inst.dashReady = true; }
           else inst.coyoteT = Math.max(0, n(inst.coyoteT) - pdt);
           inst.jumpBufT = jumpPressed ? b.jumpBuffer : Math.max(0, n(inst.jumpBufT) - pdt);
           if (inst.dashCD > 0) inst.dashCD -= pdt;
-          /* dash: rapido, recto y sin gravedad; en el aire solo uno hasta volver a tocar el suelo */
           if (canDash && !inst.platOff && !(inst.dashT > 0) && !(inst.dashCD > 0) && inst.dashReady !== false &&
               (pressedKey(b.keyDash || 'shift') || !!sim.dash)) {
             inst.dashT = b.dashTime; inst.dashDir = R && !L ? 1 : L && !R ? -1 : (inst.faceX || 1);
@@ -1924,7 +1777,6 @@
             if (L && !R) inst.faceX = -1; else if (R && !L) inst.faceX = 1;
             used = true;
           } else {
-            /* tras un salto de pared, un momento sin control horizontal (el impulso aleja de la pared) */
             if (inst.wallLockT > 0) { inst.wallLockT -= pdt; used = true; }
             else if (L && !R) { inst.vx = -sp; used = true; inst.faceX = -1; }
             else if (R && !L) { inst.vx = sp; used = true; inst.faceX = 1; }
@@ -1940,7 +1792,6 @@
               inst.vy = -jumpV; inst.grounded = false; inst.coyoteT = 0; inst.jumpBufT = 0;
               inst.evJump = state.frame; inst.jumpHeldPhase = true;
             } else if (jumpPressed && wallOn && b.wallJump && (nearWall(inst, -1) || nearWall(inst, 1))) {
-              /* salto de pared: arriba y lejos de la pared; recupera los saltos en el aire y el dash */
               var away = nearWall(inst, -1) ? 1 : -1;
               inst.vy = -jumpV * 0.92; inst.vx = away * sp * 1.15; inst.faceX = away;
               inst.wallLockT = 0.16; inst.airJumpsLeft = airN; inst.dashReady = true; inst.jumpBufT = 0;
@@ -1949,7 +1800,6 @@
               inst.vy = -(b.airJump || jumpV); inst.airJumpsLeft--; inst.jumpBufT = 0;
               inst.evAirJump = state.frame; inst.jumpHeldPhase = true;
             }
-            /* salto variable: al soltar el salto mientras sube, se corta */
             if (inst.jumpHeldPhase && (inst.vy >= 0 || inst.grounded)) inst.jumpHeldPhase = false;
             if (b.jumpCut && inst.jumpHeldPhase && !jumpHeld) { inst.vy *= 0.45; inst.jumpHeldPhase = false; }
             if (wallOn && !inst.grounded && !ladder && (inst.wallL || inst.wallR) && (L || R) && inst.vy > 0) {
@@ -1995,7 +1845,6 @@
       }
     }
 
-    /* ---------------- seleccion y ordenes (RTS) ---------------- */
     var anyRts = (project.objects || []).some(function (o) { return o.behaviors && o.behaviors.movement === 'rts'; });
     function rtsUnits() {
       if (!anyRts) return [];
@@ -2040,7 +1889,6 @@
       }
     }
 
-    /* ---------------- camara ---------------- */
     function updateCamera(dt) {
       var sc = scenes[state.sceneId]; if (!sc) return;
       var cam = state.camera;
@@ -2050,7 +1898,6 @@
         var inst = null;
         for (var i = 0; i < state.instances.length; i++) if (state.instances[i].id === cam.followId) inst = state.instances[i];
         if (inst) {
-          /* anticipacion: mira hacia donde va (velocidad x segundos); zona muerta: no se mueve si el objeto no sale de ella */
           var la = cam.look || 0, lx = la ? clamp(inst.vx * la, -vw / 3, vw / 3) : 0, ly = la ? clamp(inst.vy * la * 0.5, -vh / 4, vh / 4) : 0;
           cam.lookX = (cam.lookX || 0) + (lx - (cam.lookX || 0)) * Math.min(1, dt * 4);
           cam.lookY = (cam.lookY || 0) + (ly - (cam.lookY || 0)) * Math.min(1, dt * 4);
@@ -2069,7 +1916,6 @@
       var k = cam.smooth > 0 ? 1 - Math.pow(1 - clamp(cam.smooth, 0.01, 1), dt * 60) : 1;
       cam.x += (tx - cam.x) * k;
       cam.y += (ty - cam.y) * k;
-      /* sin limites ("none"): la camara puede salirse de la escena (zoom, temblores y giros quedan centrados) */
       var lim = cam.limits || { x: 0, y: 0, w: sc.width, h: sc.height };
       if (lim !== 'none') {
         cam.x = clamp(cam.x, lim.x, Math.max(lim.x, lim.x + lim.w - vw));
@@ -2078,7 +1924,6 @@
       if (cam.shakeT > 0) cam.shakeT -= dt;
     }
 
-    /* ---------------- cambio de escena con transicion ---------------- */
     function changeScene(name, transition, dur) {
       var target = null;
       for (var i = 0; i < (project.scenes || []).length; i++) {
@@ -2092,7 +1937,6 @@
       };
     }
 
-    /* ---------------- condiciones ---------------- */
     function pick(picks, objId, instId) {
       if (!picks[objId]) picks[objId] = {};
       else if (oneMemo) oneMemo.delete(picks[objId]);
@@ -2107,7 +1951,6 @@
       var p = cond.params || {}, t = cond.type, i, list, found;
       switch (t) {
         case 'always': return true;
-        /* --- fase 3: objetos, animaciones, temporizadores y comportamientos --- */
         case 'distance': {
           var dl = objInstances(p.object), dw = objInstances(p.with), dok = false, dmax = resolveVal(p.value);
           for (i = 0; i < dl.length; i++) for (var dj = 0; dj < dw.length; dj++) {
@@ -2369,7 +2212,6 @@
       }
     }
 
-    /* ---------------- acciones ---------------- */
     function targets(objId, picks) {
       var set = picks[objId];
       if (set) {
@@ -2457,7 +2299,6 @@
         case 'arrayPush': arrayVar(p.variable).push(autoNum(resolveStr(p.value))); break;
         case 'arrayPop': { var pp = readVar(p.variable); if (Array.isArray(pp)) pp.pop(); break; }
         case 'arrayClear': writeVar(p.variable, []); break;
-        /* --- variables con expresiones, arrays y funciones --- */
         case 'setVar': {
           var sv = evalExpr(p.value), op = p.op || 'set';
           if (op !== 'set') {
@@ -2616,7 +2457,7 @@
         case 'addObjVar': for (i = 0; i < list.length; i++) list[i].vars[p.variable] = n(list[i].vars[p.variable]) + resolveVal(p.value); break;
         case 'setGlobal': writeVar(p.variable, resolveStr(p.value)); break;
         case 'addGlobal': writeVar(p.variable, n(readVar(p.variable)) + resolveVal(p.value)); break;
-        case 'setText': for (i = 0; i < list.length; i++) { list[i].textOverride = resolveStr(p.text); list[i].typeFull = null; } break;   /* corta la maquina de escribir */
+        case 'setText': for (i = 0; i < list.length; i++) { list[i].textOverride = resolveStr(p.text); list[i].typeFull = null; } break;
         case 'textAppend': for (i = 0; i < list.length; i++) list[i].textOverride = (list[i].textOverride != null ? list[i].textOverride : resolveStr((objDef(list[i]).text || {}).content || '')) + resolveStr(p.text); break;
         case 'typewriter': for (i = 0; i < list.length; i++) { list[i].typeFull = resolveStr(p.text); list[i].typeT = 0; list[i].typeSpeed = Math.max(1, tnum(p.speed) || 20); list[i].textOverride = ''; } break;
         case 'setTextColor': for (i = 0; i < list.length; i++) list[i].textColor = resolveStr(p.color); break;
@@ -2804,7 +2645,6 @@
         case 'stopMusic': stopMusicTrack(); break;
         case 'stopGame': state.running = false; break;
         case 'jsCode': runCode(p.code, list.length ? list[0] : null, 'accion'); break;
-        /* --- fase 3 --- */
         case 'objTimerCtl': {
           var otn = resolveStr(p.name);
           for (i = 0; i < list.length; i++) {
@@ -2859,9 +2699,6 @@
       }
     }
 
-    /* ---------------- instrucciones compiladas ----------------
-       Las condiciones y acciones de variables, arrays y funciones (las que mas se repiten en bucles) se
-       convierten una vez en funciones y se guardan en la instruccion (_f); el resto pasa por condResult/doAction. */
     function numOf(v) { return typeof v === 'number' ? (v - v === 0 ? v : 0) : typeof v === 'boolean' ? (v ? 1 : 0) : n(v); }
     function cmpFn(op) {
       switch (op) {
@@ -2960,12 +2797,6 @@
       return f || null;
     }
 
-    /* ---------------- funciones compiladas a JavaScript ----------------
-       Una funcion de eventos cuyas instrucciones son todas de variables, arrays, comparaciones, bucles y
-       llamadas (sin objetos ni textos con plantilla) se traduce entera a una funcion de JS: sus variables
-       locales pasan a ser variables de JS, "Repetir" y "Mientras" son bucles for, "Salir del bucle" es break
-       y "Devolver" es return. Va decenas de veces mas rapido que interpretarla (el bot de ajedrez la usa).
-       Si algo no se puede traducir, la funcion se sigue interpretando como siempre. */
     var FN = {}, jsDepth = { d: 0 };
     function rtResize(a, k) { if (!Array.isArray(a)) a = []; k = Math.max(0, Math.min(1000000, k | 0)); if (k < a.length) a.length = k; else while (a.length < k) a.push(0); return a; }
     function rtFill(k, v) { k = Math.max(0, Math.min(1000000, k | 0)); var a = new Array(k); for (var i = 0; i < k; i++) a[i] = v; return a; }
@@ -3070,7 +2901,6 @@
         return null;
       }
       try {
-        // TV (verdadero o no) no puede llamarse T: T("clave") es la traduccion de las expresiones (FN_NAMES)
         return new Function('G', 'FN', 'N', 'TV', 'O', 'C', 'D', 'RZ', 'FILL', 'SORT', 'APP', FN_NAMES.join(','), src)
           .apply(null, [state.globals, FN, numOf, function (v) { return !!v && v !== '0'; }, exprObj, cursorValue, jsDepth, rtResize, rtFill, rtSort, rtAppend].concat(FN_VALS));
       } catch (e2) {
@@ -3078,7 +2908,6 @@
         return null;
       }
     }
-    /* al cargar la escena: FN[nombre] llama a la version compilada o, si no la hay, al interprete */
     function linkFunctions() {
       Object.keys(FN).forEach(function (k) { delete FN[k]; });
       Object.keys(fnTable).forEach(function (name) {
@@ -3091,8 +2920,6 @@
       });
     }
 
-    /* ---------------- eventos ---------------- */
-    /* La lista plana de eventos (con .level) se convierte en arbol: cada evento con sus subeventos. */
     function buildEventTree(list) {
       var root = [], stack = [{ lvl: -1, kids: root }];
       list.forEach(function (es) {
@@ -3111,7 +2938,6 @@
     }
     var STOP = 1;
     function stopped() { return state.sceneChanged || state.ended || !state.running; }
-    /* Evalua una condicion. Si es verdadera (y no invertida) deja en picks las instancias que la cumplen. */
     function evalCond(cond, picks, es, path) {
       if (cond.enabled === false) return true;
       var t = cond.type, r, i, cf, subs = cond.sub || [];
@@ -3144,7 +2970,6 @@
         r = false;
         if (es.acc[path] >= period) { es.acc[path] -= period; r = true; }
       } else if (t === 'triggerOnce') {
-        /* verdadera solo el primer fotograma en que se llega aqui seguido */
         var prev = es.once[path];
         r = prev !== state.frame - 1 && prev !== state.frame;
         es.once[path] = state.frame;
@@ -3158,7 +2983,6 @@
           r = condResult(cond, fresh);
         } finally { condScope = null; }
         if (cond.invert && oid && fresh[oid]) {
-          /* condicion de objeto invertida: se quedan las instancias que NO la cumplen */
           var rest = {}, any = false;
           for (i = 0; i < cands.length; i++) if (!fresh[oid][cands[i].id]) { rest[cands[i].id] = true; any = true; }
           if (any) picks[oid] = rest;
@@ -3178,8 +3002,6 @@
       if (!evalConds(ev.conditions || [], picks, node.es, 'c')) return 0;
       return runActs(node, picks, 0);
     }
-    /* "Esperar N segundos": las acciones que siguen (y los subeventos) se apuntan y se hacen despues, con los mismos
-       objetos elegidos. Dentro de una funcion no espera (una funcion devuelve su valor en el momento). */
     function runWaits(dt) {
       if (!state.waits.length) return;
       var due = [], keep = [];
@@ -3205,13 +3027,11 @@
         var cf = act._f;
         if (cf === undefined) cf = act._f = compileAction(act);
         if (cf) cf(); else doAction(act, picks);
-        if (flow) return flow;               /* salir del bucle o devolver valor */
+        if (flow) return flow;
         if (stopped()) return STOP;
       }
       return node.kids.length ? runNodes(node.kids, picks) : 0;
     }
-    /* Via rapida: un evento cuyas condiciones y acciones estan todas compiladas no elige objetos, asi que
-       no hace falta copiar la seleccion ni pasar por evalCond. node.fast guarda las listas ya preparadas. */
     function fastPlan(node, asBody) {
       var ev = node.es.ref, t = asBody ? '' : ev.type || '';
       if (t && t !== 'repeat' && t !== 'while') return null;
@@ -3249,7 +3069,6 @@
       }
       return node.kids.length ? runNodes(node.kids, picks) : 0;
     }
-    /* resultado de una vuelta de bucle: true si hay que dejar el bucle (y r != 0 se propaga) */
     function loopExit(r) {
       if (r === FLOW_BREAK) { flow = 0; return true; }
       return r !== 0;
@@ -3257,7 +3076,6 @@
     function runNode(node, parentPicks) {
       var ev = node.es.ref, k, r;
       if (ev.enabled === false || ev.type === 'function') return 0;
-      /* un bucle con "Al empezar la escena" no da vueltas despues del primer fotograma (la condicion no cambia en el bucle) */
       if (node.atStart === undefined) node.atStart = (ev.type === 'repeat' || ev.type === 'while') && (ev.conditions || []).some(function (c) { return c.type === 'atStart' && c.enabled !== false && !c.invert && !c.sub; });
       if (node.atStart && state.frame > 1) return 0;
       var fp = node.fast;
@@ -3286,7 +3104,6 @@
       }
       if (ev.type === 'repeat') {
         var count = Math.max(0, Math.min(1000000, Math.floor(resolveVal(ev.count))));
-        /* contador opcional: variable local si se esta dentro de una funcion, si no global */
         var cv = ev['var'] ? lvalue(ev['var']).name : '', home = cv ? (frames.length ? frames[frames.length - 1].vars : state.globals) : null;
         for (k = 0; k < count; k++) {
           if (home) home[cv] = k;
@@ -3300,7 +3117,7 @@
         var insts = ev.object ? objInstances(ev.object) : [];
         condScope = null;
         for (k = 0; k < insts.length; k++) {
-          if (state.instances.indexOf(insts[k]) < 0) continue;      /* eliminada en una vuelta anterior */
+          if (state.instances.indexOf(insts[k]) < 0) continue;
           var pf = clonePicks(parentPicks);
           pf[ev.object] = {}; pf[ev.object][insts[k].id] = true;
           r = runBody(node, pf);
@@ -3309,7 +3126,7 @@
         return 0;
       }
       if (ev.type === 'while') {
-        for (k = 0; k < 100000; k++) {                              /* tope para no colgar el juego */
+        for (k = 0; k < 100000; k++) {
           var pw = clonePicks(parentPicks);
           if (!evalConds(ev.whileConds || [], pw, node.es, 'w')) break;
           r = runBody(node, pw);
@@ -3327,7 +3144,7 @@
     function runEvents() {
       var nodes = state.eventTree || [];
       jsDepth.d = 0;
-      if (PROF && !folderNames) {                  /* --profile: tiempo de cada carpeta de eventos */
+      if (PROF && !folderNames) {
         folderNames = {};
         (project.events || []).concat.apply(project.events || [], (project.scenes || []).map(function (s) { return s.events || []; }))
           .forEach(function (e) { if (e.kind === 'folder') folderNames[e.id] = e.name; });
@@ -3337,11 +3154,10 @@
         var r = runNode(nodes[i], {});
         if (PROF) profAdd('    carpeta ' + (folderNames[nodes[i].es.ref.folder] || '(sin carpeta)'), t0);
         if (r === STOP) return;
-        flow = 0;                            /* "salir del bucle" fuera de un bucle solo corta su evento */
+        flow = 0;
       }
     }
 
-    /* ---------------- shaders y efectos ---------------- */
     function applyFilterDraw(drawFn, filter) {
       if (!filter) { drawFn(); return; }
       ctx.save();
@@ -3364,7 +3180,6 @@
       return noiseCanvas;
     }
     var vignetteCache = null;
-    /* --profile (jugador nativo): ms medios por parte del fotograma, cada 120 fotogramas */
     var PROF = N.profile ? {} : null, profN = 0;
     function profT() { return PROF ? N.hrtime() : 0; }
     function profAdd(k, t0) { if (PROF) PROF[k] = (PROF[k] || 0) + N.hrtime() - t0; }
@@ -3394,7 +3209,6 @@
           var gap = Math.max(2, Math.round(6 - amt / 25));
           for (var y = 0; y < VH; y += gap) ctx.fillRect(0, y, VW, 1);
         } else if (type === 'vignette') {
-          /* el degradado se pinta una vez en un lienzo (por intensidad) y luego solo se compone */
           if (!vignetteCache || vignetteCache.amt !== amt) {
             var vc = vignetteCache ? vignetteCache.cv : S2D.surface(VW, VH);
             var vg = vc.ctx, grad = vg.createRadialGradient(VW / 2, VH / 2, VH / 3, VW / 2, VH / 2, VH * 0.85);
@@ -3460,8 +3274,6 @@
       }
     }
 
-    /* ---------------- dibujo ---------------- */
-    /* rectangulo de pantalla con lo que se dibuja en una capa con shader (para procesar solo esa zona) */
     var drawBox = null;
     function trackBox(wx0, wy0, wx1, wy1) {
       if (!drawBox) return;
@@ -3470,9 +3282,6 @@
       if (X0 < drawBox[0]) drawBox[0] = X0; if (Y0 < drawBox[1]) drawBox[1] = Y0;
       if (X1 > drawBox[2]) drawBox[2] = X1; if (Y1 > drawBox[3]) drawBox[3] = Y1;
     }
-    /* mapas de tiles de una capa (tm.layer; sin capa = la principal), solo las casillas que se ven con su parallax */
-    /* Los mapas de tiles se dibujan por trozos (de unos 256 px) ya pintados en una imagen: unos pocos dibujos por capa
-       en vez de uno por tile. Un trozo se rehace si cambia algun tile (tileRev); se guardan los ultimos CHUNK_MAX. */
     var tileRev = 0, chunkList = [], CHUNK_MAX = 240;
     function tileChunk(tm, ts, cx, cy, K) {
       var map = tm._chunks || (tm._chunks = {}), key = cx + ',' + cy, e = map[key], T = ts.tileSize;
@@ -3534,11 +3343,6 @@
       }
     }
 
-
-    /* ---------------- particulas ----------------
-       Cuadrados que salen en abanico (angulo y dispersion en grados), con gravedad, se encogen y se desvanecen.
-       color admite varios separados por comas (cada particula toma uno). glow: se suman a lo de debajo (brillo). */
-    /* las particulas viven en arreglos de numeros (sin un objeto por particula: nada que recoger de la memoria) */
     var PMAX = 8000, PF = 10;
     var pf = new Float32Array(PMAX * PF), pc = new Uint8Array(PMAX * 4), pimg = new Int16Array(PMAX), pn = 0, pimgs = [];
     var particles = { get length() { return pn; } };
@@ -3584,7 +3388,7 @@
         if (x < x0 || x > x1 || y < y0 || y > y1) continue;
         var f = pf[j + 5] / pf[j + 6], sz = Math.max(1, Math.round(pf[j + 7] * (0.4 + 0.6 * f))), al = Math.min(1, f * 1.4);
         var px0 = Math.round(x - sz / 2), py0 = Math.round(y - sz / 2);
-        if (pimg[i] >= 0 && ctx.drawSprite) {                           /* particula con imagen: girando y desvaneciendose */
+        if (pimg[i] >= 0 && ctx.drawSprite) {
           var fr = spriteFrame(pimgs[pimg[i]], 0), psc = sz / Math.max(1, fr.width);
           ctx.globalCompositeOperation = pc[c + 3] ? 'lighter' : 'source-over';
           ctx.drawSprite(fr, x, y, pf[j + 8] * Math.PI / 180, psc, psc, al);
@@ -3600,13 +3404,11 @@
       ctx.restore();
     }
 
-    /* sprite con tinte: cada pixel se multiplica por el color (como el tinte de GDevelop); se guarda en cache */
     var tintCache = {}, tintCount = 0;
     function tintedFrame(cv, key, t) {
       var k = key + '|' + t[0] + ',' + t[1] + ',' + t[2], c = tintCache[k];
       if (c) return c;
       if (++tintCount > 600) { tintCache = {}; tintCount = 1; }
-      /* las imagenes de pixeles se leen directamente; un lienzo de la GPU se lee de vuelta (lento, raro) */
       var src = cv.data || cv.ctx.getImageData(0, 0, cv.width, cv.height).data;
       c = S2D.image(cv.width, cv.height, src);
       var d = c.data;
@@ -3614,7 +3416,6 @@
       c.update();
       return (tintCache[k] = c);
     }
-    /* "r;g;b", "#rrggbb" o "#rgb" -> [r, g, b] (enteros 0-255), o null si no se entiende */
     function parseRGB(v) {
       var s = String(v == null ? '' : v).trim(), m;
       if ((m = /^(-?[\d.]+)\s*[;,]\s*(-?[\d.]+)\s*[;,]\s*(-?[\d.]+)$/.exec(s))) return [m[1], m[2], m[3]].map(function (x) { return clamp(Math.round(+x), 0, 255); });
@@ -3622,10 +3423,7 @@
       if ((m = /^#?([0-9a-f]{3})$/i.exec(s))) return [0, 1, 2].map(function (o) { return parseInt(m[1].charAt(o) + m[1].charAt(o), 16); });
       return null;
     }
-    /* contorno (como el efecto Outline de GDevelop): obj.outline o el de la instancia (accion "Poner contorno"),
-       en pixeles de pantalla, dibujado en 8 direcciones */
     var OL_DX = [-1, 0, 1, -1, 1, -1, 0, 1], OL_DY = [-1, -1, -1, 0, 0, 1, 1, 1];
-    /* texto enriquecido: [color=#f55]rojo[/color], [wave]ondula[/wave], [shake]tiembla[/shake] */
     var richRe = /\[(\/?)(color|wave|shake)(=[^\]]*)?\]/;
     function richSegments(line) {
       var out = [], col = [], wave = 0, shake = 0, re = /\[(\/?)(color|wave|shake)(?:=([^\]]*))?\]/g, last = 0, m;
@@ -3648,7 +3446,7 @@
         var sg = segs[i];
         ctx.fillStyle = sg.c || baseCol;
         if (!sg.w && !sg.s) { ctx.fillText(sg.t, x, ly); x += sg.wd; continue; }
-        for (j = 0; j < sg.t.length; j++) {                       /* letra a letra */
+        for (j = 0; j < sg.t.length; j++) {
           var ch = sg.t.charAt(j), cw = ctx.measureText(ch).width, dy = 0, dx = 0;
           if (sg.w) dy = Math.sin(t * 6 + (x + cw / 2) / 9) * 3;
           if (sg.s) { dx = Math.sin(t * 53 + j * 7.1) * 1.2; dy += Math.cos(t * 47 + j * 5.3) * 1.2; }
@@ -3664,10 +3462,8 @@
       var rgb = parseRGB(o.color || '#000000') || [0, 0, 0];
       return { width: n(o.width, 0), color: 'rgb(' + rgb.join(',') + ')', rgb: rgb };
     }
-    /* estirar (a < 0) o aplastar (a > 0) un momento: solo se ve, no cambia la caja de colision */
     function startSquash(inst, a, dur) { inst.sqA = clamp(a, -0.9, 0.9); inst.sqD = inst.sqT = Math.max(0.02, dur || 0.15); }
     function squashK(inst) { return inst.sqT > 0 ? inst.sqA * Math.sin(Math.PI * inst.sqT / inst.sqD) : 0; }
-    /* silueta blanca del fotograma (destello al recibir un golpe), en cache */
     var whiteCache = {};
     function whiteFrame(cv, key) {
       var c = whiteCache[key];
@@ -3681,9 +3477,8 @@
     }
     function drawInstance(inst) {
       var obj = objDef(inst);
-      if (obj.type === 'light') return;                              /* las luces solo se ven en la oscuridad */
+      if (obj.type === 'light') return;
       if (!inst.visible || inst.opacity <= 0 || inst.flashHide) return;
-      /* lo mas comun (un sprite sin filtro, tinte, contorno ni imagen propia): una sola llamada de dibujo */
       if ((!obj.type || obj.type === 'sprite') && !inst.img && !inst.tint && !inst.effectFilter && !obj.shader && !inst.outline && !obj.outline && !obj.nine && ctx.drawSprite) {
         var fan = inst.animName ? animFind(obj, inst.animName) : null;
         var fsid = fan ? fan.spriteId : obj.spriteId, ffr = fan ? inst.animFrame | 0 : inst.frame | 0;
@@ -3712,8 +3507,6 @@
         content = resolveStr(content);
         var size = n(obj.text && obj.text.size, 24), tcol = inst.textColor || (obj.text && obj.text.color) || '#ffffff';
         var tpf = pixelFont(obj.text && obj.text.font), lines = String(content).split('\n'), lh = tpf ? size : size * 1.25, ly;
-        /* varias lineas (\n): el bloque queda centrado en vertical en la posicion del objeto; mientras escribe la
-           maquina de escribir cuenta ya las lineas del texto completo, asi las primeras no se mueven */
         var nlines = inst.typeFull != null ? Math.max(lines.length, String(inst.typeFull).split('\n').length) : lines.length;
         for (var li = 0; li < lines.length; li++) {
           ly = (li - (nlines - 1) / 2) * lh;
@@ -3721,7 +3514,6 @@
             if (ly) ctx.translate(0, ly);
             var tol = outlineOf(inst, obj), talign = (obj.text && obj.text.align) || 'left';
             if (tol) {
-              /* con contorno: el texto ya dibujado (9 pasadas) se guarda en una imagen y se reutiliza */
               var tm = ctx.m || [1, 0, 0, 1, 0, 0], tpx = Math.max(0.0001, Math.sqrt(tm[0] * tm[0] + tm[1] * tm[1])), tdd = Math.round(tol.width / tpx * 4) / 4;
               var tim = outlinedText(tpf, lines[li], size, tcol, tol.color, tdd);
               var tx0 = talign === 'center' ? -tim.w / 2 : talign === 'right' ? -tim.w : 0;
@@ -3767,7 +3559,7 @@
         var anim = inst.animName ? animFind(obj, inst.animName) : null;
         var ckey = inst.img ? 'img' + inst.img._uid : anim ? anim.spriteId + '#' + (inst.animFrame | 0) : obj.spriteId + '#' + (inst.frame | 0);
         var cv = inst.img || (anim ? spriteFrame(anim.spriteId, inst.animFrame | 0) : spriteFrame(obj.spriteId, inst.frame | 0));
-        if (inst.img && obj.spriteId && sprites[obj.spriteId]) {        /* imagen propia: ocupa el tamano del sprite del objeto */
+        if (inst.img && obj.spriteId && sprites[obj.spriteId]) {
           var bsp = sprites[obj.spriteId];
           ctx.scale(bsp.width / Math.max(1, cv.width), bsp.height / Math.max(1, cv.height));
         }
@@ -3781,7 +3573,6 @@
         }
         var nine = obj.nine;
         if (nine && (n(nine.l, 0) || n(nine.r, 0) || n(nine.t, 0) || n(nine.b, 0))) {
-          /* nine-slice: las esquinas no se estiran; los bordes solo a lo largo y el centro en los dos sentidos */
           var nsx = inst.scaleX || 1, nsy = inst.scaleY || 1;
           ctx.scale(1 / nsx, 1 / nsy);
           drawNine(cv, cv.width * Math.abs(nsx), cv.height * Math.abs(nsy), nine);
@@ -3802,11 +3593,7 @@
       }
     }
 
-    /* ---------------- luces 2D ----------------
-       La escena se oscurece (Escena > Luz: oscuridad y color, o la accion "Oscuridad de la escena"); cada objeto con
-       el comportamiento Luz abre un circulo con borde suave en esa oscuridad y suma un brillo de su color. */
     var lightSurf = null, lightImg = null;
-    /* circulo blanco con borde suave (alfa 1 en el centro y 0 en el borde) para abrir la oscuridad */
     function lightTex() {
       if (lightImg) return lightImg;
       var N2 = 128, img = S2D.image(N2, N2), d = img.data;
@@ -3819,14 +3606,11 @@
       img.update();
       return (lightImg = img);
     }
-    /* oscuridad de una capa (la de la accion o la de la capa en el editor); null si no tiene */
     function layerDarkness(lid) {
       var o = state.layerDark && state.layerDark[lid], L = layers[lid];
       if (o) return o.v > 0 ? o : null;
       return L && n(L.darkness, 0) > 0 ? { v: n(L.darkness, 0), c: L.darkColor } : null;
     }
-    /* la oscuridad tapa lo dibujado hasta ahora (la capa y las de debajo); las luces le abren agujeros. Sin argumentos:
-       la oscuridad de la escena (proyectos de antes y la accion "Oscuridad de la escena") */
     function drawLighting(shX, shY, darkV, darkC) {
       var sc = scenes[state.sceneId], lt = (sc && sc.light) || {};
       var dark = darkV != null ? darkV : state.darkness != null ? state.darkness : n(lt.darkness, 0);
@@ -3858,7 +3642,6 @@
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = 1;
       ctx.drawImage(lightSurf, 0, 0, VW, VH);
-      /* brillo de color de cada luz, sumado */
       ctx.setTransform(z, 0, 0, z, -cam.x * z + shX, -cam.y * z + shY);
       ctx.globalCompositeOperation = 'lighter';
       for (var k = 0; k < glows.length; k += 5) {
@@ -3872,8 +3655,6 @@
       ctx = main;
     }
 
-    /* ---------------- capas con shader (GLSL) ----------------
-       Una capa con shader se dibuja en su propio lienzo de la GPU, pasa por el shader (N.gpuShader) y se compone. */
     var layerFx = {};
     function layerShaderCode(lid) {
       var L = layers[lid]; if (!L || !L.shaderId) return '';
@@ -3886,7 +3667,6 @@
       var c2 = S2D.surface(VW, VH);
       return (layerFx[lid] = { c2: c2, x2: c2.ctx });
     }
-    /* Sprites fuera de la vista (con el parallax de su capa) no se dibujan. Texto y botones siempre. */
     function offView(inst, obj, par) {
       if (obj.type && obj.type !== 'sprite') return false;
       var sp = sprites[obj.spriteId];
@@ -3897,8 +3677,6 @@
       if (cam.rot) { var rad = Math.sqrt(vw * vw + vh * vh) / 2; vw = vh = rad * 2; }
       return Math.abs(inst.x - cx) > vw / 2 + r || Math.abs(inst.y - cy) > vh / 2 + r;
     }
-    /* objetos de cada capa (sin los del HUD), ya en orden de z: se reparten una vez por fotograma; solo se ordena
-       una capa si sus z no estan ya en orden (lo normal es que si) */
     function layerBuckets() {
       var out = {}, list = state.instances;
       for (var i = 0; i < list.length; i++) {
@@ -3912,7 +3690,7 @@
       }
       for (var k in out) if (!out[k].sorted) {
         var L = out[k].list;
-        for (var j = 0; j < L.length; j++) L[j]._ord = j;            /* desempate estable: orden de creacion */
+        for (var j = 0; j < L.length; j++) L[j]._ord = j;
         L.sort(function (a, b) { return (n(a.z) - n(b.z)) || (a._ord - b._ord); });
       }
       return out;
@@ -3922,7 +3700,7 @@
       if (!bk) return;
       var drawList = bk.list, sel = state.selection, anySel = false;
       for (var sk in sel) { anySel = true; break; }
-      if (!anySel && !drawBox) {                                    /* lo normal en un juego: dibujar lo que se ve */
+      if (!anySel && !drawBox) {
         for (var fi = 0; fi < drawList.length; fi++) if (!offView(drawList[fi], drawList[fi]._od || objDef(drawList[fi]), par)) drawInstance(drawList[fi]);
         return;
       }
@@ -3950,8 +3728,6 @@
       ctx = fx.x2;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, VW, VH);
-      /* shaderContentOnly: el shader solo se aplica en el rectangulo donde la capa tiene algo (mucho mas rapido;
-         no sirve para shaders que pintan por toda la pantalla, como la lluvia) */
       var only = !!layers[lid].shaderContentOnly;
       drawBox = only ? [1e9, 1e9, -1e9, -1e9] : null;
       ctx.save();
@@ -3964,14 +3740,14 @@
       var box = drawBox;
       drawBox = null;
       if (box) {
-        if (box[2] <= box[0]) return;                               /* la capa no tiene nada a la vista */
-        var mg = 12;                                                /* margen para lo que mueva el shader */
+        if (box[2] <= box[0]) return;
+        var mg = 12;
         box = [Math.max(0, Math.floor(box[0]) - mg), Math.max(0, Math.floor(box[1]) - mg), Math.min(VW, Math.ceil(box[2]) + mg), Math.min(VH, Math.ceil(box[3]) + mg)];
         if (box[2] <= box[0] || box[3] <= box[1]) return;
       }
       var src = fx.c2, t = state.time || 0;
       var ts0 = profT();
-      try { N.gpuShader(fx.c2._gpu, code, t, cam.x * par, cam.y * par, cam.zoom); }   /* si falla, la capa queda sin shader */
+      try { N.gpuShader(fx.c2._gpu, code, t, cam.x * par, cam.y * par, cam.zoom); }
       catch (e) { console.warn('Source 2D [capa shader]: ' + e.message); }
       profAdd('shader de ' + lid + ' (GPU)', ts0);
       ctx.save();
@@ -3981,8 +3757,6 @@
       ctx.restore();
     }
 
-    /* transformacion de la camara para una capa con ese parallax; con rotacion (camera.rot, en grados) gira
-       alrededor del centro de la pantalla */
     function camTransform(par, shX, shY) {
       var cam = state.camera, z = cam.zoom, tx = -cam.x * par * z + shX, ty = -cam.y * par * z + shY, r = n(cam.rot, 0) * Math.PI / 180;
       if (!r) { ctx.setTransform(z, 0, 0, z, tx, ty); return; }
@@ -3999,7 +3773,6 @@
       var cam = state.camera;
       var shX = 0, shY = 0;
       if (cam.shakeT > 0) {
-        /* trauma: fuerza al cuadrado del tiempo que queda y movimiento con ondas mezcladas (suave, no a saltos) */
         var tr = clamp(cam.shakeT / (cam.shakeDur || cam.shakeT), 0, 1), tm = state.time * 37;
         shX = cam.shakeMag * tr * tr * (Math.sin(tm) * 0.6 + Math.sin(tm * 2.3 + 1.7) * 0.4);
         shY = cam.shakeMag * tr * tr * (Math.sin(tm * 1.3 + 0.5) * 0.6 + Math.sin(tm * 2.9 + 3.1) * 0.4);
@@ -4020,7 +3793,7 @@
         if (layers[lid].hidden) continue;
         var lcode = layerShaderCode(lid);
           var tl0 = profT();
-        if (lcode && !layerHasContent(lid, drawList)) {                /* capa vacia: sin pase de shader */
+        if (lcode && !layerHasContent(lid, drawList)) {
           profAdd('capa ' + lid, tl0);
           var lde = layerDarkness(lid);
           if (lde) drawLighting(shX, shY, lde.v, lde.c);
@@ -4037,7 +3810,7 @@
         drawTilemaps(lid, par);
         drawLayerInstances(lid, drawList);
         profAdd('capa ' + lid, tl0);
-        if (lid === 'base') { tl0 = profT(); drawParticles(); profAdd('particulas', tl0); }   /* encima de los objetos de la capa principal */
+        if (lid === 'base') { tl0 = profT(); drawParticles(); profAdd('particulas', tl0); }
         ctx.restore();
         var ldk = layerDarkness(lid);
         if (ldk) drawLighting(shX, shY, ldk.v, ldk.c);
@@ -4081,16 +3854,13 @@
       }
     }
 
-    /* ---------------- bucle ---------------- */
     var last = 0;
     function step(dt) {
       dt = dt * state.timeScale;
       state.dt = dt;
       state.frame++;
       state.time += dt;
-      /* pausa de impacto: el juego se congela un momento (golpes con peso) */
       if (state.hitstop > 0) { state.hitstop -= dt / (state.timeScale || 1); state.frame--; state.time -= dt; return; }
-      /* mensajes: los enviados en el fotograma anterior se pueden recibir en este */
       state.msg = state.msgNext; state.msgNext = {};
       var paused = !!state.paused;
       if (!paused) Object.keys(state.timers).forEach(function (k) { if (!state.timers[k].paused) state.timers[k].t += dt; });
@@ -4101,7 +3871,7 @@
         if (tr.t >= tr.dur) {
           if (tr.phase === 'out') {
             loadScene(tr.nextId, true);
-            state.frame = 1;     /* este paso ya cuenta como el primero: "al inicio de la escena" una sola vez */
+            state.frame = 1;
             state.transition = { type: tr.type, phase: 'in', t: 0, dur: tr.dur, nextId: tr.nextId };
           } else {
             state.transition = null;
@@ -4144,7 +3914,6 @@
       if (!state.sceneChanged) runEvents();
       profAdd('  eventos', tq);
       if (state.sceneChanged) { state.sceneChanged = false; return; }
-      /* en pausa: los eventos siguen (para el menu de pausa) y los tweens de los objetos que "siguen en pausa" */
       if (state.paused) { updateTweens(dt, true); updateCamera(dt); return; }
       updateTweens(dt);
       tq = profT();
@@ -4156,15 +3925,11 @@
       updateParticles(dt);
       profAdd('  particulas (mover)', tq);
     }
-    /* ---------------- depurador (vista previa del editor: --debug) ----------------
-       F3 muestra fps, tiempos, objetos, variables y lo que hay bajo el raton (y las cajas de colision); F6 pausa y
-       F7 avanza un fotograma. */
     var dbg = { on: false, pause: false, stepOne: false, fps: 0, tStep: 0, tDraw: 0, lastT: 0, frames: 0, acc: 0 };
     function hrNow() { try { return N.hrtime ? N.hrtime() : Date.now(); } catch (e) { return Date.now(); } }
     function drawDebug() {
       var cam = state.camera, z = cam.zoom || 1, i, L = state.instances;
       ctx.save();
-      /* cajas de colision */
       ctx.setTransform(z, 0, 0, z, -cam.x * z, -cam.y * z);
       ctx.lineWidth = 1 / z;
       var hover = null;
@@ -4208,7 +3973,7 @@
       if (N.debug) {
         dbg.frames++;
         if (t - dbg.lastT >= 500) { dbg.fps = Math.round(dbg.frames * 1000 / Math.max(1, t - dbg.lastT)); dbg.frames = 0; dbg.lastT = t; }
-        if (dbg.pause && !dbg.stepOne) {                            /* en pausa: solo se redibuja (con el panel) */
+        if (dbg.pause && !dbg.stepOne) {
           last = t; draw(); if (dbg.on) drawDebug(); clearFrameInput(); return;
         }
         dbg.stepOne = false;
@@ -4216,8 +3981,6 @@
       var dt = last ? Math.min(0.05, (t - last) / 1000) : 0.016;
       last = t;
       var tp0 = profT();
-      /* paso fijo (Ajustes): la logica avanza siempre de 1/60 s (igual en cualquier monitor o equipo) y el dibujo
-         se interpola entre los dos ultimos pasos, asi a 144 Hz se ve suave y a 30 fps el juego no cambia */
       if (project.settings && project.settings.fixedStep) {
         fixedAcc = Math.min(fixedAcc + dt, 0.25);
         var steps = 0;
@@ -4241,7 +4004,6 @@
       if (N.debug && dbg.on) drawDebug();
       profAdd('dibujo total', tp0);
       profFrame();
-      /* los shaders GLSL de pantalla se aplican, uno tras otro, sobre el fotograma ya dibujado (u_amount = intensidad) */
       var sl = screenShaderList();
       for (var si = 0; si < sl.length; si++) {
         try { N.shaderAmount(sl[si].amount); N.gpuShader(canvas._gpu, sl[si].code, state.time, 0, 0, 1); } catch (e) { quiet(e); }
@@ -4249,7 +4011,6 @@
       if (sl.length) N.shaderAmount(1);
       if (!(project.settings && project.settings.fixedStep)) clearFrameInput();
     }
-    /* lo que solo dura un paso: teclas recien pulsadas o soltadas, rueda y clics */
     function clearFrameInput() {
       state.pressed = {}; state.released = {}; state.lastKey = ''; state.typed = '';
       state.wheelUp = false; state.wheelDown = false;
@@ -4261,7 +4022,7 @@
       for (i = 0; i < L.length; i++) {
         var o = L[i];
         if (o.prevX === undefined || (o.x === o.prevX && o.y === o.prevY)) continue;
-        if (Math.abs(o.x - o.prevX) > 200 || Math.abs(o.y - o.prevY) > 200) continue;      /* teletransporte: sin mezclar */
+        if (Math.abs(o.x - o.prevX) > 200 || Math.abs(o.y - o.prevY) > 200) continue;
         keep.push(o, o.x, o.y);
         o.x = o.prevX + (o.x - o.prevX) * a; o.y = o.prevY + (o.y - o.prevY) * a;
       }

@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-# Crea una clave de firma de prueba (build/firma nueva pide la contrasena por terminal) y escribe su parte publica.
-# Uso: S2D_FIRMA_DIR=<carpeta> clave_prueba.py <contrasena>   -> imprime la clave publica en hexadecimal
 import os, pty, subprocess, sys, time
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

@@ -1,5 +1,4 @@
 #version 450
-// filtros de color de CSS (matriz, invert, brightness, contrast, opacity) sin premultiplicar
 layout(push_constant) uniform PC { vec2 inv; vec2 res; vec4 m0; vec4 m1; vec4 m2; vec4 k; } pc;
 layout(set = 0, binding = 0) uniform sampler2D u_tex;
 layout(location = 0) in vec2 v_uv;

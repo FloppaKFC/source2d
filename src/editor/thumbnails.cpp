@@ -1,4 +1,3 @@
-// Source 2D - miniaturas de proyectos (ver thumbnails.hpp)
 #include "thumbnails.hpp"
 #include <algorithm>
 #include <cmath>
@@ -16,7 +15,7 @@ namespace {
 struct Canvas {
     std::vector<Px> &px;
     int w, h;
-    float s, ox, oy;   // escala y desplazamiento de mundo a pixel
+    float s, ox, oy;
     void blend(int x, int y, Px c, int alpha) {
         int a = c.a * alpha / 255;
         if (a <= 0) return;
@@ -28,7 +27,6 @@ struct Canvas {
     }
 };
 
-// imagen (sw x sh) centrada en (cx, cy) del mundo, con su tamano base bw x bh, escala, giro y opacidad (0-255)
 void drawImage(Canvas &cv, const std::vector<Px> &src, int sw, int sh, float cx, float cy, float bw, float bh, float sx, float sy, float angDeg, int alpha) {
     if (src.empty() || sw <= 0 || sh <= 0 || sx == 0 || sy == 0) return;
     float a = angDeg * 3.14159265f / 180, cs = std::cos(a), sn = std::sin(a);
@@ -37,8 +35,8 @@ void drawImage(Canvas &cv, const std::vector<Px> &src, int sw, int sh, float cx,
     int y0 = std::max(0, (int)std::floor(cv.oy + (cy - r) * cv.s)), y1 = std::min(cv.h - 1, (int)std::ceil(cv.oy + (cy + r) * cv.s));
     for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) {
         float wx = (x + 0.5f - cv.ox) / cv.s - cx, wy = (y + 0.5f - cv.oy) / cv.s - cy;
-        float lx = wx * cs + wy * sn, ly = -wx * sn + wy * cs;          // al espacio local del objeto
-        float u = lx / (bw * sx) + 0.5f, v = ly / (bh * sy) + 0.5f;      // la escala negativa voltea
+        float lx = wx * cs + wy * sn, ly = -wx * sn + wy * cs;
+        float u = lx / (bw * sx) + 0.5f, v = ly / (bh * sy) + 0.5f;
         if (u < 0 || u >= 1 || v < 0 || v >= 1) continue;
         cv.blend(x, y, src[(int)(v * sh) * sw + (int)(u * sw)], alpha);
     }
@@ -50,7 +48,6 @@ void fillRect(Canvas &cv, float x0w, float y0w, float x1w, float y1w, Px c, int 
     for (int y = y0; y < y1; y++) for (int x = x0; x < x1; x++) cv.blend(x, y, c, alpha);
 }
 
-// la fuente del jugador, para que los textos se vean como en el juego
 Font &thumbFont() {
     static Font f{};
     static bool loaded = false;
@@ -63,7 +60,6 @@ Font &thumbFont() {
     return f;
 }
 
-// "{g:score}" y similares se ven como en el primer fotograma: con el valor inicial de la variable o 0
 std::string resolveText(const json &doc, std::string s) {
     size_t i;
     while ((i = s.find('{')) != std::string::npos) {
@@ -78,7 +74,6 @@ std::string resolveText(const json &doc, std::string s) {
     return s;
 }
 
-// texto con una fuente del proyecto: se rasteriza y se copia escalado (vecino mas cercano)
 void drawFontText(Canvas &cv, const json &doc, const std::string &font, const std::string &txt, float x, float y, float size, Px c, int alpha, bool bold, const char *align) {
     TextImage img;
     if (!renderTextImage(doc, font, txt, size, c, bold, img)) return;
@@ -118,7 +113,7 @@ const json *byId(const json &doc, const char *list, const std::string &id) {
     return nullptr;
 }
 
-}  // namespace
+}
 
 void renderProjectThumb(const json &doc, int w, int h, std::vector<Px> &out, int sceneIdx) {
     out.assign(w * h, Px{0x1D, 0x1D, 0x26, 255});
@@ -127,7 +122,6 @@ void renderProjectThumb(const json &doc, int w, int h, std::vector<Px> &out, int
     float s = std::min(w / VW, h / VH);
     if (!doc.contains("scenes") || !doc["scenes"].is_array() || doc["scenes"].empty()) return;
     const json &sc = doc["scenes"][sceneIdx >= 0 && sceneIdx < (int)doc["scenes"].size() ? sceneIdx : 0];
-    // el mundo se ve con el zoom inicial de la camara; los objetos HUD van en pixeles de pantalla
     float cz = sc.contains("camera") && sc["camera"].is_object() ? (float)jnum(sc["camera"], "zoom", 1) : 1;
     if (!(cz > 0)) cz = 1;
     Canvas hud{out, w, h, s, (w - VW * s) / 2, (h - VH * s) / 2};
@@ -135,9 +129,7 @@ void renderProjectThumb(const json &doc, int w, int h, std::vector<Px> &out, int
     fillRect(hud, 0, 0, VW, VH, parseColor(jstr(sc, "background", "#202329")), 255);
     VW /= cz; VH /= cz;
 
-    // mapas de tiles
     std::map<std::string, std::vector<Px>> cache;
-    // los de antes (escena) y los de los objetos Tile (cada instancia, con su esquina en x, y)
     std::vector<json> maps;
     if (sc.contains("tilemaps") && sc["tilemaps"].is_array()) for (auto &tm : sc["tilemaps"]) maps.push_back(tm);
     if (sc.contains("instances") && sc["instances"].is_array())
@@ -168,7 +160,6 @@ void renderProjectThumb(const json &doc, int w, int h, std::vector<Px> &out, int
             }
         }
 
-    // instancias en el orden del juego: capa (z), z de la instancia y orden
     if (!sc.contains("instances") || !sc["instances"].is_array()) return;
     const json &insts = sc["instances"];
     auto layerOf = [&](const json &obj) -> const json * { return byId(doc, "layers", jstr(obj, "capa", "base")); };
@@ -223,9 +214,9 @@ int g_budget = 1;
 
 void upload(Thumb &t, const std::vector<Px> &px) {
     t.tex.update(px, kThumbW, kThumbH);
-    SetTextureFilter(t.tex.tex, TEXTURE_FILTER_BILINEAR);   // se muestra algo mas pequena que el original
+    SetTextureFilter(t.tex.tex, TEXTURE_FILTER_BILINEAR);
 }
-}  // namespace
+}
 
 void thumbsNewFrame() { g_budget = 1; }
 

@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# Source 2D - menu de Source Store de sprites (Source-Sprite.sh) o de sonidos (Source-Sound.sh, que usa este mismo menu):
-# revisar los paquetes que mandaron los creadores, sacarlos a una carpeta para mirarlos, aprobarlos o rechazarlos,
-# publicar los tuyos, retirar uno, destacados y denuncias. Cada opcion explica lo que hace.
-# Usa tools/source_store.py: firma el catalogo con tu clave (pide la contrasena), lo sube con git y usa gh para los envios.
-#   Controladores/Source-Sprite.sh               (desde cualquier carpeta)
-#   S2D_SIN_SUBIR=1 Controladores/Source-Sprite.sh firma pero no sube (para probar)
 set -u
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TIPO="${S2D_STORE_TIPO:-sprites}"
@@ -21,7 +15,7 @@ EXTRA=()
 
 if [ -t 1 ]; then B=$'\e[1m'; D=$'\e[2m'; V=$'\e[38;5;141m'; R=$'\e[31m'; N=$'\e[0m'; else B= D= V= R= N=; fi
 titulo() { printf '\n%s== %s ==%s\n' "$V$B" "$1" "$N"; }
-pedir() {   # pedir "Pregunta" variable [por defecto]
+pedir() {
     local p="$1" def="${3:-}" r
     if [ -n "$def" ]; then read -e -r -p "$p [$def]: " r; r="${r:-$def}"; else read -e -r -p "$p: " r; fi
     printf -v "$2" '%s' "$r"

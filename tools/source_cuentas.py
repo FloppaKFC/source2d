@@ -1,23 +1,11 @@
 #!/usr/bin/env python3
-# Source 2D - cuentas de Source Play: quien esta registrado y quien tiene insignia (verificada o admin).
-# Las cuentas registradas son las que pusieron estrella a FloppaKFC/source2d-juegos (el editor la pone al entrar con
-# GitHub); la fecha de la estrella es cuando se unieron. Las insignias van en cuentas.json, firmado con tu clave en la
-# copia local del repositorio de juegos (../source2d-juegos o S2D_JUEGOS_DIR), y el editor las muestra junto al nombre.
-#   source_cuentas.py lista [texto]        cuentas registradas (las mas nuevas primero), con su insignia
-#   source_cuentas.py verificar LOGIN      insignia de cuenta verificada
-#   source_cuentas.py admin LOGIN          insignia de admin
-#   source_cuentas.py creador LOGIN        insignia de creador de Source 2D (la tuya)
-#   source_cuentas.py quitar LOGIN         sin insignia
-#   source_cuentas.py insignias            solo las cuentas con insignia
-# --sin-subir: firma pero no sube.
 import argparse, json, os, re, subprocess, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from anunciar import AUTOR, guardar_y_firmar  # noqa: E402
-from source_play import gh, repo  # noqa: E402
+from anunciar import AUTOR, guardar_y_firmar
+from source_play import gh, repo
 
 JUEGOS = "FloppaKFC/source2d-juegos"
-
 
 def cargar(d):
     p = os.path.join(d, "cuentas.json")
@@ -29,7 +17,6 @@ def cargar(d):
     j["autor"] = AUTOR
     return j
 
-
 def insignia(c, login):
     l = login.lower()
     if l in (x.lower() for x in c["creadores"]):
@@ -40,17 +27,14 @@ def insignia(c, login):
         return "verificada"
     return ""
 
-
 def registrados():
     out = subprocess.run([gh(), "api", "-H", "Accept: application/vnd.github.star+json", "--paginate",
                           f"repos/{JUEGOS}/stargazers?per_page=100"], capture_output=True, text=True)
     if out.returncode != 0:
         sys.exit(out.stderr.strip() or "No se pudo leer la lista de cuentas")
-    # --paginate junta varias listas JSON seguidas: "][" entre paginas
     txt = re.sub(r"\]\s*\[", ",", out.stdout.strip()) or "[]"
     r = [(x["user"]["login"], x.get("starred_at", "")[:10]) for x in json.loads(txt)]
     return sorted(r, key=lambda x: x[1], reverse=True)
-
 
 def subir(d, mensaje, sin_subir):
     if sin_subir:
@@ -63,7 +47,6 @@ def subir(d, mensaje, sin_subir):
     subprocess.run(["git", "-C", d, "commit", "-q", "-m", mensaje], check=True)
     subprocess.run(["git", "-C", d, "push", "-q"], check=True)
     print("Subido. Los editores verán la insignia al abrirse (o en menos de una hora).")
-
 
 def main():
     ap = argparse.ArgumentParser(description="Cuentas de Source Play")
@@ -109,7 +92,6 @@ def main():
            "quitar": "ya no tiene insignia"}[a.orden]
     subir(d, f"Cuentas: {login} {que}", a.sin_subir)
     print(f"{login} {que}.")
-
 
 if __name__ == "__main__":
     main()

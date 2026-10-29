@@ -59,7 +59,7 @@ void TilesetEditor::setGrid(Project &proj, int T, int cols, int rows) {
     writeBack(proj);
     int oldT = (int)jnum(*ts, "tileSize", 16);
     json &tiles = (*ts)["tiles"];
-    for (auto &t : tiles) {   // cambiar el tamano conserva la esquina superior izquierda
+    for (auto &t : tiles) {
         if (oldT == T) break;
         json np = json::array();
         for (int y = 0; y < T; y++) for (int x = 0; x < T; x++) {
@@ -134,7 +134,6 @@ void TilesetEditor::draw(Project &proj) {
         if (ImGui::Checkbox("Peligro (pinchos)", &danger)) { t["danger"] = danger; proj.dirty = true; }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("En los eventos se pregunta con la condición \"toca un tile peligroso\"");
         if (jbool(t, "solid", false) || jbool(t, "oneway", false) || jbool(t, "ladder", false) || jbool(t, "danger", false)) {
-            // forma: medio tile para escalones, puntos para rampas (el personaje sube solo por ellos)
             ImGui::SeparatorText("Colisión del tile");
             if (!t.contains("collision")) t["collision"] = nullptr;
             float mw = std::min(220.0f, ImGui::GetContentRegionAvail().x - 60);

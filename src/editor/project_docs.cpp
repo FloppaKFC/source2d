@@ -21,15 +21,12 @@ static json &arr(Project &proj, const char *key) {
     return proj.doc[key];
 }
 
-/* ---------------- extensiones (QuickJS) ---------------- */
 static JSRuntime *g_rt = nullptr;
 static JSContext *g_ctx = nullptr;
 
-// el contexto no tiene acceso a archivos, pero un bucle sin fin colgaria el editor: se corta a los 2 s
 static double g_evalUntil = 0;
 static int stopSlowEval(JSContext *, void *) { return GetTime() > g_evalUntil; }
 
-// ejecuta el codigo de una extension y devuelve sus definiciones (sin funciones) como JSON
 static bool evalExtension(const std::string &code, json &out, std::string &err) {
     if (!g_rt) {
         g_rt = JS_NewRuntime(); g_ctx = JS_NewContext(g_rt); JS_SetMaxStackSize(g_rt, 1 << 20);
@@ -111,7 +108,6 @@ std::string addExtension(Project &proj, bool plugin, bool estilo) {
     return id;
 }
 
-// extension oficial Steam (presets/steam.js): una sola por proyecto, con id fijo
 std::string addSteamExtension(Project &proj) {
     json &l = arr(proj, "extensions");
     std::string id = "ext_steam";
@@ -129,7 +125,6 @@ std::string addRainShader(Project &proj) {
     return "sh_rain";
 }
 
-/* ---------------- ajustes del proyecto ---------------- */
 void SettingsEditor::draw(Project &proj) {
     if (focusMe) { ImGui::SetNextWindowFocus(); focusMe = false; }
     ImGui::SetNextWindowSize(ImVec2(800, 620), ImGuiCond_FirstUseEver);
@@ -222,7 +217,6 @@ void SettingsEditor::draw(Project &proj) {
     school::anchor("settings.globals");
     if (addG) gl.push_back({{"name", "var" + std::to_string(gl.size() + 1)}, {"type", "normal"}, {"value", 0}});
 
-    // idiomas: tabla clave -> texto por idioma. En textos {t:clave}; en expresiones T("clave")
     ImGui::SeparatorText("Idiomas");
     ImGui::TextDisabled("En los textos: {t:clave}. Acción \"Cambiar el idioma del juego\".");
     if (!proj.doc.contains("i18n") || !proj.doc["i18n"].is_object()) proj.doc["i18n"] = {{"langs", json::array({"es"})}, {"strings", json::object()}};
@@ -261,8 +255,6 @@ void SettingsEditor::draw(Project &proj) {
     if (proj.doc["settings"] != before || arr(proj, "globals") != globalsBefore || proj.name() != nameBefore) proj.dirty = true;
 }
 
-/* ---------------- shaders ---------------- */
-/* vista previa del shader: la miniatura de la primera escena pasada por el shader, en vivo (u_time corre) */
 static void shaderPreview(Project &proj, const std::string &code, bool ok, float w) {
     static RenderTexture2D rt{};
     static Shader sh{};
@@ -330,7 +322,6 @@ void ShadersEditor::draw(Project &proj) {
         row("Nombre", 90); editText("##n", *s, "name");
         ImGui::TextDisabled("GLSL ES 1.0: v_uv (coordenada), u_tex (imagen de la capa) y u_time (segundos).");
         ImGui::TextDisabled("Se aplica a una capa (Escena > Capas), al objeto (Efecto) o a toda la escena (Efectos de la escena).");
-        // codigo a la izquierda y vista previa en vivo de la escena con el shader a la derecha
         float pw = std::min(384.0f, ImGui::GetContentRegionAvail().x * 0.42f), codeW = ImGui::GetContentRegionAvail().x - pw - 12;
         std::vector<CodeError> errs;
         ImGui::BeginGroup();
@@ -344,7 +335,6 @@ void ShadersEditor::draw(Project &proj) {
         if (ui::deleteButton("Eliminar shader", "el shader \"" + jstr(*s, "name", "sin nombre") + "\"")) {
             std::string id = cur;
             for (size_t i = 0; i < l.size(); i++) if (jstr(l[i], "id") == id) { l.erase(l.begin() + i); break; }
-            // quien lo usaba (escenas, capas, objetos) queda sin shader, en vez de apuntar a uno que ya no existe
             auto unlink = [&](json &arr) { if (arr.is_array()) for (auto &x : arr) if (x.is_object() && jstr(x, "shaderId") == id) x.erase("shaderId"); };
             unlink(proj.doc["scenes"]); unlink(proj.doc["layers"]); unlink(proj.doc["objects"]);
             cur.clear();
@@ -355,7 +345,6 @@ void ShadersEditor::draw(Project &proj) {
     if (l != before) proj.dirty = true;
 }
 
-/* ---------------- extensiones y plugins ---------------- */
 void ExtensionsEditor::draw(Project &proj) {
     if (focusMe) { ImGui::SetNextWindowFocus(); focusMe = false; }
     ImGui::SetNextWindowSize(ImVec2(950, 640), ImGuiCond_FirstUseEver);
@@ -401,7 +390,6 @@ void ExtensionsEditor::draw(Project &proj) {
     if (ex != b1 || pl != b2) proj.dirty = true;
 }
 
-/* ---------------- musica ---------------- */
 static const char *B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 std::string base64Encode(const unsigned char *d, size_t n) {
     std::string out;
@@ -440,7 +428,6 @@ std::string importMusic(Project &proj, const std::string &file, std::string &err
     return id;
 }
 
-/* archivos iniciales: los de texto (json, txt, csv) se guardan tal cual; el resto en base64 */
 bool addInitialFile(Project &proj, const std::string &file, std::string &err) {
     std::ifstream in(file, std::ios::binary);
     if (!in) { err = "No se pudo leer " + file; return false; }
@@ -448,7 +435,7 @@ bool addInitialFile(Project &proj, const std::string &file, std::string &err) {
     std::string name = fs::path(file).filename().string(), ext = fs::path(file).extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
     json &fl = arr(proj, "files");
-    for (size_t i = 0; i < fl.size(); i++) if (jstr(fl[i], "name") == name) { fl.erase(fl.begin() + i); break; }   // reemplaza al del mismo nombre
+    for (size_t i = 0; i < fl.size(); i++) if (jstr(fl[i], "name") == name) { fl.erase(fl.begin() + i); break; }
     json f = {{"id", makeUid("fi")}, {"name", name}};
     if (ext == ".json" || ext == ".txt" || ext == ".csv" || ext == ".md" || ext == ".xml") f["text"] = data;
     else {
@@ -491,7 +478,6 @@ void musicShutdown() {
     if (IsAudioDeviceReady()) CloseAudioDevice();
 }
 
-/* ---------------- importar imagenes ---------------- */
 bool ImportImage::load(const std::string &file) {
     Image img = LoadImage(file.c_str());
     if (!img.data) { error = "No se pudo abrir la imagen (PNG, JPG, GIF, BMP, TGA o QOI)"; return false; }

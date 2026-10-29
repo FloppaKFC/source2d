@@ -1,11 +1,3 @@
-/* Source 2D - compresor LZMA sencillo (LZMA1 en crudo, el que lee src/lzdec.h) para el proyecto de los juegos del
- * exportacion ligera. Busqueda con cadenas de hash, eleccion voraz con un paso de espera (lazy) y las cuatro distancias
- * repetidas de LZMA; sin el analisis de precios del compresor oficial, pero queda bastante por debajo de deflate.
- *
- *   size_t lz_encode(const uint8_t *in, size_t n, uint8_t *out, size_t cap, unsigned props)
- *       props = lc + lp*9 + pb*45; devuelve los bytes escritos o 0 si no cupo en 'cap' (con n + n/2 + 64 siempre cabe)
- *
- * Se puede incluir desde C y desde C++. Comprobado contra lz_decode (el editor descomprime y compara antes de usarlo). */
 #ifndef S2D_LZENC_H
 #define S2D_LZENC_H
 #include <stddef.h>
@@ -60,7 +52,7 @@ static void lze_rtree(LzEnc *e, uint16_t *probs, int bits, unsigned sym) {
     for (int i = 0; i < bits; i++) { unsigned b = sym & 1; sym >>= 1; lze_bit(e, probs + m, b); m = (m << 1) | b; }
 }
 
-static void lze_len(LzEnc *e, uint16_t *p, unsigned len, unsigned ps) {   /* len ya sin el minimo de 2 */
+static void lze_len(LzEnc *e, uint16_t *p, unsigned len, unsigned ps) {
     if (len < 8) { lze_bit(e, p + LZ_LEN_CHOICE, 0); lze_tree(e, p + LZ_LEN_LOW + ps * 8, 3, len); return; }
     lze_bit(e, p + LZ_LEN_CHOICE, 1);
     if (len < 16) { lze_bit(e, p + LZ_LEN_CHOICE2, 0); lze_tree(e, p + LZ_LEN_MID + ps * 8, 3, len - 8); return; }
@@ -70,7 +62,7 @@ static void lze_len(LzEnc *e, uint16_t *p, unsigned len, unsigned ps) {   /* len
 
 #define LZE_MAXLEN 273
 #define LZE_HBITS 20
-#define LZE_NICE 273       /* largo con el que una coincidencia ya no se puede mejorar: se deja de buscar */
+#define LZE_NICE 273
 #define LZE_FAR(small, big) (((big) >> 7) > (small))
 
 static unsigned lze_hash(const uint8_t *p) { return ((p[0] << 16 | p[1] << 8 | p[2]) * 2654435761u) >> (32 - LZE_HBITS); }
@@ -83,7 +75,6 @@ static unsigned lze_same(const uint8_t *a, const uint8_t *b, unsigned max) {
 
 typedef struct { const uint8_t *in; size_t n; int32_t *head, *prev; int depth; } LzFinder;
 
-/* la coincidencia mas larga en 'pos' (y su distancia - 1 en *dist); mete 'pos' en la cadena */
 static unsigned lze_find(LzFinder *f, size_t pos, uint32_t *dist) {
     unsigned best = 0;
     if (pos + 3 > f->n) return 0;
@@ -104,8 +95,6 @@ static size_t lz_encode(const uint8_t *in, size_t n, uint8_t *out, size_t cap, u
     unsigned lc = props % 9, lp = (props / 9) % 5, pb = props / 45;
     if (pb > 4 || lc + lp > 4) return 0;
     uint16_t *P = (uint16_t *)malloc(sizeof(uint16_t) * LZ_PROBS);
-    /* profundidad de busqueda segun el tamano: en proyectos grandes (audio e imagenes en base64, casi sin repeticiones)
-       buscar mucho apenas mejora y lo vuelve muy lento */
     int depth = n > (8u << 20) ? 16 : n > (2u << 20) ? 48 : 256;
     LzFinder f = { in, n, (int32_t *)malloc(sizeof(int32_t) << LZE_HBITS), (int32_t *)malloc(sizeof(int32_t) * (n + 1)), depth };
     if (!P || !f.head || !f.prev) { free(P); free(f.head); free(f.prev); return 0; }
@@ -120,7 +109,6 @@ static size_t lz_encode(const uint8_t *in, size_t n, uint8_t *out, size_t cap, u
     unsigned mlen = lze_find(&f, 0, &mdist);
     while (pos < n) {
         unsigned ps = (unsigned)pos & pbm, max = (unsigned)(n - pos < LZE_MAXLEN ? n - pos : LZE_MAXLEN);
-        /* la mejor de las distancias repetidas */
         unsigned rlen = 0, ridx = 0;
         for (unsigned r = 0; r < 4; r++) {
             if (rep[r] >= pos) continue;
@@ -129,18 +117,16 @@ static size_t lz_encode(const uint8_t *in, size_t n, uint8_t *out, size_t cap, u
         }
         if (mlen == 2 && mdist >= 128) mlen = 0;
         if (mlen < 2) mlen = 0;
-        /* como el modo rapido del compresor oficial: una distancia repetida sale mucho mas barata que una nueva */
         int use_rep = rlen >= 2 && (rlen >= LZE_NICE || rlen + 1 >= mlen || (rlen + 2 >= mlen && mdist >= (1u << 9)) ||
                                     (rlen + 3 >= mlen && mdist >= (1u << 15)));
         unsigned len = use_rep ? rlen : mlen;
-        /* espera un byte si el siguiente da una coincidencia mejor */
         uint32_t ndist = 0;
         unsigned nlen = pos + 1 < n ? lze_find(&f, pos + 1, &ndist) : 0;
         if (len >= 2 && !use_rep && len < LZE_NICE) {
             if (nlen >= 2 && ((nlen >= len && ndist < mdist) || (nlen == len + 1 && !LZE_FAR(mdist, ndist)) || nlen > len + 1 ||
                               (nlen + 1 >= len && len >= 3 && LZE_FAR(ndist, mdist))))
                 len = 0;
-            else {      /* o si en el siguiente byte alguna distancia repetida llega casi tan lejos */
+            else {
                 unsigned lim = len - 1 > 2 ? len - 1 : 2, mx = (unsigned)(n - pos - 1 < LZE_MAXLEN ? n - pos - 1 : LZE_MAXLEN);
                 for (unsigned r = 0; r < 4 && len && pos + 1 < n; r++)
                     if (rep[r] < pos + 1 && lze_same(in + pos - rep[r], in + pos + 1, lim) >= lim && lim <= mx) len = 0;
@@ -148,7 +134,7 @@ static size_t lz_encode(const uint8_t *in, size_t n, uint8_t *out, size_t cap, u
         }
         if (len < 2) {
             uint8_t b = in[pos];
-            if (pos > rep[0] && in[pos - rep[0] - 1] == b && state >= 7 && !(nlen > 2)) {   /* repetir un byte (short rep) */
+            if (pos > rep[0] && in[pos - rep[0] - 1] == b && state >= 7 && !(nlen > 2)) {
                 lze_bit(&e, P + LZ_IS_MATCH + (state << 4) + ps, 1);
                 lze_bit(&e, P + LZ_IS_REP + state, 1);
                 lze_bit(&e, P + LZ_IS_REP_G0 + state, 0);
@@ -211,7 +197,6 @@ static size_t lz_encode(const uint8_t *in, size_t n, uint8_t *out, size_t cap, u
             }
             rep[3] = rep[2]; rep[2] = rep[1]; rep[1] = rep[0]; rep[0] = d;
         }
-        /* meter en las cadenas las posiciones que se saltan (pos + 1 ya esta) */
         size_t end = pos + len;
         for (size_t k = pos + 2; k < end; k++) { uint32_t dd; lze_find(&f, k, &dd); }
         pos = end;

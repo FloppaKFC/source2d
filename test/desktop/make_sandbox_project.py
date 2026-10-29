@@ -4,10 +4,8 @@ debe poder y la carpeta de datos tiene que ser <datos>/tienda/<id>. Imprime "S2D
 Uso: make_sandbox_project.py <salida.json>"""
 import json, sys
 
-
 def C(t, **p):
     return dict(type=t, enabled=True, invert=False, params=p)
-
 
 code = ("var n=__native,P=n.paths();var a=n.fileWrite(P[2]+'/s2d_prueba.txt','x');var b=n.fileWrite(P[1]+'/partida.txt','y');"
         "console.log('S2DTEST '+JSON.stringify({ok:!a&&b&&/tienda.mi-juego$/.test(P[1]),docs:a,datos:b,dir:P[1]}));")

@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-# Source 2D - cuentas de Source Play: ver las cuentas registradas (las que entraron con GitHub desde el editor) y darles
-# o quitarles la insignia de cuenta verificada o de admin. La insignia sale junto a su nombre en el editor (perfil,
-# tarjetas de sus juegos). Usa tools/source_cuentas.py: firma cuentas.json con tu clave (pide la contrasena) y lo sube.
-#   Controladores/Source-Cuentas.sh                 (desde cualquier carpeta)
-#   S2D_SIN_SUBIR=1 Controladores/Source-Cuentas.sh firma pero no sube (para probar)
 set -u
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SC=(python3 "$RAIZ/tools/source_cuentas.py")
@@ -17,7 +12,7 @@ pedir() {
     printf -v "$2" '%s' "$r"
 }
 
-cambiar() {   # cambiar verificar|admin|quitar "texto"
+cambiar() {
     local u; pedir "Usuario de GitHub (vacío = volver)" u
     [ -z "$u" ] && return
     "${SC[@]}" "$1" "$u" "${EXTRA[@]}"

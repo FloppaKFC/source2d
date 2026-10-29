@@ -1,5 +1,4 @@
 #version 450
-// cuadrados y triangulos en pixeles del lienzo (0,0 arriba a la izquierda)
 layout(push_constant) uniform PC { vec2 inv; } pc;
 layout(location = 0) in vec2 a_pos;
 layout(location = 1) in vec2 a_uv;

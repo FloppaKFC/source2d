@@ -1,15 +1,7 @@
-/* Source 2D engine - capa del runtime (src/runtime.js) para el navegador: la exportacion HTML.
-   Da lo mismo que src/gfx.js y __native en el jugador nativo, pero con lo del navegador:
-     S2D.surface / S2D.image   lienzos <canvas> 2D (el contexto 2D del navegador ya es el que espera el runtime)
-     N.gpuShader               shaders GLSL de capas y de pantalla con WebGL
-     N.music* / sfx / tone     audio con <audio> y Web Audio
-     N.file* / dirList / paths un sistema de archivos virtual guardado en localStorage (partidas, niveles del jugador)
-   La pagina (src/editor/exporter.cpp) pone el proyecto en <script type="application/json" id="s2d-proyecto">. */
 (function () {
 'use strict';
 const G = window;
 
-/* ---------- colores (como en gfx.js) ---------- */
 const NAMED = { white: [255, 255, 255, 1], black: [0, 0, 0, 1], red: [255, 0, 0, 1], transparent: [0, 0, 0, 0] };
 const colorCache = new Map();
 function parseColor(s) {
@@ -32,13 +24,11 @@ function parseColor(s) {
   return c;
 }
 
-/* ---------- lienzos ---------- */
-const surfaces = [];                 /* numero (_gpu) -> lienzo, para N.gpuShader */
+const surfaces = [];
 function prepare(cv, w, h) {
   cv.width = Math.max(1, w | 0); cv.height = Math.max(1, h | 0);
   const ctx = cv.getContext('2d', { willReadFrequently: false });
   ctx.imageSmoothingEnabled = false;
-  /* el runtime mira ctx.m (la matriz actual) para grosores de contorno y zonas de shaders */
   Object.defineProperty(ctx, 'm', { get() { const t = this.getTransform(); return [t.a, t.b, t.c, t.d, t.e, t.f]; } });
   cv.ctx = ctx;
   Object.defineProperty(cv, '_w', { get() { return this.width; } });
@@ -54,7 +44,6 @@ function surface(w, h) {
   cv.free = () => { surfaces[cv._gpu] = null; cv.width = cv.height = 1; };
   return cv;
 }
-/* imagen de pixeles RGBA (alfa directo): data se puede cambiar y luego update() */
 function image(w, h, pixels) {
   const cv = prepare(document.createElement('canvas'), w, h);
   const n = cv.width * cv.height * 4;
@@ -65,7 +54,6 @@ function image(w, h, pixels) {
   cv.free = () => {};
   return cv;
 }
-/* PNG, JPG... en base64: el navegador decodifica sin esperar; el lienzo toma su tamano al cargar */
 function decodeImage(b64) {
   const cv = prepare(document.createElement('canvas'), 1, 1);
   const im = new Image();
@@ -75,7 +63,6 @@ function decodeImage(b64) {
   return cv;
 }
 
-/* ---------- shaders GLSL con WebGL (de un lienzo al mismo lienzo) ---------- */
 const VERT = 'attribute vec2 a_pos; varying vec2 v_uv; void main() { v_uv = vec2(a_pos.x * 0.5 + 0.5, 0.5 - a_pos.y * 0.5); gl_Position = vec4(a_pos, 0.0, 1.0); }';
 let gl = null, glCanvas = null, glTex = null, glFailed = false, amount = 1;
 const programs = new Map();
@@ -145,7 +132,6 @@ function gpuShader(id, code, t, cx, cy, zoom) {
   return true;
 }
 
-/* ---------- audio ---------- */
 let actx = null;
 function audio() {
   if (!actx) { try { actx = new (G.AudioContext || G.webkitAudioContext)(); } catch (e) { actx = null; } }
@@ -162,10 +148,9 @@ function playTrack(id, loop) {
   music = new Audio(tracks[id]);
   music.loop = !!loop; music.volume = musicVol;
   const pr = music.play();
-  if (pr && pr.catch) pr.catch(() => { pending = { id, loop }; });    /* sin clic previo el navegador no deja sonar */
+  if (pr && pr.catch) pr.catch(() => { pending = { id, loop }; });
 }
 
-/* sonidos de archivo con canales (Web Audio): se decodifican al cargar; cada reproduccion es una fuente nueva */
 const sounds = {}, chGain = [], chVoices = [[], [], [], [], [], [], [], []];
 function chNode(ch) {
   const a = audio();
@@ -206,13 +191,12 @@ function channel(op, ch, v) {
   for (const c of chs) {
     if (op === 0) chVoices[c].slice().forEach(src => { try { src.stop(); } catch (e) {} });
     else if (op === 3) chNode(c).gain.value = v;
-    else if (op === 1) chNode(c).gain.value = 0;                     /* el navegador no pausa una fuente: se silencia */
+    else if (op === 1) chNode(c).gain.value = 0;
     else if (op === 2) chNode(c).gain.value = chNode(c)._v != null ? chNode(c)._v : 1;
     if (op === 3) chNode(c)._v = v;
   }
 }
 
-/* mandos del navegador: los botones llegan como teclas "pad_a"... (como en el motor nativo) */
 const PADK = ['a', 'b', 'x', 'y', 'lb', 'rb', 'lt', 'rt', 'select', 'start', 'l3', 'r3', 'up', 'down', 'left', 'right'];
 const padPrev = [[], [], [], []];
 function padList() { try { return navigator.getGamepads ? navigator.getGamepads() : []; } catch (e) { return []; } }
@@ -232,7 +216,6 @@ function pollPads() {
   }
 }
 
-/* ---------- archivos: sistema virtual en localStorage ("s2dfs:" + ruta) ---------- */
 const FS = 's2dfs:';
 const norm = p => '/' + String(p).replace(/\\/g, '/').split('/').filter(x => x && x !== '.').join('/');
 function fsGet(p) { try { return localStorage.getItem(FS + norm(p)); } catch (e) { return null; } }
@@ -308,7 +291,6 @@ G.__native = {
   },
 };
 
-/* ---------- S2D: lo que usa el runtime ---------- */
 const S2D = G.S2D = {
   surface, image, decodeImage, parseColor,
   isImage: x => x instanceof HTMLCanvasElement,
@@ -323,7 +305,6 @@ const S2D = G.S2D = {
   isFullscreen: () => !!document.fullscreenElement,
 };
 
-/* ---------- pantalla, entrada y fotogramas ---------- */
 let shown = null;
 function present() {
   const d = S2D.display;
@@ -334,7 +315,6 @@ function present() {
   document.body.appendChild(d);
   fit();
 }
-/* el juego llena la ventana sin deformarse (bandas negras) y con los pixeles nitidos */
 let pixelPerfect = false;
 function fit() {
   const d = shown;
@@ -366,7 +346,6 @@ addEventListener('mouseup', e => send('mouseup', e));
 addEventListener('mousemove', e => { if (e.target === shown) send('mousemove', e); });
 addEventListener('wheel', e => { if (e.target === shown) send('wheel', e, { button: e.deltaY < 0 ? -1 : 1 }); }, { passive: true });
 addEventListener('contextmenu', e => { if (e.target === shown) e.preventDefault(); });
-/* tactil: el primer dedo es el raton (tocar = clic, arrastrar = mover); sin desplazar ni hacer zoom en la pagina */
 addEventListener('touchstart', e => { if (e.target !== shown) return; e.preventDefault(); const t = e.changedTouches[0]; gesture(); send('mousemove', t); send('mousedown', t); }, { passive: false });
 addEventListener('touchmove', e => { if (e.target !== shown) return; e.preventDefault(); send('mousemove', e.changedTouches[0]); }, { passive: false });
 addEventListener('touchend', e => { if (e.target === shown) e.preventDefault(); send('mouseup', e.changedTouches[0]); }, { passive: false });
@@ -379,7 +358,6 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-/* arranque: el proyecto viene en la pagina como JSON (datos, no codigo) */
 G.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('s2d-proyecto');
   let project = null;
@@ -389,7 +367,6 @@ G.addEventListener('DOMContentLoaded', () => {
   const g = S2D.createGame(project);
   g.start();
   if (project.settings && project.settings.autofullscreen) setTimeout(() => g.toggleFullscreen(), 300);
-  /* pruebas: "#s2dtest=N" ejecuta N fotogramas de 1/60 s antes de que termine de cargar (captura sin esperar) */
   const m = /s2dtest=(\d+)/.exec(location.hash);
   if (m) for (let i = 1; i <= +m[1] && !quitted; i++) { S2D.onFrame(i * 1000 / 60); present(); }
   else requestAnimationFrame(frame);

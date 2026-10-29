@@ -1,10 +1,8 @@
-/* Source 2D engine - dibujo con Vulkan (experimental). Mismo contrato que plat_gpu_* de platform.h; lo usa
- * platform_raylib.c cuando se pide Vulkan (--vulkan o "renderer": "vulkan" en los ajustes) y vk_init funciona. */
 #ifndef S2D_GPU_VULKAN_H
 #define S2D_GPU_VULKAN_H
 #include <stddef.h>
 #include <stdint.h>
-int  vk_init(int w, int h, int uncapped, char *info, size_t ninfo);   /* 0 si Vulkan funciona; info: GPU o motivo */
+int  vk_init(int w, int h, int uncapped, char *info, size_t ninfo);
 void vk_shutdown(void);
 int  vk_active(void);
 int  vk_target(int w, int h);

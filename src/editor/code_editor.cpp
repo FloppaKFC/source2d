@@ -14,7 +14,6 @@
 #include "ui.hpp"
 #include "assets.hpp"
 
-/* ---------------- palabras de cada lenguaje ---------------- */
 static const std::set<std::string> &keywords(CodeLang l) {
     static const std::set<std::string> glsl = {"if", "else", "for", "while", "do", "break", "continue", "return", "discard", "uniform", "varying",
         "attribute", "const", "in", "out", "inout", "precision", "highp", "mediump", "lowp", "struct", "true", "false", "void"};
@@ -39,13 +38,11 @@ static const std::set<std::string> &builtins(CodeLang l) {
     return l == CodeLang::GLSL ? glsl : js;
 }
 
-/* ---------------- colores (como un tema oscuro de VS Code) ---------------- */
 static const ImU32 C_TXT = IM_COL32(220, 222, 232, 255), C_KW = IM_COL32(197, 134, 230, 255), C_TYPE = IM_COL32(86, 182, 255, 255),
                    C_FN = IM_COL32(220, 220, 150, 255), C_NUM = IM_COL32(181, 206, 120, 255), C_STR = IM_COL32(230, 160, 110, 255),
                    C_COM = IM_COL32(110, 150, 110, 255), C_PRE = IM_COL32(160, 160, 200, 255), C_ERR = IM_COL32(240, 80, 80, 255);
 
 struct Tok { size_t a, b; ImU32 c; };
-/* colorea una linea; inComment dice si se viene de un comentario de bloque abierto */
 static void tokenize(const std::string &s, CodeLang lang, bool &inComment, std::vector<Tok> &out) {
     out.clear();
     size_t i = 0, n = s.size();
@@ -86,7 +83,6 @@ static void tokenize(const std::string &s, CodeLang lang, bool &inComment, std::
     }
 }
 
-/* ---------------- autocompletado ---------------- */
 struct Ac { ImGuiID id = 0; int prefixStart = 0, cursor = 0, lastCursor = -1, lastLen = -1, sel = 0; std::string prefix; std::vector<std::string> list; bool hidden = false; CodeLang lang; };
 static Ac g_ac;
 static std::vector<std::string> suggestions(const std::string &text, const std::string &prefix, CodeLang lang) {
@@ -94,7 +90,7 @@ static std::vector<std::string> suggestions(const std::string &text, const std::
     if (prefix.size() < 2) return out;
     std::set<std::string> words;
     for (auto *s : {&keywords(lang), &types(lang), &builtins(lang)}) words.insert(s->begin(), s->end());
-    for (size_t i = 0; i < text.size();) {               // tambien las palabras que ya hay en el codigo
+    for (size_t i = 0; i < text.size();) {
         if (std::isalpha((unsigned char)text[i]) || text[i] == '_') {
             size_t j = i; while (j < text.size() && (std::isalnum((unsigned char)text[j]) || text[j] == '_')) j++;
             if (j - i >= 3) words.insert(text.substr(i, j - i));
@@ -114,7 +110,7 @@ static int callback(ImGuiInputTextCallbackData *d) {
         d->Buf = str->data();
         return 0;
     }
-    if (d->EventFlag == ImGuiInputTextFlags_CallbackCompletion) {        // Tab: completa o sangra
+    if (d->EventFlag == ImGuiInputTextFlags_CallbackCompletion) {
         if (!g_ac.list.empty() && !g_ac.hidden) {
             const std::string &w = g_ac.list[std::clamp(g_ac.sel, 0, (int)g_ac.list.size() - 1)];
             d->DeleteChars(g_ac.prefixStart, d->CursorPos - g_ac.prefixStart);
@@ -125,7 +121,6 @@ static int callback(ImGuiInputTextCallbackData *d) {
     }
     if (d->EventFlag == ImGuiInputTextFlags_CallbackAlways) {
         int c = d->CursorPos;
-        /* Enter: la linea nueva empieza con la sangria de la anterior (y 4 mas si acababa en "{") */
         if (c > 0 && d->Buf[c - 1] == '\n' && g_ac.lastLen >= 0 && d->BufTextLen == g_ac.lastLen + 1 && c == g_ac.lastCursor + 1) {
             int ls = c - 2;
             while (ls >= 0 && d->Buf[ls] != '\n') ls--;
@@ -137,7 +132,7 @@ static int callback(ImGuiInputTextCallbackData *d) {
             if (!ind.empty()) d->InsertChars(c, ind.c_str());
             c = d->CursorPos;
         }
-        if (d->BufTextLen != g_ac.lastLen) g_ac.hidden = false;      // al escribir vuelven las sugerencias
+        if (d->BufTextLen != g_ac.lastLen) g_ac.hidden = false;
         int s = c;
         while (s > 0 && (std::isalnum((unsigned char)d->Buf[s - 1]) || d->Buf[s - 1] == '_')) s--;
         g_ac.prefixStart = s; g_ac.cursor = c;
@@ -150,7 +145,7 @@ static int callback(ImGuiInputTextCallbackData *d) {
 
 bool codeEditor(const char *id, std::string &text, ImVec2 size, CodeLang lang, const std::vector<CodeError> &errs) {
     ImGui::PushID(id);
-    for (char &c : text) if (c == '\t') c = ' ';           // sin tabuladores: el color se alinea con el texto
+    for (char &c : text) if (c == '\t') c = ' ';
     const float gutter = 44, lh = ImGui::GetTextLineHeight();
     if (size.x <= 0) size.x = ImGui::GetContentRegionAvail().x;
     if (size.y <= 0) size.y = ImGui::GetContentRegionAvail().y;
@@ -161,14 +156,13 @@ bool codeEditor(const char *id, std::string &text, ImVec2 size, CodeLang lang, c
     ImGuiID iid = ImGui::GetID("##ce");
     bool active = ImGui::GetActiveID() == iid;
     if (active) g_ac.id = iid, g_ac.lang = lang;
-    // flechas para elegir la sugerencia (sin mover el cursor del texto)
     bool acOpen = active && g_ac.id == iid && !g_ac.list.empty() && !g_ac.hidden;
     if (acOpen) {
         if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) { g_ac.sel = (g_ac.sel + 1) % (int)g_ac.list.size(); ImGui::SetKeyOwner(ImGuiKey_DownArrow, ImGui::GetID("##acnav"), ImGuiInputFlags_LockThisFrame); }
         if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) { g_ac.sel = (g_ac.sel + (int)g_ac.list.size() - 1) % (int)g_ac.list.size(); ImGui::SetKeyOwner(ImGuiKey_UpArrow, ImGui::GetID("##acnav"), ImGuiInputFlags_LockThisFrame); }
         if (ImGui::IsKeyPressed(ImGuiKey_Escape)) { g_ac.hidden = true; ImGui::SetKeyOwner(ImGuiKey_Escape, ImGui::GetID("##acnav"), ImGuiInputFlags_LockThisFrame); }
     }
-    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 0));              // el texto se pinta encima, en colores
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_FrameBg, IM_COL32(30, 31, 40, 255));
     if (text.capacity() < text.size() + 1) text.reserve(text.size() + 1);
     bool changed = ImGui::InputTextMultiline("##ce", text.data(), text.capacity() + 1, ImVec2(size.x - gutter, size.y),
@@ -181,7 +175,7 @@ bool codeEditor(const char *id, std::string &text, ImVec2 size, CodeLang lang, c
     std::string cur = buf;
     float scrollY = 0, scrollX = 0;
     if (st && active) { scrollX = st->Scroll.x; scrollY = st->Scroll.y; }
-    else {                                                     // sin editar: el desplazamiento esta en la ventana hija del campo
+    else {
         char wn[512]; snprintf(wn, sizeof wn, "%s/%s_%08X", ImGui::GetCurrentWindow()->Name, "##ce", iid);
         if (ImGuiWindow *w = ImGui::FindWindowByName(wn)) scrollY = w->Scroll.y;
     }
@@ -209,7 +203,7 @@ bool codeEditor(const char *id, std::string &text, ImVec2 size, CodeLang lang, c
                 dl->AddText(font, fs, ImVec2(x, y), t.c, L.c_str() + t.a, L.c_str() + t.b);
                 x += font->CalcTextSizeA(fs, FLT_MAX, 0, L.c_str() + t.a, L.c_str() + t.b).x;
             }
-            if (errAt.count(line)) {                           // subrayado ondulado rojo
+            if (errAt.count(line)) {
                 float x0 = rmin.x + pad.x - scrollX, x1 = std::max(x0 + 30, x);
                 for (float xx = x0; xx < x1; xx += 4) dl->AddLine(ImVec2(xx, y + lh), ImVec2(xx + 2, y + lh - 2), C_ERR), dl->AddLine(ImVec2(xx + 2, y + lh - 2), ImVec2(xx + 4, y + lh), C_ERR);
             }
@@ -219,13 +213,11 @@ bool codeEditor(const char *id, std::string &text, ImVec2 size, CodeLang lang, c
         ls = le + 1;
     }
     int lines = line - 1;
-    // cursor (el de ImGui no se ve porque su texto es transparente)
     if (active && cpos >= 0 && fmodf((float)ImGui::GetTime(), 1.0f) < 0.6f) {
         float cx = rmin.x + pad.x - scrollX + curX, cy = rmin.y + pad.y + (curLine - 1) * lh - scrollY;
         dl->AddLine(ImVec2(cx, cy), ImVec2(cx, cy + lh), IM_COL32(240, 240, 255, 255), 1.5f);
     }
     dl->PopClipRect();
-    // numeros de linea y marcas de error
     dl->PushClipRect(p0, ImVec2(p0.x + gutter, p0.y + size.y), true);
     std::string hoverErr;
     for (int l = 1; l <= lines; l++) {
@@ -242,7 +234,6 @@ bool codeEditor(const char *id, std::string &text, ImVec2 size, CodeLang lang, c
     }
     dl->PopClipRect();
     if (!hoverErr.empty()) ImGui::SetTooltip("%s", hoverErr.c_str());
-    // sugerencias bajo el cursor
     if (active && g_ac.id == iid && !g_ac.list.empty() && !g_ac.hidden) {
         float cx = rmin.x + pad.x - scrollX + curX, cy = rmin.y + pad.y + curLine * lh - scrollY;
         ImGui::SetNextWindowPos(ImVec2(cx, cy + 2));
@@ -265,7 +256,6 @@ bool codeEditor(const char *id, std::string &text, ImVec2 size, CodeLang lang, c
     return changed;
 }
 
-/* ---------------- comprobar GLSL con el OpenGL del editor ---------------- */
 static int glslHeaderLines(const char *h) { int n = 0; for (; *h; h++) n += *h == '\n'; return n; }
 static const char *glslHeader() {
     return rlGetVersion() == RL_OPENGL_21 ?
@@ -305,7 +295,6 @@ std::vector<CodeError> checkGLSL(const std::string &code) {
     if (prog && prog != rlGetShaderIdDefault()) rlUnloadShaderProgram(prog);
     if (prog && prog != rlGetShaderIdDefault()) return out;
     int head = glslHeaderLines(glslHeader());
-    // formatos: Mesa "0:12(5): error: ...", NVIDIA "0(12) : error C0000: ...", AMD/Intel "ERROR: 0:12: ..."
     std::regex mesa(R"(\d+:(\d+)\(\d+\):\s*error:\s*(.*))"), nv(R"(\d+\((\d+)\)\s*:\s*error\s*\w*:\s*(.*))"), amd(R"(ERROR:\s*\d+:(\d+):\s*(.*))");
     for (auto &l : g_log) {
         size_t a = 0;
@@ -324,7 +313,6 @@ std::vector<CodeError> checkGLSL(const std::string &code) {
     return out;
 }
 
-/* ---------------- comprobar JavaScript con QuickJS (solo compilar, no se ejecuta nada) ---------------- */
 std::vector<CodeError> checkJS(const std::string &code, bool functionBody) {
     static JSRuntime *rt = nullptr;
     static JSContext *ctx = nullptr;
@@ -354,7 +342,6 @@ std::vector<CodeError> checkJS(const std::string &code, bool functionBody) {
     return out;
 }
 
-/* ---------------- campo con comprobacion ---------------- */
 struct FieldState { std::string checked; double changedAt = 0; std::vector<CodeError> errs; };
 bool codeFieldStr(const char *id, std::string &text, ImVec2 size, CodeLang lang, bool functionBody, std::vector<CodeError> *errsOut) {
     static std::map<std::string, FieldState> states;
@@ -365,7 +352,7 @@ bool codeFieldStr(const char *id, std::string &text, ImVec2 size, CodeLang lang,
     bool ch = codeEditor(id, text, ImVec2(size.x, std::max(60.0f, size.y - listH)), lang, fs.errs);
     double now = ImGui::GetTime();
     if (ch) fs.changedAt = now;
-    if (text != fs.checked && now - fs.changedAt > 0.5) {          // medio segundo sin escribir: se comprueba
+    if (text != fs.checked && now - fs.changedAt > 0.5) {
         fs.checked = text;
         fs.errs = text.find_first_not_of(" \n\t") == std::string::npos ? std::vector<CodeError>()
                 : lang == CodeLang::GLSL ? checkGLSL(text) : checkJS(text, functionBody);

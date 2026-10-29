@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# Source 2D - publica una version nueva para que los editores la vean en Noticias y en el selector de versiones.
-# Sube los ejecutables a una Release de FloppaKFC/source2d-versiones (con gh), apunta su huella BLAKE2b en
-# versiones.json, crea la noticia "Nueva actualizacion" y lo firma todo (pide tu contrasena una vez).
-#   publicar_version.py "Beta 0.2" 2 --linux Release/Linux/Source2D --windows Release/Windows/Source2D.exe
-#                       [--canal estable|experimental] [--notas "Que trae"] [--sin-noticia] [--importante] [--sin-subir]
-# El numero (2) es S2D_VERSION_NUM de src/editor/version.hpp: tiene que ser mayor que el de las versiones anteriores.
 import argparse, datetime, os, shutil, subprocess, sys, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -13,11 +7,9 @@ from anunciar import RAIZ, cargar, guardar_y_firmar, huella, repo, subir
 REPO = "FloppaKFC/source2d-versiones"
 NOMBRES = {"linux": "Source2D-linux", "windows": "Source2D-windows.exe"}
 
-
 def gh():
     local = os.path.join(RAIZ, "build", "toolchain", "gh", "gh")
     return local if os.path.exists(local) else (shutil.which("gh") or sys.exit("Falta gh (GitHub CLI)"))
-
 
 def main():
     ap = argparse.ArgumentParser(description="Publica una version de Source 2D")
@@ -79,7 +71,6 @@ def main():
         print("Firmado. No se ha subido (--sin-subir).")
     else:
         subir(d, f"Version {a.nombre}")
-
 
 if __name__ == "__main__":
     main()

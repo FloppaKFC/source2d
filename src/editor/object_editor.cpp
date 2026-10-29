@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <cstring>
 
-/* ---------------- creacion ---------------- */
 std::string createObject(Project &proj, const std::string &kind) {
     json &objs = proj.doc["objects"];
     int n = (int)objs.size() + 1;
@@ -19,14 +18,14 @@ std::string createObject(Project &proj, const std::string &kind) {
                              {"jump", 620}, {"friction", 0.85}, {"airFriction", 0.99}, {"bounce", 0}, {"mass", 1}, {"spin", 0}}},
               {"vars", json::array()}, {"animations", json::array()}, {"flipOnMove", true}, {"comportamientos", json::object()}};
     if (kind == "sprite" && !proj.sprites().empty()) o["spriteId"] = jstr(proj.sprites()[0], "id");
-    if (kind == "sprite" && proj.sprites().empty()) {   // el primero: con su sprite en blanco listo para dibujar
+    if (kind == "sprite" && proj.sprites().empty()) {
         json px = json::array();
         for (int i = 0; i < 32 * 32; i++) px.push_back("");
         std::string sid = makeUid("s");
         proj.sprites().push_back({{"id", sid}, {"name", "Objeto " + std::to_string(n)}, {"width", 32}, {"height", 32}, {"frames", json::array({{{"pixels", px}}})}});
         o["spriteId"] = sid;
     }
-    if (kind == "tile") {   // cada objeto Tile tiene su mapa de tiles (el primero del proyecto o uno nuevo)
+    if (kind == "tile") {
         if (proj.doc.contains("tilesets") && proj.doc["tilesets"].is_array() && !proj.doc["tilesets"].empty()) o["tilesetId"] = jstr(proj.doc["tilesets"][0], "id");
         else {
             o["tilesetId"] = createTileset(proj, "Tiles 1", 16, 4, 2);
@@ -43,7 +42,6 @@ std::string createObject(Project &proj, const std::string &kind) {
     return id;
 }
 
-/* ---------------- comportamientos (mismo modelo que el runtime) ---------------- */
 struct BhProp { const char *k, *label, *type; double d; const char *sdef; std::vector<std::pair<std::string, std::string>> opts; };
 struct BhInfo { const char *type, *name, *desc; bool move; std::vector<BhProp> props; };
 static const std::vector<BhInfo> &catalog() {
@@ -141,7 +139,6 @@ void objectRemoveBehavior(json &obj, const std::string &type) { bhRemove(obj, ty
 
 static void animPreview(Project &proj, ImDrawList *dl, const json &anim, ImVec2 a, ImVec2 b);
 
-/* ---------------- interfaz ---------------- */
 std::string ObjectEditor::title(Project &proj) {
     json *o = findById(proj.doc["objects"], objectId);
     return "Objeto: " + (o ? jstr(*o, "name") : std::string("?")) + "###obj_" + objectId;
@@ -149,7 +146,6 @@ std::string ObjectEditor::title(Project &proj) {
 
 static void labelRow(const char *l) { ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted(l); ImGui::SameLine(190); ImGui::SetNextItemWidth(-1); }
 
-// fuente del texto: la del juego o una del proyecto (TTF importada o de pixeles)
 static void fontRows(Project &proj, json &t) {
     if (!proj.doc.contains("fonts") || !proj.doc["fonts"].is_array()) proj.doc["fonts"] = json::array();
     labelRow("Fuente");
@@ -164,7 +160,7 @@ void ObjectEditor::tabProps(Project &proj, json &o) {
     ImGui::SeparatorText("General");
     labelRow("Nombre"); editText("##name", o, "name");
     school::anchor("obj.name");
-    {   // objeto de una escena o global (en todas las escenas)
+    {
         bool global = jstr(o, "scene").empty();
         std::string owner;
         if (!global) for (auto &sc : proj.doc["scenes"]) if (jstr(sc, "id") == jstr(o, "scene")) owner = jstr(sc, "name");
@@ -173,7 +169,7 @@ void ObjectEditor::tabProps(Project &proj, json &o) {
         ImGui::Dummy(ImVec2(182, 0)); ImGui::SameLine();
         if (ImGui::Checkbox("Objeto global (lo pueden usar todas las escenas)", &global)) {
             if (global) o.erase("scene");
-            else {   // vuelve a la primera escena donde se usa (o a la primera escena)
+            else {
                 std::string sid;
                 for (auto &sc : proj.doc["scenes"]) if (sid.empty() && sc.contains("instances")) for (auto &it : sc["instances"]) if (jstr(it, "objectId") == objectId) sid = jstr(sc, "id");
                 if (sid.empty() && !proj.doc["scenes"].empty()) sid = jstr(proj.doc["scenes"][0], "id");
@@ -184,7 +180,7 @@ void ObjectEditor::tabProps(Project &proj, json &o) {
     }
     ImGui::TextDisabled("Si lo renombras, actualiza las expresiones de los eventos que usen el nombre (Jugador.X).");
     if (type == "sprite") {
-        labelRow("Dibujo");   // las animaciones y su colision, en la pestana Animaciones
+        labelRow("Dibujo");
         ImGui::TextDisabled("Las animaciones y sus colisiones están en la pestaña Animaciones.");
         ImGui::Dummy(ImVec2(182, 0)); ImGui::SameLine();
         bool esHit = ImGui::Button("Editar sprite");
@@ -211,7 +207,6 @@ void ObjectEditor::tabProps(Project &proj, json &o) {
         labelRow("Color del texto"); editColor("##bfg", b, "fg", "#ffffff");
         fontRows(proj, b);
     } else if (type == "group") {
-        // grupo: lista de objetos; en los eventos, el grupo vale por todos sus objetos
         if (!o.contains("members") || !o["members"].is_array()) o["members"] = json::array();
         ImGui::SeparatorText("Objetos del grupo");
         for (auto &m : proj.doc["objects"]) {
@@ -254,7 +249,7 @@ void ObjectEditor::tabProps(Project &proj, json &o) {
         labelRow("Parpadeo"); editNum("##lf", L, "flicker", 0, 0.01f, "%.2f", 0, 1);
         ImGui::TextDisabled("Ilumina la oscuridad de las capas (Capas > Oscuridad). Ponla en la escena como cualquier objeto.");
     }
-    if (type == "sprite") {   // nine-slice: al escalarlo, las esquinas y los bordes no se estiran (paneles, botones, barras)
+    if (type == "sprite") {
         json &nn = sub(o, "nine");
         labelRow("Nine-slice (bordes)");
         float w4 = ImGui::GetContentRegionAvail().x / 4 - 6;
@@ -263,7 +258,7 @@ void ObjectEditor::tabProps(Project &proj, json &o) {
         ImGui::SetNextItemWidth(w4); editNum("##nt", nn, "t", 0, 0.5f, "arr %.0f", 0, 512); ImGui::SameLine();
         ImGui::SetNextItemWidth(w4); editNum("##nb", nn, "b", 0, 0.5f, "abj %.0f", 0, 512);
     }
-    if (type == "sprite") {   // caja de colision propia: mas pequena que el dibujo hace los saltos y los peligros mas justos
+    if (type == "sprite") {
         json &hb = sub(o, "hitbox");
         labelRow("Caja de colisión");
         float w = ImGui::GetContentRegionAvail().x / 2 - 4;
@@ -282,8 +277,6 @@ void ObjectEditor::tabProps(Project &proj, json &o) {
         ImGui::SeparatorText("Física");
         editBool("Gravedad (cae)", b, "gravity", false); ImGui::SameLine(260);
         editBool("Choca con el escenario y los sólidos", b, "collide", false);
-        // material: rellena rebote, rozamientos, masa, peso y resistencia del aire con valores de ese material (luego se
-        // pueden retocar a mano). Entre dos cuerpos libres, el choque reparte la velocidad segun la masa.
         struct Mat { const char *id, *name; double bounce, fr, afr, mass, weight, drag, maxFall; };
         static const Mat mats[] = {
             {"", "Normal (a mano)", 0, 0.85, 0.99, 1, 1, 0, 0},
@@ -333,8 +326,6 @@ void ObjectEditor::tabProps(Project &proj, json &o) {
     codeField("##onupdate", h, "onUpdate", ImVec2(-1, 110), CodeLang::JS, true);
 }
 
-// operaciones con los frames de un sprite: la imagen final (frames), la de cada capa (layers[].frames) y la
-// duracion de cada frame (durations) se mueven juntas. op: 'm' mover i a j, 'd' borrar i, 'c' duplicar i, 'n' frame vacio al final
 void objectFrameOp(json &sp, char op, int i, int j) {
     auto apply = [&](json &arr, const json &blank) {
         if (!arr.is_array()) return;
@@ -354,7 +345,6 @@ void objectFrameOp(json &sp, char op, int i, int j) {
     if (sp.contains("durations") && sp["durations"].is_array() && !sp["durations"].empty()) apply(sp["durations"], sp["durations"].back());
 }
 
-// vista previa animada de una animacion (su sprite a sus fps), centrada en el cuadro a-b
 static void animPreview(Project &proj, ImDrawList *dl, const json &anim, ImVec2 a, ImVec2 b) {
     ui::checkerboard(dl, a, b, 6);
     json *sp = proj.spriteById(jstr(anim, "spriteId"));
@@ -370,14 +360,12 @@ static void animPreview(Project &proj, ImDrawList *dl, const json &anim, ImVec2 
     }
 }
 
-// tira de frames de una animacion: arrastrar para cambiar el orden, x para borrar, clic derecho para mas
 void ObjectEditor::framesStrip(Project &proj, json &anim) {
     json *sp = proj.spriteById(jstr(anim, "spriteId"));
     if (!sp) { ImGui::TextDisabled("Esta animación no tiene sprite: elige uno arriba."); return; }
     json &frames = (*sp)["frames"];
     int n = frames.is_array() ? (int)frames.size() : 0;
     float cell = 72, gap = 8;
-    // vista previa animada a la izquierda (fuera de la tira, que se desliza sin taparla)
     {
         ImDrawList *dl = ImGui::GetWindowDrawList();
         ImVec2 p = ImGui::GetCursorScreenPos();
@@ -386,10 +374,10 @@ void ObjectEditor::framesStrip(Project &proj, json &anim) {
         dl->AddText(ImVec2(p.x + 4, p.y + cell + 26), ui::kDim, "Vista previa");
         ImGui::SameLine(0, 16);
     }
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));   // sin el fondo de la tarjeta encima otra vez
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
     ImGui::BeginChild("##strip", ImVec2(0, cell + 52), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
     ImGui::PopStyleColor();
-    ImDrawList *dl = ImGui::GetWindowDrawList();   // la de la tira: recorta lo que se sale por los lados
+    ImDrawList *dl = ImGui::GetWindowDrawList();
     int moveFrom = -1, moveTo = -1, del = -1, dup = -1;
     for (int i = 0; i < n; i++) {
         ImGui::PushID(i);
@@ -423,7 +411,7 @@ void ObjectEditor::framesStrip(Project &proj, json &anim) {
         dl->AddRect(p, ImVec2(p.x + cell, p.y + cell), hov ? ui::kPrimary : IM_COL32(255, 255, 255, 40), 4, 0, hov ? 2.0f : 1.0f);
         char num[16]; snprintf(num, sizeof num, "%d", i + 1);
         dl->AddText(ImVec2(p.x + cell / 2 - ImGui::CalcTextSize(num).x / 2, p.y + cell + 2), ui::kDim, num);
-        if (hov && n > 1) {   // x para borrar de una
+        if (hov && n > 1) {
             ImVec2 xa(p.x + cell - 18, p.y + 2), xb(p.x + cell - 2, p.y + 18);
             bool on = ImGui::IsMouseHoveringRect(xa, xb);
             dl->AddRectFilled(xa, xb, on ? IM_COL32(240, 96, 93, 255) : IM_COL32(40, 40, 48, 230), 4);
@@ -446,7 +434,6 @@ void ObjectEditor::framesStrip(Project &proj, json &anim) {
     if (changed) { proj.rev++; proj.dirty = true; if (onSpriteChanged) onSpriteChanged(jstr(*sp, "id")); }
 }
 
-// animacion nueva: la primera usa el sprite del objeto; las demas, un sprite nuevo del mismo tamano para dibujarla
 void ObjectEditor::addAnimation(Project &proj, json &o) {
     size_t count = o["animations"].size();
     std::string name = count == 0 ? "Idle" : "Anim " + std::to_string(count + 1), sid = jstr(o, "spriteId");
@@ -456,15 +443,13 @@ void ObjectEditor::addAnimation(Project &proj, json &o) {
         sid = onNewSprite ? onNewSprite(jstr(o, "name") + " " + name, w, h) : "";
         if (jstr(o, "spriteId").empty()) o["spriteId"] = sid;
     }
-    json &anims = o["animations"];   // despues de tocar el objeto (una clave nueva lo mueve en memoria)
+    json &anims = o["animations"];
     anims.push_back({{"id", makeUid("a")}, {"name", name}, {"spriteId", sid}, {"fps", 8}, {"loop", true}});
     curAnim = (int)anims.size() - 1;
     proj.rev++; proj.dirty = true;
 }
 
 void ObjectEditor::tabAnims(Project &proj, json &o) {
-    // todas las claves que se usan aqui, antes de coger referencias: anadir una clave al objeto mueve las demas en
-    // memoria y dejaria "anims" apuntando a nada (asi se caia el editor)
     if (!o.contains("animations") || !o["animations"].is_array()) o["animations"] = json::array();
     if (!o.contains("collision")) o["collision"] = nullptr;
     if (!o.contains("animSlots") || !o["animSlots"].is_object()) o["animSlots"] = json::object();
@@ -479,7 +464,7 @@ void ObjectEditor::tabAnims(Project &proj, json &o) {
         ImGui::Spacing();
     }
     int del = -1;
-    for (int i = 0; i < (int)anims.size(); i++) {   // una tarjeta por animacion: sus datos y sus frames
+    for (int i = 0; i < (int)anims.size(); i++) {
         json &a = anims[i];
         ImGui::PushID(i);
         bool cur = i == curAnim;
@@ -517,7 +502,6 @@ void ObjectEditor::tabAnims(Project &proj, json &o) {
     if (curAnim >= (int)anims.size()) curAnim = (int)anims.size() - 1;
     if (curAnim < 0 && !anims.empty()) curAnim = 0;
 
-    // colision: la de cada animacion (agachado, mas baja...) o, sin animaciones, la del objeto
     ImGui::SeparatorText("Colisión");
     school::anchor("obj.collision");
     ImGui::TextDisabled("Con qué parte del dibujo choca. Cada animación puede tener la suya: agachado, por ejemplo, más baja.");
@@ -633,7 +617,7 @@ void ObjectEditor::tabBehaviors(Project &, json &o) {
             labelRow("Búfer de salto"); editNum("##jb", pf, "jumpBuffer", 0, 0.005f, "%.2f s", 0, 1);
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("Un salto pulsado un poco antes de aterrizar se hace al tocar el suelo");
             labelRow("Caída máxima"); editNum("##mf", pf, "maxFall", 0, 5, "%.0f px/s (0 = sin límite)", 0, 10000);
-            if (pf != before) cp["plataformero"] = pf;     // los antiguos crean sus opciones solo al editarlas
+            if (pf != before) cp["plataformero"] = pf;
         } else if (t == "topdown") {
             labelRow("Rapidez"); editNum("##spd", b, "speed", 150, 1, "%.0f", 0, 5000);
             labelRow("Tamaño de casilla"); editNum("##cell", b, "cell", 16, 1, "%.0f px", 1, 512);
@@ -749,7 +733,6 @@ void ObjectEditor::tabEffect(Project &proj, json &o) {
     ImGui::TextDisabled("Combina: blur, brightness, contrast, saturate, hue-rotate, grayscale, sepia, invert, opacity, drop-shadow.");
     if (!proj.doc.contains("shaders")) proj.doc["shaders"] = json::array();
     labelRow("Shader GLSL"); comboById("##shid", o, "shaderId", proj.doc["shaders"], "(ninguno)");
-    // contorno como el efecto Outline de GDevelop (se ve en la escena y en el juego)
     if (!o.contains("outline") || !o["outline"].is_object()) o["outline"] = {{"width", 0}, {"color", "#000000"}};
     labelRow("Contorno (px)"); editNum("##olw", o["outline"], "width", 0, 0.1f, "%.1f", 0, 8);
     labelRow("Color del contorno"); editColor("##olc", o["outline"], "color", "#000000");
@@ -765,7 +748,6 @@ void ObjectEditor::draw(Project &proj) {
     ImGui::End();
 }
 
-// el contenido (cabecera y pestanas); tambien dentro del editor de escena
 void ObjectEditor::drawBody(Project &proj) {
     json *op = findById(proj.doc["objects"], objectId);
     if (!op) { open = false; return; }
@@ -786,7 +768,7 @@ void ObjectEditor::drawBody(Project &proj) {
     std::string type = jstr(o, "type", "sprite");
     ImGui::TextDisabled("%s", objTypeLabel(type));
     ImGui::SetCursorPos(ImVec2(tp.x, tp.y + 56));
-    if (nextTab >= 0) { forceTab = nextTab; nextTab = -1; }   // pedido desde una pestana (se aplica al fotograma siguiente)
+    if (nextTab >= 0) { forceTab = nextTab; nextTab = -1; }
     if (ImGui::BeginTabBar("##otabs")) {
         auto fl = [&](int i) { return forceTab == i ? ImGuiTabItemFlags_SetSelected : 0; };
         if (ImGui::BeginTabItem("Propiedades", nullptr, fl(0))) { ImGui::BeginChild("##p"); tabProps(proj, o); ImGui::EndChild(); ImGui::EndTabItem(); }

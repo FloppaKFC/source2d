@@ -1,5 +1,4 @@
 #version 450
-// degradado radial: v_uv trae la posicion en el lienzo; hasta 4 paradas
 layout(push_constant) uniform PC { vec2 inv; vec2 pad; vec4 g; vec4 n; vec4 pos; vec4 col[4]; } pc;
 layout(location = 0) in vec2 v_uv;
 layout(location = 1) in vec4 v_col;

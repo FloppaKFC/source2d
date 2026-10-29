@@ -10,7 +10,6 @@
 
 using ui::Icon;
 
-// paleta DawnBringer 32 (de uso libre), la misma que traen por defecto muchos editores de pixel art
 static const unsigned kDB32[32] = {
     0x000000, 0x222034, 0x45283c, 0x663931, 0x8f563b, 0xdf7126, 0xd9a066, 0xeec39a, 0xfbf236, 0x99e550, 0x6abe30,
     0x37946e, 0x4b692f, 0x524b24, 0x323c39, 0x3f3f74, 0x306082, 0x5b6ee1, 0x639bff, 0x5fcde4, 0xcbdbfc, 0xffffff,
@@ -50,7 +49,6 @@ static Px blendOver(Px d, Px s, int extraAlpha = 255) {
     return r;
 }
 
-/* ---------------- carga y guardado ---------------- */
 static std::vector<Px> pixelsFrom(const json &arr, int n) {
     std::vector<Px> out(n);
     if (!arr.is_array()) return out;
@@ -94,8 +92,6 @@ bool SpriteEditor::load(const json &sp) {
     return true;
 }
 
-// cambios de otra persona (trabajar juntos): se recarga sin mover el fotograma ni la capa en que se esta; un trazo a
-// medio hacer sigue en 'preview' y se aplica encima al soltar
 void SpriteEditor::reload(const json &sp) {
     int f = curFrame, l = curLayer;
     load(sp);
@@ -136,7 +132,6 @@ SpriteEditor::~SpriteEditor() {
     texCanvas.release(); texPrev.release(); texNext.release(); texAnim.release();
 }
 
-/* ---------------- composicion ---------------- */
 void SpriteEditor::composite(int frame, std::vector<Px> &out, bool withPreview) const {
     int n = st.w * st.h;
     out.assign(n, Px{});
@@ -161,7 +156,6 @@ bool SpriteEditor::celEmpty(int layer, int frame) const {
     return true;
 }
 
-/* ---------------- deshacer ---------------- */
 void SpriteEditor::pushUndo() {
     undoStack.push_back(st);
     if (undoStack.size() > 100) undoStack.erase(undoStack.begin());
@@ -186,7 +180,6 @@ void SpriteEditor::redo() {
     dirtyForProject = true;
 }
 
-/* ---------------- dibujo de pixeles ---------------- */
 bool SpriteEditor::canPaint() {
     SpriteLayer &L = st.layers[curLayer];
     if (L.locked) { status = "La capa \"" + L.name + "\" está bloqueada"; return false; }
@@ -241,7 +234,6 @@ void SpriteEditor::shapeTo(std::vector<Px> &dst, int x0, int y0, int x1, int y1,
         double nx = (x - cx) / rx, ny = (y - cy) / ry, d = nx * nx + ny * ny;
         if (d > 1.0) continue;
         if (filled) { stamp(dst, x, y, c); continue; }
-        // borde: algun vecino queda fuera de la elipse
         bool edge = false;
         for (int k = 0; k < 4 && !edge; k++) {
             int qx = x + (k == 0) - (k == 1), qy = y + (k == 2) - (k == 3);
@@ -284,7 +276,6 @@ void SpriteEditor::pickAt(int x, int y, bool secondary) {
 
 Px SpriteEditor::strokeColor() const { return strokeSecondary ? spriteTools().bg : spriteTools().fg; }
 
-/* ---------------- trazos (raton o pruebas) ---------------- */
 void SpriteEditor::strokeBegin(int x, int y, bool secondary) {
     auto &t = spriteTools();
     strokeSecondary = secondary; sx = lx = x; sy = ly = y;
@@ -294,7 +285,6 @@ void SpriteEditor::strokeBegin(int x, int y, bool secondary) {
     case Tool::Hand: return;
     case Tool::Select: case Tool::Lasso: case Tool::Wand: case Tool::SelEllipse: {
         if (floating) commitPreview();
-        // Mayus suma a la seleccion y Alt resta (como en Aseprite)
         bool ig = ImGui::GetCurrentContext() != nullptr;
         selMode = ig && ImGui::GetIO().KeyShift ? 1 : ig && ImGui::GetIO().KeyAlt ? 2 : 0;
         if (t.tool == Tool::Wand) { selectByColor(x, y, t.wandContiguous, selMode); return; }
@@ -307,14 +297,13 @@ void SpriteEditor::strokeBegin(int x, int y, bool secondary) {
         if (!canPaint()) return;
         pushUndo();
         stroking = true;
-        // levanta el contenido (la seleccion o la capa entera) a una capa flotante
         SelRect r = sel.active ? sel : SelRect{0, 0, st.w, st.h, false};
         floatW = r.w; floatH = r.h; floatX = r.x; floatY = r.y; moveDX = moveDY = 0;
         floatPx.assign(floatW * floatH, Px{});
         std::vector<Px> &d = cel();
         for (int yy = 0; yy < r.h; yy++) for (int xx = 0; xx < r.w; xx++) {
             int i = (r.y + yy) * st.w + r.x + xx;
-            if (!selHas(i)) continue;          // solo lo seleccionado (lazo, varita...)
+            if (!selHas(i)) continue;
             floatPx[yy * floatW + xx] = d[i]; d[i] = Px{};
         }
         floating = true; selStart = sel;
@@ -349,7 +338,6 @@ void SpriteEditor::strokeMove(int x, int y) {
         if (x == lx && y == ly) return;
         Px c = t.tool == Tool::Eraser ? Px{255, 255, 255, 255} : strokeColor();
         if (t.pixelPerfect && t.brush == 1 && !t.mirrorX && !t.mirrorY) {
-            // pixel perfect: se dibuja punto a punto y se quitan las esquinas en L
             int dx = std::abs(x - lx), dy = -std::abs(y - ly), sxs = lx < x ? 1 : -1, sys = ly < y ? 1 : -1, err = dx + dy, cx = lx, cy = ly;
             while (cx != x || cy != y) {
                 int e2 = 2 * err;
@@ -376,7 +364,7 @@ void SpriteEditor::strokeMove(int x, int y) {
         if (c.a == 0) c = Px{0, 0, 0, 0};
         int ex = x, ey = y;
         if (t.tool == Tool::Line) {
-            if (shift) {  // multiplos de 45 grados
+            if (shift) {
                 int ddx = x - sx, ddy = y - sy;
                 if (std::abs(ddx) > 2 * std::abs(ddy)) ey = sy;
                 else if (std::abs(ddy) > 2 * std::abs(ddx)) ex = sx;
@@ -421,7 +409,6 @@ void SpriteEditor::strokeMove(int x, int y) {
         break;
     }
     case Tool::Gradient: {
-        /* del color principal (inicio) al secundario (fin) a lo largo de la linea; con tramado usa solo los dos colores */
         Px a = t.fg, b = t.bg;
         double vx = x - sx, vy = y - sy, len2 = vx * vx + vy * vy;
         static const int B4[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
@@ -461,14 +448,14 @@ void SpriteEditor::commitPreview() {
     int n = st.w * st.h;
     if ((int)preview.size() != n) { preview.clear(); return; }
     bool erase = t.tool == Tool::Eraser || ((t.tool == Tool::Line || t.tool == Tool::Rect || t.tool == Tool::Ellipse) && strokeColor().a == 0);
-    if (t.tool == Tool::Gradient) {                            /* el degradado sustituye lo que hay (tambien la transparencia) */
+    if (t.tool == Tool::Gradient) {
         for (int i = 0; i < n; i++) if (selHas(i)) d[i] = preview[i];
         preview.clear(); dirtyForProject = true; return;
     }
     if (t.tool == Tool::Move || floating) {
         for (int i = 0; i < n; i++) if (preview[i].a) d[i] = preview[i];
         floating = false; floatPx.clear();
-        if (sel.active && selMask.size() == (size_t)n && (moveDX || moveDY)) {   // la seleccion viaja con lo movido
+        if (sel.active && selMask.size() == (size_t)n && (moveDX || moveDY)) {
             std::vector<uint8_t> m(n, 0);
             for (int y = 0; y < st.h; y++) for (int x = 0; x < st.w; x++) {
                 int tx = x + moveDX, ty = y + moveDY;
@@ -492,7 +479,7 @@ void SpriteEditor::strokeEnd() {
     stroking = false;
     auto &t = spriteTools();
     if (t.tool == Tool::Select || t.tool == Tool::SelEllipse) { if (sx == lx && sy == ly && selMode == 0) dropSelection(); return; }
-    if (t.tool == Tool::Contour && lassoPts.size() >= 3) {      /* la forma dibujada se rellena */
+    if (t.tool == Tool::Contour && lassoPts.size() >= 3) {
         size_t k = lassoPts.size();
         Px c = strokeColor();
         for (int y = 0; y < st.h; y++) for (int x = 0; x < st.w; x++) {
@@ -507,7 +494,6 @@ void SpriteEditor::strokeEnd() {
         lassoPts.clear();
     }
     if (t.tool == Tool::Lasso) {
-        // poligono del lazo: pixeles con el centro dentro (par-impar) mas el propio trazo
         int n = st.w * st.h;
         std::vector<uint8_t> m(n, 0);
         size_t k = lassoPts.size();
@@ -537,10 +523,9 @@ void SpriteEditor::strokeEnd() {
         return;
     }
     commitPreview();
-    if (!ppPts.empty() && ppPts[0] == -1) t.tool = Tool::Pencil;   // borrado con color transparente
+    if (!ppPts.empty() && ppPts[0] == -1) t.tool = Tool::Pencil;
 }
 
-/* ---------------- frames, capas y lienzo ---------------- */
 void SpriteEditor::addFrame(bool duplicate) {
     pushUndo();
     int at = curFrame + 1, n = st.w * st.h;
@@ -665,7 +650,7 @@ void SpriteEditor::applyFx(int kind, bool allFrames, float a, float b, Px c1, Px
             if (!selHas(i)) continue;
             Px p = src[i];
             switch (kind) {
-            case 0: {   // contorno: los pixeles vacios que tocan uno pintado toman el color
+            case 0: {
                 if (p.a) break;
                 bool edge = false;
                 for (int k = 0; k < 4 && !edge; k++) {
@@ -677,12 +662,12 @@ void SpriteEditor::applyFx(int kind, bool allFrames, float a, float b, Px c1, Px
             }
             case 1: if (p.a) d[i] = Px{(uint8_t)(255 - p.r), (uint8_t)(255 - p.g), (uint8_t)(255 - p.b), p.a}; break;
             case 2: if (p.a) { uint8_t g = (uint8_t)std::lround(0.299 * p.r + 0.587 * p.g + 0.114 * p.b); d[i] = Px{g, g, g, p.a}; } break;
-            case 3: if (p.a) {   // brillo (a: -100..100) y contraste (b: -100..100)
+            case 3: if (p.a) {
                 double k = (100.0 + b) / 100.0;
                 auto C = [&](int v) { return (uint8_t)std::clamp((int)std::lround((v - 128) * k + 128 + a * 2.55), 0, 255); };
                 d[i] = Px{C(p.r), C(p.g), C(p.b), p.a};
                 } break;
-            case 4: if (p.a) {   // tono (a: grados) y saturacion (b: -100..100)
+            case 4: if (p.a) {
                 double r = p.r / 255.0, g = p.g / 255.0, bl = p.b / 255.0, mx = std::max({r, g, bl}), mn = std::min({r, g, bl}), l = (mx + mn) / 2, h = 0, s = 0;
                 if (mx != mn) {
                     double dd = mx - mn; s = l > 0.5 ? dd / (2 - mx - mn) : dd / (mx + mn);
@@ -697,7 +682,7 @@ void SpriteEditor::applyFx(int kind, bool allFrames, float a, float b, Px c1, Px
                 } break;
             case 5: if (p == c1) d[i] = c2; break;
             case 6: { int sx2 = ((x - (int)a) % st.w + st.w) % st.w, sy2 = ((y - (int)b) % st.h + st.h) % st.h; d[i] = src[sy2 * st.w + sx2]; break; }
-            case 7: if (p.a) {   // pixel suelto: ninguno de sus 8 vecinos esta pintado
+            case 7: if (p.a) {
                 bool alone = true;
                 for (int yy = -1; yy <= 1 && alone; yy++) for (int xx = -1; xx <= 1; xx++) {
                     if (!xx && !yy) continue;
@@ -766,7 +751,6 @@ void SpriteEditor::paste() {
     dirtyForProject = true;
 }
 
-/* ---------------- interfaz ---------------- */
 struct ToolInfo { Tool t; Icon ic; const char *name; ImGuiKey key; };
 static const ToolInfo kTools[] = {
     {Tool::Select, Icon::Select, "Selección rectangular (M)\nMayús: sumar  Alt: restar", ImGuiKey_M},
@@ -782,8 +766,6 @@ static const ToolInfo kTools[] = {
     {Tool::Gradient, Icon::Gradient, "Degradado (Mayús+G): del color principal al secundario", ImGuiKey_None},
     {Tool::Contour, Icon::Contour, "Contorno: dibuja una forma a mano y se rellena (D)", ImGuiKey_D},
 };
-/* herramientas del mismo tipo juntas en un boton (como en Aseprite): clic elige la ultima usada del grupo y otro
-   clic (o el derecho) despliega las demas */
 struct ToolGroup { const char *name; std::vector<Tool> tools; };
 static const ToolGroup kGroups[] = {
     {"Selección", {Tool::Select, Tool::SelEllipse, Tool::Lasso, Tool::Wand}},
@@ -894,7 +876,6 @@ void SpriteEditor::drawOptions() {
     if (ImGui::SmallButton("100%")) { zoom = 1; }
 }
 
-// borde de la seleccion con "hormigas" (vale para cualquier forma: rectangulo, lazo o varita)
 void SpriteEditor::drawSelectionOutline(ImDrawList *dl, ImVec2 o) {
     if (!sel.active || selMask.size() != (size_t)(st.w * st.h)) return;
     int ox = floating ? moveDX : 0, oy = floating ? moveDY : 0;
@@ -943,7 +924,6 @@ void SpriteEditor::drawCanvas() {
     ImVec2 o(p0.x + panX, p0.y + panY), e(o.x + st.w * zoom, o.y + st.h * zoom);
     int px = (int)std::floor((m.x - o.x) / zoom), py = (int)std::floor((m.y - o.y) / zoom);
 
-    // pintura con el raton
     if (!panning) {
         if (hovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right)))
             strokeBegin(px, py, ImGui::IsMouseClicked(ImGuiMouseButton_Right));
@@ -981,7 +961,6 @@ void SpriteEditor::drawCanvas() {
         dl->AddPolyline(pts.data(), (int)pts.size(), IM_COL32(0, 0, 0, 255), 0, 3.0f);
         dl->AddPolyline(pts.data(), (int)pts.size(), IM_COL32_WHITE, 0, 1.5f);
     }
-    // cursor del pincel
     if (hovered && !panning && px >= 0 && py >= 0 && px < st.w && py < st.h &&
         (t.tool == Tool::Pencil || t.tool == Tool::Eraser || t.tool == Tool::Line || t.tool == Tool::Rect || t.tool == Tool::Ellipse || t.tool == Tool::Bucket || t.tool == Tool::Picker)) {
         int b = (t.tool == Tool::Bucket || t.tool == Tool::Picker) ? 1 : t.brush, off = (b - 1) / 2;
@@ -997,8 +976,6 @@ void SpriteEditor::drawCanvas() {
     }
 }
 
-/* trabajar juntos: lo que pintan los demas mientras pintan (su trazo antes de soltarlo, en el fotograma que se ve) y
-   donde esta su cursor; y lo propio para ellos */
 void SpriteEditor::drawPresence(ImDrawList *dl, ImVec2 o, bool hovered, int px, int py) {
     if (collab::role() == collab::Role::None) return;
     const std::string doc = "sprite:" + spriteId;
@@ -1024,7 +1001,7 @@ void SpriteEditor::drawPresence(ImDrawList *dl, ImVec2 o, bool hovered, int px, 
         dl->AddText(ImVec2(lp.x + 5, lp.y + 2), IM_COL32(20, 20, 26, 255), p.name.c_str());
     }
     bool inside = hovered && px >= 0 && py >= 0 && px < st.w && py < st.h;
-    if (!inside && !stroking && !ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) return;   // solo el editor que se usa
+    if (!inside && !stroking && !ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) return;
     json extra = {{"f", curFrame}};
     auto &t = spriteTools();
     if (stroking && (int)preview.size() == st.w * st.h && t.tool != Tool::Select && t.tool != Tool::Lasso) {
@@ -1103,7 +1080,7 @@ void SpriteEditor::drawSidePanel(Project &proj) {
     if (ImGui::SmallButton("+ Añadir el color principal")) { t.palette.push_back(t.fg); savePaletteTo(proj.doc); proj.dirty = true; }
     drawPaletteFileButtons(proj);
 
-    if (tileMode) return;               // los tiles no tienen animacion ni tamano propio
+    if (tileMode) return;
     ImGui::SeparatorText("Vista previa");
     int frames = (int)st.layers[0].cels.size();
     int pf = curFrame;
@@ -1171,7 +1148,6 @@ void SpriteEditor::drawSidePanel(Project &proj) {
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Divide el frame actual (una hoja de sprites) en un frame por celda");
 }
 
-/* paletas en archivos: cargar y guardar en los formatos de Aseprite, o tomar los colores del sprite */
 static ui::FileDialog g_palDlg;
 void SpriteEditor::drawPaletteFileButtons(Project &proj) {
     auto &t = spriteTools();
@@ -1209,7 +1185,6 @@ void SpriteEditor::drawPaletteFileButtons(Project &proj) {
 
 void SpriteEditor::drawTimeline() {
     int frames = (int)st.layers[0].cels.size(), layers = (int)st.layers.size();
-    // barra de controles
     if (ui::iconButton("play", playing ? Icon::Stop : Icon::Play, playing, playing ? "Detener (Enter)" : "Reproducir (Enter)", 26)) { playing = !playing; playT = 0; }
     ImGui::SameLine();
     if (ui::iconButton("prevf", Icon::Prev, false, "Frame anterior (,)", 26)) curFrame = (curFrame + frames - 1) % frames;
@@ -1228,7 +1203,7 @@ void SpriteEditor::drawTimeline() {
     ImGui::SameLine(0, 16);
     ImGui::AlignTextToFramePadding();
     ImGui::Text("Frame %d/%d", curFrame + 1, frames); ImGui::SameLine();
-    ImGui::SetNextItemWidth(140);                // con los botones - y + caben hasta 10000
+    ImGui::SetNextItemWidth(140);
     int dur = st.durations[curFrame];
     if (ImGui::InputInt("ms##dur", &dur, 10)) { st.durations[curFrame] = std::clamp(dur, 10, 10000); dirtyForProject = true; }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Duración de este frame en milisegundos");
@@ -1246,11 +1221,9 @@ void SpriteEditor::drawTimeline() {
     if (ImGui::SmallButton("Combinar")) mergeDown();
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Pega la capa actual sobre la de abajo (en todos los frames)");
 
-    // rejilla capas x frames (la capa de arriba se dibuja primero, como en LibreSprite)
     ImGuiTableFlags tf = ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingFixedFit;
     if (ImGui::BeginTable("##tl", frames + 1, tf, ImGui::GetContentRegionAvail())) {
         ImGui::TableSetupScrollFreeze(1, 1);
-        /* rueda: con Mayus (o si todas las capas caben) desplaza los frames hacia los lados */
         if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::GetIO().MouseWheel != 0 &&
             (ImGui::GetIO().KeyShift || ImGui::GetScrollMaxY() <= 0)) {
             ImGui::SetScrollX(ImGui::GetScrollX() - ImGui::GetIO().MouseWheel * 78);
@@ -1267,7 +1240,7 @@ void SpriteEditor::drawTimeline() {
             char lbl[16]; snprintf(lbl, sizeof lbl, "%d", f + 1);
             if (f == curFrame) {
                 ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, IM_COL32(75, 54, 153, 255));
-                if (lastFrame != curFrame) { ImGui::SetScrollHereX(0.5f); lastFrame = curFrame; }   /* el frame actual siempre a la vista */
+                if (lastFrame != curFrame) { ImGui::SetScrollHereX(0.5f); lastFrame = curFrame; }
             }
             if (ImGui::Selectable(lbl, f == curFrame, 0, ImVec2(22, 0))) curFrame = f;
             if (ImGui::BeginPopupContextItem("##fctx")) {
@@ -1378,10 +1351,9 @@ void SpriteEditor::drawBody(Project &proj) {
     handleShortcuts();
     drawOptions();
     ImVec2 avail = ImGui::GetContentRegionAvail();
-    /* la linea de tiempo se puede hacer mas alta arrastrando su borde de arriba (para ver muchas capas) */
     static size_t lastLayers = 0;
     float want = std::min(300.0f, 70.0f + 28.0f * (float)st.layers.size() + 30.0f);
-    if (tlH < 0 || (st.layers.size() > lastLayers && tlH < want)) tlH = want;   /* crece sola al anadir capas */
+    if (tlH < 0 || (st.layers.size() > lastLayers && tlH < want)) tlH = want;
     lastLayers = st.layers.size();
     tlH = std::clamp(tlH, 90.0f, std::max(90.0f, avail.y * 0.75f));
     float timelineH = tileMode ? 0.0f : tlH + 6;

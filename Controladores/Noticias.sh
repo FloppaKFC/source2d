@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# Source 2D - menu para publicar en Inicio > Noticias sin recordar opciones: actualizar el juego (version nueva),
-# dar una noticia (importante, titular o normal, con imagen, texto de debajo y notificacion), editarla, borrarla o verlas.
-# Cada opcion explica en pantalla lo que hace antes de preguntar nada.
-# Usa tools/anunciar.py y tools/publicar_version.py, que firman con tu clave (piden la contrasena) y suben con git.
-#   Controladores/Noticias.sh            (desde cualquier carpeta)
-#   S2D_SIN_SUBIR=1 Controladores/Noticias.sh   firma pero no sube (para probar)
 set -u
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PY=python3
@@ -16,24 +10,23 @@ EXTRA=()
 if [ -t 1 ]; then B=$'\e[1m'; D=$'\e[2m'; V=$'\e[38;5;141m'; R=$'\e[31m'; N=$'\e[0m'; else B= D= V= R= N=; fi
 
 titulo() { printf '\n%s== %s ==%s\n' "$V$B" "$1" "$N"; }
-pedir() {   # pedir "Pregunta" variable [por defecto]
+pedir() {
     local p="$1" def="${3:-}" r
     if [ -n "$def" ]; then read -e -r -p "$p [$def]: " r; r="${r:-$def}"; else read -e -r -p "$p: " r; fi
     printf -v "$2" '%s' "$r"
 }
-si_no() {   # si_no "Pregunta" (s por defecto si $2 = s)
+si_no() {
     local r def="${2:-n}"
     read -r -p "$1 [$( [ "$def" = s ] && echo S/n || echo s/N )]: " r
     r="${r:-$def}"
     [[ "$r" =~ ^[sSyY] ]]
 }
-expandir() {   # ~ y $HOME
+expandir() {
     local p="$1"
     p="${p/#\~/$HOME}"
     printf '%s' "$p"
 }
 
-# Pide una imagen: acepta un archivo o una carpeta (entonces lista sus imagenes para elegir una)
 pedir_imagen() {
     local donde f i lista=()
     IMAGEN=""
@@ -68,7 +61,7 @@ ayuda_texto() {
     echo "Los votos se ven con la opción 6 del menú.${N}"
 }
 
-elegir_tipo() {   # TIPO_FLAGS segun importante / titular / normal, el tema y si notifica
+elegir_tipo() {
     echo "¿Qué tipo de noticia es?"
     echo "  1) Importante  ${D}sale en una ventana en medio del editor la próxima vez que alguien lo abra (solo una vez)${N}"
     echo "  2) Titular     ${D}se queda fijada arriba del todo en Inicio > Noticias, encima de las demás${N}"

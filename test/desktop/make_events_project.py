@@ -20,7 +20,7 @@ var want = { hit: '20,30', mid: '20', inv: '10', or: '10,30', cnt: 3, rep: 5, w:
 var fails = Object.keys(want).filter(function (k) { return String(got[k]) !== String(want[k]); });
 console.log('S2DTEST ' + JSON.stringify({ ok: !fails.length, fails: fails, got: got }));'''
 for _sc in p['scenes']:
-    _sc['events'] = []          # solo los eventos de la prueba
+    _sc['events'] = []
 p['events'] = [
     dict(id='e1', enabled=True, conditions=[pos('gt', '15')], actions=[]),
     dict(id='e1s', enabled=True, level=1, conditions=[], actions=[C('setObjVar', dict(object=O, variable='hit', value='1'))]),

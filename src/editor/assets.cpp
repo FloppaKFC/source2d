@@ -35,7 +35,6 @@ json *findById(json &arr, const std::string &id) {
     return nullptr;
 }
 
-/* ---------------- texturas ---------------- */
 struct CachedTex { ui::PixTexture tex; int rev = -1; };
 static std::map<std::string, CachedTex> g_tex;
 
@@ -75,7 +74,6 @@ void releaseTextures() {
     g_tex.clear();
 }
 
-/* ---------------- objetos y eventos por escena ---------------- */
 bool objectInScene(const json &obj, const std::string &sceneId) {
     std::string s = jstr(obj, "scene");
     return sceneId.empty() || s.empty() || s == sceneId;
@@ -103,7 +101,6 @@ std::string sceneName(Project &proj, const std::string &sceneId) {
     return sc ? jstr(*sc, "name") : std::string();
 }
 
-/* ---------------- objetos ---------------- */
 const char *objTypeLabel(const std::string &type) {
     return type == "text" ? "Texto" : type == "button" ? "Botón" : type == "tile" ? "Tile" : type == "group" ? "Grupo" : type == "light" ? "Luz" : "Sprite";
 }
@@ -135,7 +132,6 @@ static ImU32 colorU32(const std::string &s, int alpha) {
 void drawObjectAt(ImDrawList *dl, Project &proj, const json &obj, ImVec2 c, float sx, float sy, float ang, float opacity, float zoom, int frame) {
     int alpha = (int)(std::clamp(opacity, 0.0f, 100.0f) * 2.55f);
     std::string type = jstr(obj, "type", "sprite");
-    // contorno (outline): la imagen repetida en 8 direcciones con el color del contorno
     static const float kOlDx[8] = {-1, 0, 1, -1, 1, -1, 0, 1}, kOlDy[8] = {-1, -1, -1, 0, 0, 1, 1, 1};
     float ow = obj.contains("outline") && obj["outline"].is_object() ? (float)jnum(obj["outline"], "width", 0) : 0;
     ImU32 olCol = ow > 0 ? colorU32(jstr(obj["outline"], "color", "#000000"), alpha) : 0;
@@ -147,7 +143,7 @@ void drawObjectAt(ImDrawList *dl, Project &proj, const json &obj, ImVec2 c, floa
         const json t = obj.contains("text") ? obj["text"] : json::object();
         float size = (float)jnum(t, "size", 24) * zoom * std::fabs(sy);
         std::string content = jstr(t, "content", "Texto"), align = jstr(t, "align", "left");
-        if (!jstr(t, "font").empty()) {   // fuente del proyecto: se dibuja como imagen
+        if (!jstr(t, "font").empty()) {
             float fsc = 1;
             if (ui::PixTexture *tx = textTexture(proj, jstr(t, "font"), content, (float)jnum(t, "size", 24), jstr(t, "color", "#ffffff"), jbool(t, "bold", true), &fsc)) {
                 float w = tx->w * fsc * zoom * std::fabs(sx), h = tx->h * fsc * zoom * std::fabs(sy);
@@ -185,7 +181,7 @@ void drawObjectAt(ImDrawList *dl, Project &proj, const json &obj, ImVec2 c, floa
         dl->AddText(ui::gameFont(), fs, ImVec2(c.x - ts.x / 2, c.y - ts.y / 2), colorU32(jstr(b, "fg", "#ffffff"), alpha), txt.c_str());
         return;
     }
-    if (type == "light") {   // luz: su radio como un halo y una bombilla en el centro
+    if (type == "light") {
         const json L = obj.contains("light") ? obj["light"] : json::object();
         Px lc = parseColor(jstr(L, "color", "#ffd9a0"));
         float r = (float)jnum(L, "radius", 160) * zoom;
@@ -198,14 +194,12 @@ void drawObjectAt(ImDrawList *dl, Project &proj, const json &obj, ImVec2 c, floa
     std::string spId = jstr(obj, "spriteId");
     ui::PixTexture *tx = spriteFrameTex(proj, spId, frame);
     if (!tx) {
-        // objeto sin sprite: un recuadro con su nombre (por ejemplo, objetos de tipo tile)
         ImVec2 a = corner(-16, -16), e = corner(16, 16);
         dl->AddRect(a, e, IM_COL32(157, 125, 255, alpha), 0, 0, 1.5f);
         dl->AddText(ImVec2(a.x + 3, a.y + 2), IM_COL32(200, 190, 255, alpha), jstr(obj, "name").c_str());
         return;
     }
     if (ow > 0) {
-        // silueta del color del contorno: la textura con el color como tinte (en blanco y negro sirve tal cual)
         for (int k = 0; k < 8; k++) {
             ImVec2 d(kOlDx[k] * ow * zoom, kOlDy[k] * ow * zoom);
             auto sh = [&](ImVec2 v) { return ImVec2(v.x + d.x, v.y + d.y); };
@@ -226,7 +220,7 @@ void objectThumb(Project &proj, const json &obj, float size) {
 void objectThumbAt(ImDrawList *dl, Project &proj, const json &obj, ImVec2 p, float size) {
     dl->AddRectFilled(p, ImVec2(p.x + size, p.y + size), IM_COL32(22, 22, 28, 255), 4);
     std::string type = jstr(obj, "type", "sprite");
-    if (type == "tile" && proj.doc.contains("tilesets"))   // su primer tile
+    if (type == "tile" && proj.doc.contains("tilesets"))
         if (ui::PixTexture *tt = tileTex(proj, jstr(obj, "tilesetId"), 0)) { dl->AddImage(tt->id(), ImVec2(p.x + 3, p.y + 3), ImVec2(p.x + size - 3, p.y + size - 3)); return; }
     if (type == "light") {
         Px lc = parseColor(obj.contains("light") ? jstr(obj["light"], "color", "#ffd9a0") : "#ffd9a0");
@@ -248,7 +242,6 @@ void objectThumbAt(ImDrawList *dl, Project &proj, const json &obj, ImVec2 p, flo
     dl->AddImage(tx->id(), ImVec2(p.x + (size - w) / 2, p.y + (size - h) / 2), ImVec2(p.x + (size + w) / 2, p.y + (size + h) / 2));
 }
 
-/* ---------------- campos ligados al JSON ---------------- */
 bool editNum(const char *label, json &o, const char *key, double def, float speed, const char *fmt, double mn, double mx) {
     double v = jnum(o, key, def);
     bool ch = ImGui::DragScalar(label, ImGuiDataType_Double, &v, speed, mn < mx ? &mn : nullptr, mn < mx ? &mx : nullptr, fmt);
@@ -320,7 +313,6 @@ bool comboOptions(const char *label, json &o, const char *key, const std::vector
     return ch;
 }
 
-/* ---------------- historial ---------------- */
 void JsonHistory::track(const json &cur) {
     if (!init) { stable = cur; init = true; return; }
     if (ImGui::IsAnyItemActive() || ImGui::IsMouseDown(ImGuiMouseButton_Left) || ImGui::IsMouseDown(ImGuiMouseButton_Right)) return;

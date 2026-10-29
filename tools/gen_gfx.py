@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import jsmin
 src, out = sys.argv[1:3]
 name = sys.argv[3] if len(sys.argv) > 3 else 'gfx_js'
-data = jsmin.thin(open(src, encoding='utf-8').read()).encode('utf-8') + b'\0'   # compactado (tools/jsmin.py)
+data = jsmin.thin(open(src, encoding='utf-8').read()).encode('utf-8') + b'\0'
 with open(out, 'w') as f:
     f.write('/* generado: no editar */\n#pragma once\n#include <stddef.h>\nstatic const unsigned char %s[] = {\n' % name)
     for i in range(0, len(data), 24):

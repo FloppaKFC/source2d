@@ -1,6 +1,3 @@
-/* Source 2D engine - capa de plataforma con raylib 5.5 (solo 2D).
- * Todo se dibuja en la GPU (plat_gpu_*: lienzos, texturas, rellenos, degradados, filtros y shaders) y se presenta
- * escalando con vecino mas cercano, centrado y con letterbox. */
 #define _POSIX_C_SOURCE 200809L
 #include <math.h>
 #include <dirent.h>
@@ -14,7 +11,6 @@
 #include "platform.h"
 #include "gpu_vulkan.h"
 
-/* dibujo con Vulkan (experimental): se pide antes de plat_init; si no arranca se sigue con OpenGL */
 static int want_vk = 0, use_vk = 0;
 static char vk_info[256];
 void plat_request_vulkan(int on) { want_vk = on; }
@@ -28,8 +24,6 @@ const char *plat_renderer_info(void) { return vk_info; }
 #define MAXV 32
 #define SAMPLE_RATE 44100.0
 
-/* voz: tono simple (plat_tone) o efecto con barrido (plat_sfx: frecuencia de f0 a f1 y volumen que se apaga,
-   ambos con curva exponencial, como los rampas de Web Audio) */
 typedef struct { double freq, phase, left; int square; int sweep, wave; double f0, f1, dur, t, vol; } Voice;
 static Voice voices[MAXV];
 static pthread_mutex_t voice_mx = PTHREAD_MUTEX_INITIALIZER;
@@ -40,9 +34,7 @@ static int uncapped_mode = 0;
 static int have_mouse = 0, last_mx = -1, last_my = -1;
 static char shot_path[1024];
 
-/* captura de pantalla (S2D_SHOT / comando shot): la pantalla actual a shot_path en PNG */
 #ifdef S2D_LITE
-/* el jugador ligero no lleva el codificador PNG de raylib: PNG sin comprimir (bloques "stored"), solo para pruebas */
 static unsigned png_crc(unsigned c, const unsigned char *p, size_t n) {
     c = ~c;
     while (n--) { c ^= *p++; for (int k = 0; k < 8; k++) c = (c >> 1) ^ (0xEDB88320u & (0u - (c & 1))); }
@@ -95,7 +87,6 @@ static void save_shot_img(Image im) {
 #endif
 static void save_shot(void) { save_shot_img(LoadImageFromScreen()); }
 
-/* ---------------- audio: voces senoidales/cuadradas (igual que la version SDL) ---------------- */
 static void audio_proc(void *buffer, unsigned int frames) {
     float *out = (float *)buffer;
     pthread_mutex_lock(&voice_mx);
@@ -162,11 +153,10 @@ void plat_sfx(double f0, double f1, double dur, int wave, double vol) {
     pthread_mutex_unlock(&voice_mx);
 }
 
-/* ---------------- musica en streaming ---------------- */
 #define MAX_TRACKS 64
 typedef struct {
     char id[96];
-    unsigned char *buf;     /* debe vivir mientras dure el stream (raylib lo lee en vivo) */
+    unsigned char *buf;
     Music music;
     int loaded;
 } Track;
@@ -236,10 +226,6 @@ void plat_audio_update(void) {
     if (!t->music.looping && !IsMusicStreamPlaying(t->music)) cur_track = -1;
 }
 
-/* ---------------- sonidos (archivos) con canales ----------------
-   Cada sonido cargado tiene SND_VOICES voces (alias que comparten los datos): pueden sonar a la vez; si todas suenan,
-   se reutiliza la mas antigua. Cada voz pertenece a un canal (0-7) con su volumen: 0 efectos, 1 voces, 2 ambiente,
-   3 interfaz... (el juego decide). */
 #define MAX_SOUNDS 256
 #define SND_VOICES 8
 #define SND_CHANNELS 8
@@ -272,7 +258,6 @@ int plat_sound_load(const char *id, const unsigned char *data, size_t len, const
     nsounds++;
     return 0;
 }
-/* vol 0-1, pitch 1 = normal, pan -1 izquierda .. 1 derecha; devuelve la voz o -1 */
 int plat_sound_play(const char *id, double vol, double pitch, double pan, int ch) {
     if (!audio_ok) return -1;
     SoundSlot *s = find_sound(id);
@@ -290,11 +275,10 @@ int plat_sound_play(const char *id, double vol, double pitch, double pan, int ch
     s->age[best] = ++snd_clock;
     SetSoundVolume(*snd, s->vol[best] * chan_vol[ch]);
     SetSoundPitch(*snd, (float)(pitch < 0.05 ? 0.05 : pitch > 8 ? 8 : pitch));
-    SetSoundPan(*snd, (float)((1 - (pan < -1 ? -1 : pan > 1 ? 1 : pan)) / 2));   /* raylib: 1 izquierda, 0 derecha */
+    SetSoundPan(*snd, (float)((1 - (pan < -1 ? -1 : pan > 1 ? 1 : pan)) / 2));
     PlaySound(*snd);
     return best;
 }
-/* ch -1 = todos */
 void plat_channel_stop(int ch) {
     for (int i = 0; i < nsounds; i++) for (int v = 0; v < SND_VOICES; v++)
         if (ch < 0 || sounds[i].ch[v] == ch) StopSound(sounds[i].voice[v]);
@@ -316,10 +300,6 @@ int plat_sound_playing(const char *id) {
     return 0;
 }
 
-/* ---------------- mando ----------------
-   Los botones llegan al juego como teclas: "pad_a", "pad_b", "pad_x", "pad_y", "pad_lb", "pad_rb", "pad_lt", "pad_rt",
-   "pad_select", "pad_start", "pad_l3", "pad_r3" y "pad_up/down/left/right" (cruceta o stick izquierdo). El segundo
-   mando usa "pad2_", el tercero "pad3_"... Asi funcionan con "tecla pulsada" y con todos los controles del motor. */
 #define PADS 4
 #define PAD_KEYS 16
 static const char *pad_key_names[PAD_KEYS] = { "a", "b", "x", "y", "lb", "rb", "lt", "rt", "select", "start", "l3", "r3", "up", "down", "left", "right" };
@@ -350,21 +330,19 @@ static void poll_pads(PlatDispatchFn fn) {
         }
     }
 }
-/* eje: 0 stick izq X, 1 izq Y, 2 der X, 3 der Y, 4 gatillo izq, 5 gatillo der (-1..1; gatillos 0..1) */
 double plat_pad_axis(int pad, int axis) {
     if (pad < 0 || pad >= PADS || !IsGamepadAvailable(pad)) return 0;
     static const int ax[6] = { GAMEPAD_AXIS_LEFT_X, GAMEPAD_AXIS_LEFT_Y, GAMEPAD_AXIS_RIGHT_X, GAMEPAD_AXIS_RIGHT_Y, GAMEPAD_AXIS_LEFT_TRIGGER, GAMEPAD_AXIS_RIGHT_TRIGGER };
     if (axis < 0 || axis > 5) return 0;
     double v = GetGamepadAxisMovement(pad, ax[axis]);
-    if (axis >= 4) return (v + 1) / 2;                      /* raylib da los gatillos de -1 a 1 */
-    return fabs(v) < 0.15 ? 0 : v;                          /* zona muerta */
+    if (axis >= 4) return (v + 1) / 2;
+    return fabs(v) < 0.15 ? 0 : v;
 }
 int plat_pad_connected(int pad) { return pad >= 0 && pad < PADS && IsGamepadAvailable(pad); }
 void plat_pad_vibrate(int pad, double left, double right, double dur) {
     if (pad >= 0 && pad < PADS && IsGamepadAvailable(pad)) SetGamepadVibration(pad, (float)left, (float)right, (float)dur);
 }
 
-/* ---------------- carpetas: nombres separados por \n (las carpetas acaban en /) ---------------- */
 char *plat_dir_list(const char *path) {
     DIR *d = opendir(path);
     if (!d) return NULL;
@@ -386,7 +364,6 @@ char *plat_dir_list(const char *path) {
     return out;
 }
 
-/* ---------------- imagenes desde memoria (PNG, JPG, BMP, GIF, QOI) ---------------- */
 unsigned char *plat_image_decode(const unsigned char *data, size_t len, int *w, int *h) {
     static const char *types[] = { ".png", ".jpg", ".bmp", ".gif", ".qoi" };
     const char *t = ".png";
@@ -404,9 +381,6 @@ unsigned char *plat_image_decode(const unsigned char *data, size_t len, int *w, 
     return out;
 }
 
-/* ---------------- pase de shader para capas ----------------
-   Los shaders del editor son GLSL ES 1.0 (v_uv, u_tex, texture2D, gl_FragColor).
-   Se traducen a GLSL 330 con el vertex shader por defecto de raylib. */
 static char *replace_all(const char *s, const char *from, const char *to) {
     size_t fl = strlen(from), tl = strlen(to), count = 0;
     for (const char *p = s; (p = strstr(p, from)) != NULL; p += fl) count++;
@@ -423,7 +397,6 @@ static char *replace_all(const char *s, const char *from, const char *to) {
     strcpy(w, p);
     return out;
 }
-/* GLSL ES 1.0 del editor -> GLSL del contexto: 1.20 con OpenGL 2.1 (graficas viejas) o 3.30 con OpenGL 3.3+ */
 static char *glsl_to_330_mode(const char *src, int gpu) {
     int gl21 = rlGetVersion() == RL_OPENGL_21;
     static const char *HEADER33 =
@@ -456,8 +429,6 @@ static char *glsl_to_330_mode(const char *src, int gpu) {
     for (size_t i = 0; i < sizeof drop / sizeof drop[0]; i++) {
         b = replace_all(a, drop[i], ""); free(a); a = b; if (!a) return NULL;
     }
-    /* en la GPU la textura de entrada es una render texture (fila 0 = abajo): v_uv y las lecturas se dan la vuelta
-       para que el shader vea lo mismo que en el pase por CPU (v_uv.y = 0 arriba) */
     const char *pairs[][2] = { { "texture2D(", gl21 ? "texture2D(" : "texture(" }, { "gl_FragColor", gl21 ? "gl_FragColor" : "finalColor" },
                                { "v_uv", "fragTexCoord" }, { "u_tex", "texture0" } };
     const char *pairs_gpu[][2] = { { "texture2D(", "s2d_tex(" }, { "gl_FragColor", gl21 ? "gl_FragColor" : "finalColor" },
@@ -509,13 +480,10 @@ static PassShader *pass_shader_mode(const char *glsl, int gpu) {
     }
     return ps;
 }
-/* intensidad del siguiente pase (uniform float u_amount, 0-1; por defecto 1) */
 static float pass_amount = 1.0f;
 void plat_shader_amount(float a) { pass_amount = a; }
 
-/* ---------------- ventana ---------------- */
 #include "s2d_diag.h"
-/* --diagnostico: informe en ~/source2d-diagnostico.txt (ver s2d_diag.h); devuelve 0 si todo funciona */
 int plat_diagnose(const char *programa, char *resumen, size_t n) {
     s2d_diag_begin(programa);
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
@@ -541,16 +509,15 @@ int plat_diagnose(const char *programa, char *resumen, size_t n) {
 
 int plat_init(int w, int h, const char *title, int uncapped) {
     uncapped_mode = uncapped;
-    /* Sin FLAG_VSYNC cuando no hay limite: el medidor debe ver el costo real. */
-    if (!getenv("S2D_LOG")) SetTraceLogLevel(LOG_WARNING);   /* los INFO de raylib solo con S2D_LOG=1 */
+    if (!getenv("S2D_LOG")) SetTraceLogLevel(LOG_WARNING);
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | (uncapped ? 0u : FLAG_VSYNC_HINT));
     InitWindow(w, h, title);
     if (!IsWindowReady()) {
         fprintf(stderr, "Source 2D engine: no se pudo abrir la ventana (raylib)\n");
         return 1;
     }
-    SetExitKey(KEY_NULL);            /* raylib cierra con ESC por defecto; el juego decide */
-    SetTargetFPS(0);                 /* el limite lo pone plat_wait_frame */
+    SetExitKey(KEY_NULL);
+    SetTargetFPS(0);
     if (want_vk) {
         use_vk = vk_init(GetRenderWidth(), GetRenderHeight(), uncapped, vk_info, sizeof vk_info) == 0;
         if (use_vk) fprintf(stderr, "Source 2D engine: dibujo con Vulkan (%s)\n", vk_info);
@@ -595,9 +562,6 @@ void plat_shutdown(void) {
 uint32_t plat_ticks(void) { return (uint32_t)(GetTime() * 1000.0); }
 double plat_time_ms(void) { return GetTime() * 1000.0; }
 
-/* Limita a la frecuencia del monitor (60, 75, 144 Hz...). Antes esperaba siempre hasta 16 ms y despues el VSync
-   esperaba el siguiente refresco: a 75 Hz salian 37 fps y a 144 Hz, 48. Ahora espera un poco menos de un refresco
-   y deja que el VSync cuadre el resto; si el VSync no esta activo, igual queda a la frecuencia del monitor. */
 void plat_wait_frame(uint32_t frame_start, int uncapped) {
     if (uncapped || uncapped_mode) return;
     static double target = 0;
@@ -610,7 +574,6 @@ void plat_wait_frame(uint32_t frame_start, int uncapped) {
     if (el < target) WaitTime((target - el) / 1000.0);
 }
 
-/* KeyboardKey de raylib -> valor de KeyboardEvent.key */
 static const char *key_name(int k, char *buf) {
     switch (k) {
     case KEY_SPACE: return " ";
@@ -631,12 +594,11 @@ static const char *key_name(int k, char *buf) {
     default: break;
     }
     if (k >= KEY_F1 && k <= KEY_F12) { snprintf(buf, 8, "F%d", k - KEY_F1 + 1); return buf; }
-    if (k >= 'A' && k <= 'Z') { buf[0] = (char)(k + 32); buf[1] = 0; return buf; }   /* minusculas, como SDL */
+    if (k >= 'A' && k <= 'Z') { buf[0] = (char)(k + 32); buf[1] = 0; return buf; }
     if (k >= 32 && k < 127) { buf[0] = (char)k; buf[1] = 0; return buf; }
     return "";
 }
 
-/* Teclas de raylib que el runtime puede recibir (rango de KeyboardKey). */
 #define KEY_MAX_SCAN 350
 
 int plat_poll(PlatDispatchFn fn) {
@@ -655,7 +617,6 @@ int plat_poll(PlatDispatchFn fn) {
         fn("mousemove", "", 0, mx, my, 0);
         last_mx = mx; last_my = my; have_mouse = 1;
     }
-    /* raylib: 0 izquierdo, 1 derecho, 2 medio. Se convierte al orden del runtime (0 izq, 1 medio, 2 der). */
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) fn("mousedown", "", 0, mx, my, 0);
     if (IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE)) fn("mousedown", "", 0, mx, my, 1);
     if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) fn("mousedown", "", 0, mx, my, 2);
@@ -663,7 +624,7 @@ int plat_poll(PlatDispatchFn fn) {
     if (IsMouseButtonReleased(MOUSE_BUTTON_MIDDLE)) fn("mouseup", "", 0, mx, my, 1);
     if (IsMouseButtonReleased(MOUSE_BUTTON_RIGHT)) fn("mouseup", "", 0, mx, my, 2);
     float wh = GetMouseWheelMove();
-    if (wh != 0) fn("wheel", "", 0, mx, my, wh > 0 ? -1 : 1);       /* btn: -1 arriba, 1 abajo */
+    if (wh != 0) fn("wheel", "", 0, mx, my, wh > 0 ? -1 : 1);
     return 1;
 }
 
@@ -680,12 +641,7 @@ void plat_fit_window(int w, int h) {
     SetWindowPosition((int)mp.x + (mw - nw) / 2, (int)mp.y + (mh - nh) / 2);
 }
 
-/* ---------------- dibujo en la GPU ----------------
-   Los lienzos grandes del juego (pantalla, capas, auxiliares) son render textures: los sprites se dibujan como
-   cuadrados con textura, los rellenos como triangulos y los shaders van de textura a textura, sin volver a la CPU.
-   Todo con alfa premultiplicado (las texturas se premultiplican al subirlas). Las render textures guardan la imagen
-   boca abajo (fila 0 = abajo): al leerlas como origen se da la vuelta a la coordenada v. */
-#define GPU_TARGETS 1024                 /* pantalla, capas, trozos de mapas de tiles, textos con contorno... */
+#define GPU_TARGETS 1024
 #define GPU_TEXTURES 16384
 typedef struct { RenderTexture2D rt, alt; int w, h, used, has_alt; } GpuTarget;
 static GpuTarget gtargets[GPU_TARGETS];
@@ -709,7 +665,7 @@ static int gpu_bind(int id) {
     if (gcur == id) return 1;
     gpu_unbind();
     BeginTextureMode(gtargets[id].rt);
-    rlDisableBackfaceCulling();                      /* los espejos (escala -1) invierten el orden de los vertices */
+    rlDisableBackfaceCulling();
     gcur = id;
     gblend = -1;
     return 1;
@@ -717,15 +673,13 @@ static int gpu_bind(int id) {
 static void gpu_blend(int mode) {
     if (mode == gblend) return;
     gpu_flush();
-    if (mode == 1) rlSetBlendFactors(RL_ONE, RL_ONE, RL_FUNC_ADD);              /* lighter */
-    else if (mode == 2) rlSetBlendFactors(RL_ONE, RL_ZERO, RL_FUNC_ADD);        /* copy (borrar) */
-    else if (mode == 3) rlSetBlendFactors(RL_ZERO, RL_ONE_MINUS_SRC_ALPHA, RL_FUNC_ADD);   /* destination-out (luces) */
-    else rlSetBlendFactors(RL_ONE, RL_ONE_MINUS_SRC_ALPHA, RL_FUNC_ADD);        /* source-over, premultiplicado */
+    if (mode == 1) rlSetBlendFactors(RL_ONE, RL_ONE, RL_FUNC_ADD);
+    else if (mode == 2) rlSetBlendFactors(RL_ONE, RL_ZERO, RL_FUNC_ADD);
+    else if (mode == 3) rlSetBlendFactors(RL_ZERO, RL_ONE_MINUS_SRC_ALPHA, RL_FUNC_ADD);
+    else rlSetBlendFactors(RL_ONE, RL_ONE_MINUS_SRC_ALPHA, RL_FUNC_ADD);
     rlSetBlendMode(RL_BLEND_CUSTOM);
     gblend = mode;
 }
-/* vecino mas cercano y sin repetir: al muestrear justo en el borde (medio pixel, contornos) se lee el borde, no el
-   lado contrario de la imagen */
 static void gpu_tex_params(Texture2D t) {
     SetTextureFilter(t, TEXTURE_FILTER_POINT);
     SetTextureWrap(t, TEXTURE_WRAP_CLAMP);
@@ -761,7 +715,6 @@ void plat_gpu_target_free(int id) {
     gtargets[id].used = 0;
 }
 
-/* sube (o actualiza) una textura RGBA con alfa directo; devuelve su numero */
 int plat_gpu_tex(int id, const uint8_t *rgba, int w, int h) {
     if (!IsWindowReady() || !rgba || w <= 0 || h <= 0) return -1;
     if (use_vk) return vk_tex(id, rgba, w, h);
@@ -774,7 +727,7 @@ int plat_gpu_tex(int id, const uint8_t *rgba, int w, int h) {
         pm[i] = (uint8_t)((rgba[i] * a + 127) / 255); pm[i + 1] = (uint8_t)((rgba[i + 1] * a + 127) / 255);
         pm[i + 2] = (uint8_t)((rgba[i + 2] * a + 127) / 255); pm[i + 3] = (uint8_t)a;
     }
-    gpu_flush();                                     /* lo ya pedido con la textura vieja se dibuja antes de cambiarla */
+    gpu_flush();
     if (id >= 0 && id < GPU_TEXTURES && gtex_used[id] && gtex[id].width == w && gtex[id].height == h) {
         UpdateTexture(gtex[id], pm);
         return id;
@@ -802,7 +755,6 @@ void plat_gpu_tex_free(int id) {
     gtex_used[id] = 0;
 }
 
-/* imagen (textura o render texture) con la transformacion m (a b c d e f del canvas) */
 void plat_gpu_draw(int target, int src_rt, int src, double sx, double sy, double sw, double sh,
                    double dx, double dy, double dw, double dh, const double m[6], double alpha, int mode) {
     if (use_vk) { vk_draw(target, src_rt, src, sx, sy, sw, sh, dx, dy, dw, dh, m, alpha, mode); return; }
@@ -829,7 +781,6 @@ void plat_gpu_draw(int target, int src_rt, int src, double sx, double sy, double
     rlEnd();
     rlSetTexture(0);
 }
-/* poligono convexo (abanico) de color liso; pts en coordenadas del lienzo */
 void plat_gpu_fill(int target, const double *pts, int n, double r, double g, double b, double a, int mode) {
     if (use_vk) { vk_fill(target, pts, n, r, g, b, a, mode); return; }
     if (!gpu_bind(target) || n < 3) return;
@@ -850,7 +801,6 @@ void plat_gpu_rect(int target, double x0, double y0, double x1, double y1, doubl
     double p[8] = { x0, y0, x1, y0, x1, y1, x0, y1 };
     plat_gpu_fill(target, p, 4, r, g, b, a, mode);
 }
-/* shader GLSL sobre todo el lienzo, en la GPU (de su textura a la de reserva, y se intercambian) */
 int plat_gpu_shader(int target, const char *glsl, double t, const float cam[3]) {
     if (use_vk) return vk_shader(target, glsl, t, cam, pass_amount);
     if (target < 0 || target >= GPU_TARGETS || !gtargets[target].used || !glsl) return -1;
@@ -878,15 +828,11 @@ int plat_gpu_shader(int target, const char *glsl, double t, const float cam[3]) 
     gblend = -1;
     return 0;
 }
-/* ---------------- filtros y degradados en la GPU ----------------
-   Los filtros CSS (grayscale, sepia, saturate, hue-rotate, invert, brightness, contrast, opacity y blur) son pases
-   de shader sobre una zona del lienzo: de su textura a la de reserva y de vuelta, con el recorte (scissor) en esa
-   zona, asi lo de fuera queda igual. Los colores se tratan sin premultiplicar, como en CSS. */
 static const char *FS_COLOR =
     "uniform vec3 u_m0;\n"
     "uniform vec3 u_m1;\n"
     "uniform vec3 u_m2;\n"
-    "uniform vec2 u_k;\n"                              /* x: 0 matriz, 1 invert, 2 brightness, 3 contrast, 4 opacity; y: cantidad */
+    "uniform vec2 u_k;\n"
     "void main() {\n"
     "  vec4 c = texture2D(u_tex, v_uv);\n"
     "  if (c.a <= 0.0) { gl_FragColor = c; return; }\n"
@@ -899,7 +845,6 @@ static const char *FS_COLOR =
     "  s = clamp(s, 0.0, 1.0);\n"
     "  gl_FragColor = vec4(s * a, a);\n"
     "}\n";
-/* desenfoque de caja en una direccion (radio r en pixeles); lo que cae fuera de la zona cuenta como transparente */
 static const char *FS_BLUR =
     "uniform vec4 u_rect;\n"
     "uniform vec3 u_blur;\n"
@@ -914,12 +859,11 @@ static const char *FS_BLUR =
     "  }\n"
     "  gl_FragColor = sum / (2.0 * r + 1.0);\n"
     "}\n";
-/* degradado radial: fragTexCoord trae la posicion en el lienzo (los vertices la llevan como coordenada de textura) */
 static const char *FS_GRAD =
-    "uniform vec4 u_g;\n"                              /* centro x, y, radios r0, r1 */
+    "uniform vec4 u_g;\n"
     "uniform vec4 u_col[8];\n"
     "uniform float u_pos[8];\n"
-    "uniform vec2 u_n;\n"                              /* x: paradas, y: opacidad */
+    "uniform vec2 u_n;\n"
     "void main() {\n"
     "  float d = distance(fragTexCoord, u_g.xy), span = u_g.w - u_g.z;\n"
     "  float t = span > 0.000001 ? (d - u_g.z) / span : (d >= u_g.w ? 1.0 : 0.0);\n"
@@ -955,7 +899,6 @@ static Builtin *builtin(Builtin *b, const char *body, const char *const names[],
     b->ok = 1;
     return b;
 }
-/* un pase del shader sh sobre la zona rc del lienzo (en su sitio); set pone los uniforms */
 static int gpu_zone_pass(int target, Shader sh, const int rc[4], void (*set)(Shader, const void *), const void *arg) {
     if (target < 0 || target >= GPU_TARGETS || !gtargets[target].used) return -1;
     GpuTarget *g = &gtargets[target];
@@ -978,7 +921,7 @@ static int gpu_zone_pass(int target, Shader sh, const int rc[4], void (*set)(Sha
     EndShaderMode();
     EndScissorMode();
     EndTextureMode();
-    BeginTextureMode(g->rt);                         /* la zona vuelve al lienzo tal cual */
+    BeginTextureMode(g->rt);
     rlDisableBackfaceCulling();
     BeginScissorMode(x0, y0, x1 - x0, y1 - y0);
     rlSetBlendFactors(RL_ONE, RL_ZERO, RL_FUNC_ADD);
@@ -995,8 +938,6 @@ static void set_color(Shader sh, const void *p) {
     for (int i = 0; i < 3; i++) if (b_color.loc[i] >= 0) SetShaderValue(sh, b_color.loc[i], a->m + 3 * i, SHADER_UNIFORM_VEC3);
     if (b_color.loc[3] >= 0) SetShaderValue(sh, b_color.loc[3], a->k, SHADER_UNIFORM_VEC2);
 }
-/* filtro de color sobre la zona rc; kind: 0 grayscale, 1 sepia, 2 saturate, 3 hue-rotate (grados), 4 invert,
-   5 brightness, 6 contrast, 7 opacity (las mismas matrices que el CSS) */
 int plat_gpu_color(int target, int kind, double amt, const int rc[4]) {
     static const char *const names[] = { "u_m0", "u_m1", "u_m2", "u_k" };
     ColorArgs a = { { 1, 0, 0, 0, 1, 0, 0, 0, 1 }, { 0, (float)amt } };
@@ -1032,7 +973,6 @@ static void set_blur(Shader sh, const void *p) {
     if (b_blur.loc[0] >= 0) SetShaderValue(sh, b_blur.loc[0], a->rect, SHADER_UNIFORM_VEC4);
     if (b_blur.loc[1] >= 0) SetShaderValue(sh, b_blur.loc[1], a->blur, SHADER_UNIFORM_VEC3);
 }
-/* desenfoque (como blur(r px) de CSS): dos pasadas de caja por filas y por columnas, dentro de la zona rc */
 int plat_gpu_blur(int target, double radius, const int rc[4]) {
     static const char *const names[] = { "u_rect", "u_blur" };
     int r = (int)floor(radius + 0.5);
@@ -1050,8 +990,6 @@ int plat_gpu_blur(int target, double radius, const int rc[4]) {
     }
     return 0;
 }
-/* poligono convexo (abanico) relleno con un degradado radial: grad = cx, cy, r0, r1, paradas, (pos, r, g, b, a)...
-   en coordenadas del lienzo (colores 0-255, alfa 0-1) */
 int plat_gpu_fill_grad(int target, const double *pts, int n, const double *grad, double alpha, int mode) {
     static const char *const names[] = { "u_g", "u_col", "u_pos", "u_n" };
     if (use_vk) return vk_fill_grad(target, pts, n, grad, alpha, mode);
@@ -1085,7 +1023,6 @@ int plat_gpu_fill_grad(int target, const double *pts, int n, const double *grad,
     EndShaderMode();
     return 0;
 }
-/* lee una zona del lienzo como RGBA con alfa directo (lento: solo para casos raros) */
 int plat_gpu_read(int target, int x, int y, int w, int h, uint8_t *out) {
     if (use_vk) return vk_read(target, x, y, w, h, out);
     if (target < 0 || target >= GPU_TARGETS || !gtargets[target].used || !out) return -1;
@@ -1107,12 +1044,10 @@ int plat_gpu_read(int target, int x, int y, int w, int h, uint8_t *out) {
     UnloadImage(im);
     return 0;
 }
-/* lleva el lienzo a la ventana (escalado a lo que quepa, centrado y con bandas negras) */
 static int pixel_perfect = 0;
 void plat_set_pixel_perfect(int on) { pixel_perfect = on ? 1 : 0; }
 void plat_gpu_present(int target, int *dx, int *dy, int *dw, int *dh) {
     if (use_vk) {
-        /* captura (pruebas): el lienzo del juego tal cual, antes de escalarlo a la ventana */
         if (shot_path[0]) {
             int sw = 0, sh = 0;
             vk_target_size(target, &sw, &sh);
@@ -1125,7 +1060,7 @@ void plat_gpu_present(int target, int *dx, int *dy, int *dw, int *dh) {
             shot_path[0] = 0;
         }
         vk_present(target, GetRenderWidth(), GetRenderHeight(), pixel_perfect, dx, dy, dw, dh);
-        PollInputEvents();                                  /* sin EndDrawing de raylib: la entrada se lee aqui */
+        PollInputEvents();
         return;
     }
     if (target < 0 || target >= GPU_TARGETS || !gtargets[target].used) return;
@@ -1133,7 +1068,7 @@ void plat_gpu_present(int target, int *dx, int *dy, int *dw, int *dh) {
     GpuTarget *g = &gtargets[target];
     int w = g->w, h = g->h, ww = GetRenderWidth(), wh = GetRenderHeight();
     double sc = fmin((double)ww / w, (double)wh / h);
-    if (pixel_perfect && sc >= 1) sc = floor(sc);          /* escala entera: cada pixel del juego mide lo mismo */
+    if (pixel_perfect && sc >= 1) sc = floor(sc);
     int W = (int)floor(w * sc), H = (int)floor(h * sc);
     if (W < 1) W = 1;
     if (H < 1) H = 1;
@@ -1158,7 +1093,7 @@ void plat_request_shot(const char *png_path) {
 
 void plat_set_fullscreen(int on) {
     int now = IsWindowState(FLAG_BORDERLESS_WINDOWED_MODE) ? 1 : 0;
-    if (on != now) ToggleBorderlessWindowed();   /* equivalente a FULLSCREEN_DESKTOP de SDL */
+    if (on != now) ToggleBorderlessWindowed();
 }
 
 void plat_set_title(const char *s) {
@@ -1166,7 +1101,6 @@ void plat_set_title(const char *s) {
 }
 
 #ifdef S2D_LITE
-/* jugador ligero: raylib sin el modulo rtext, pero rcore aun usa esta funcion al listar carpetas */
 int TextFindIndex(const char *text, const char *find) {
     const char *p = text && find ? strstr(text, find) : NULL;
     return p ? (int)(p - text) : -1;

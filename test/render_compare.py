@@ -8,7 +8,6 @@ import sys
 import numpy as np
 from PIL import Image
 
-
 def main():
     if len(sys.argv) < 3:
         sys.exit(__doc__)
@@ -35,7 +34,6 @@ def main():
         if d.max() > 0:
             Image.fromarray(np.clip(d * 4, 0, 255).astype(np.uint8)).save(os.path.join(b, 'diff', f))
     print('peor: %.2f %%' % peor)
-
 
 if __name__ == '__main__':
     main()

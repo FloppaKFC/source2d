@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-# GitHub de mentira para probar "Publicar en Source Play" sin internet: inicio de sesion con codigo (device flow),
-# copia del repositorio de envios, rama, archivos y pull request, y el comentario del revisor.
-# Uso: github_falso.py <puerto> <carpeta donde guardar lo subido>
 import base64, json, os, sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -9,7 +6,6 @@ PUERTO, SALIDA = int(sys.argv[1]), sys.argv[2]
 estado = {"sondeos": 0, "refs": 0, "registrado": False, "sigo": False}
 PERFIL = {"login": "amiga", "name": "Amiga Prueba", "bio": "Hago juegos de ritmo", "created_at": "2020-05-01T10:00:00Z",
           "followers": 3, "following": 1, "avatar_url": "file://" + os.path.abspath(os.path.join(SALIDA, "avatar.png"))}
-
 
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):
@@ -105,7 +101,7 @@ class H(BaseHTTPRequestHandler):
         if not self.autorizado():
             return
         ruta, _, q = self.path.partition("?")
-        if "page=" in q and "page=1" not in q.split("&"):   # listas por paginas: todo cabe en la primera
+        if "page=" in q and "page=1" not in q.split("&"):
             return self.responder(200, [])
         if self.path == "/user":
             return self.responder(200, {"login": "creador"})
@@ -123,7 +119,6 @@ class H(BaseHTTPRequestHandler):
                                         "following": 1 if estado["sigo"] else 0, "avatar_url": ""})
         if self.path == "/user/following/amiga":
             return self.responder(204 if estado["sigo"] else 404, {})
-        # listas de GitHub: el editor solo cuenta las cuentas de Source Play (amiga y creador)
         if ruta == "/users/amiga/followers":
             return self.responder(200, [{"login": "uno"}, {"login": "dos"}, {"login": "tres"}] + ([{"login": "creador"}] if estado["sigo"] else []))
         if ruta == "/users/amiga/following":
@@ -133,7 +128,7 @@ class H(BaseHTTPRequestHandler):
         if ruta in ("/users/creador/followers", "/users/creador/following"):
             return self.responder(200, [{"login": "amiga"}] if ruta.endswith("followers") or estado["sigo"] else [])
         if self.path == "/repos/creador/source2d-envios/git/ref/heads/main":
-            estado["refs"] += 1   # la copia tarda un poco en existir
+            estado["refs"] += 1
             if estado["refs"] < 2:
                 return self.responder(404, {"message": "Not Found"})
             return self.responder(200, {"object": {"sha": "abc123"}})
@@ -141,6 +136,5 @@ class H(BaseHTTPRequestHandler):
             return self.responder(200, [{"user": {"login": "otro"}, "body": "¡Qué bueno!"},
                                         {"user": {"login": "FloppaKFC"}, "body": "Rechazado: falta un final"}])
         self.responder(404, {"message": "Not Found"})
-
 
 HTTPServer(("127.0.0.1", PUERTO), H).serve_forever()

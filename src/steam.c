@@ -1,8 +1,3 @@
-/* Source 2D engine - Steam (extension oficial "Steam"): logros, estadisticas, guardado en la nube, overlay, presencia,
- * nombre e idioma del jugador. Usa la API plana de Steamworks cargada al vuelo: el juego no la necesita para abrir.
- * Para publicar en Steam: junto al ejecutable van libsteam_api.so (Linux) o steam_api64.dll (Windows) del SDK de
- * Steamworks y, para probar fuera de Steam, steam_appid.txt con el numero de la app. Sin ellos, todo dice "no hay
- * Steam" y el juego funciona igual. */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,7 +24,6 @@ static struct {
     FnVoidV run, shutdown;
 } S;
 
-/* accesor de una interfaz: SteamAPI_SteamUserStats_v013... (el numero cambia con cada SDK: se prueba del mas nuevo) */
 static void *iface(const char *name) {
     char b[96];
     for (int v = 40; v >= 1; v--) {
@@ -41,7 +35,6 @@ static void *iface(const char *name) {
 }
 #define M(type, name) ((type)sym(S.lib, name))
 static void store_stats(void) { int (*f)(void *) = M(int (*)(void *), "SteamAPI_ISteamUserStats_StoreStats"); if (f && S.stats) f(S.stats); }
-/* llama f(args) solo si la funcion existe en esta version de la biblioteca */
 #define CALL(type, name, fallback, ...) (M(type, name) ? M(type, name)(__VA_ARGS__) : (fallback))
 
 int steam_init(const char *exe_dir) {
@@ -91,7 +84,7 @@ int steam_achievement(int op, const char *name, int a, int b) {
 }
 double steam_stat(int op, const char *name, double v) {
     if (!S.ok || !S.stats || !name) return 0;
-    if (op == 0) {             /* leer (primero como entero, si no como decimal) */
+    if (op == 0) {
         int32_t i = 0; float f = 0;
         int (*gi)(void *, const char *, int32_t *) = M(int (*)(void *, const char *, int32_t *), "SteamAPI_ISteamUserStats_GetStatInt32");
         if (gi && gi(S.stats, name, &i)) return i;
@@ -108,7 +101,6 @@ double steam_stat(int op, const char *name, double v) {
     store_stats();
     return ok;
 }
-/* nube: 0 escribir, 1 leer (malloc), 2 existe, 3 borrar, 4 activada */
 int steam_cloud(int op, const char *name, const char *data, size_t len, char **out) {
     if (!S.ok || !S.storage) return 0;
     switch (op) {
@@ -130,7 +122,6 @@ int steam_cloud(int op, const char *name, const char *data, size_t len, char **o
     }
     return 0;
 }
-/* textos del jugador: 0 nombre, 1 idioma del juego, 2 id de Steam, 3 numero de la app */
 const char *steam_text(int op) {
     static char b[64];
     if (!S.ok) return "";
@@ -144,8 +135,6 @@ const char *steam_text(int op) {
     }
     return "";
 }
-/* overlay: 0 abrir un dialogo ("achievements", "friends", "stats"...), 1 abrir una pagina web, 2 abrir la tienda
-   (b = app), 3 esta activado */
 int steam_overlay(int op, const char *a, int b) {
     if (!S.ok || !S.friends) return 0;
     switch (op) {

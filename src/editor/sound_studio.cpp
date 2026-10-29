@@ -19,7 +19,7 @@ static const Inst kInst[] = {{"piano", "Piano"}, {"organo", "Órgano"}, {"bajo",
 static const char *kDrums[] = {"Bombo", "Caja", "Charles", "Charles abierto", "Palmas", "Tom grave", "Tom agudo", "Platillo"};
 static const int kDrumN = 8;
 static const char *kNoteNames[] = {"Do", "Do#", "Re", "Re#", "Mi", "Fa", "Fa#", "Sol", "Sol#", "La", "La#", "Si"};
-static const int kLow = 36, kHigh = 96;    // Do2 .. Do7
+static const int kLow = 36, kHigh = 96;
 
 json newSong(const std::string &name, bool sfx) {
     json s = {{"format", "source2d-sound"}, {"name", name}, {"mode", sfx ? "sfx" : "music"}, {"bpm", 120}, {"bars", 4},
@@ -30,14 +30,12 @@ json newSong(const std::string &name, bool sfx) {
     return s;
 }
 
-/* ---------------- sintesis ---------------- */
 static uint32_t g_rng = 22222;
 static float noise() { g_rng = g_rng * 1664525u + 1013904223u; return (float)((g_rng >> 8) & 0xFFFF) / 32768.0f - 1.0f; }
 static double releaseOf(const std::string &in) {
     return in == "piano" ? 0.35 : in == "campana" ? 0.8 : in == "cuerdas" ? 0.3 : in == "flauta" ? 0.1 : in == "sierra" ? 0.15 : 0.06;
 }
 
-// una nota de un instrumento en out (a partir de la muestra at); held: segundos que se mantiene pulsada
 static void renderNote(std::vector<float> &out, size_t at, int rate, const std::string &in, int midi, double held, float vol) {
     double f = 440.0 * std::pow(2.0, (midi - 69) / 12.0);
     if (in == "bateria") {
@@ -104,7 +102,7 @@ static void renderNote(std::vector<float> &out, size_t at, int rate, const std::
             double vib = t > 0.25 ? 1 + 0.006 * std::sin(PI2 * 5.5 * t) : 1;
             ph += w * vib;
             v = std::sin(ph) * 0.6 + std::sin(2 * ph) * 0.08 + noise() * 0.05 * std::exp(-t * 8);
-        } else {   // cuerdas
+        } else {
             env *= std::min(1.0, t / 0.15);
             ph = std::fmod(ph + f * 0.996 / rate, 1.0); ph2 = std::fmod(ph2 + f / rate, 1.0); ph3 = std::fmod(ph3 + f * 1.004 / rate, 1.0);
             double raw = ((2 * ph - 1) + (2 * ph2 - 1) + (2 * ph3 - 1)) / 3;
@@ -149,7 +147,7 @@ std::vector<int16_t> render(const json &song, int rate) {
     std::vector<float> mix;
     if (jstr(song, "mode", "music") == "sfx") mix = renderSfx(song.contains("sfx") ? song["sfx"] : json::object(), rate);
     else {
-        double sd = 60.0 / std::clamp(jnum(song, "bpm", 120), 20.0, 400.0) / 4;   // un paso: semicorchea
+        double sd = 60.0 / std::clamp(jnum(song, "bpm", 120), 20.0, 400.0) / 4;
         int steps = std::max(1, (int)jnum(song, "bars", 4)) * 16;
         size_t len = (size_t)(steps * sd * rate);
         std::vector<float> buf(len + rate * 2);
@@ -165,7 +163,6 @@ std::vector<int16_t> render(const json &song, int rate) {
                     renderNote(buf, (size_t)(st * sd * rate), rate, in, m, l * sd * 0.95, vol);
                 }
             }
-        // lo que suena despues del final vuelve al principio: la musica se repite sin cortes
         mix.assign(buf.begin(), buf.begin() + len);
         for (size_t i = len; i < buf.size(); i++) mix[(i - len) % len] += buf[i];
     }
@@ -227,7 +224,7 @@ bool exportMp3(const json &song, const std::string &path, std::string &err) {
 std::string saveToProject(Project &proj, const json &song, const std::string &musicId) {
     if (!proj.doc.contains("music") || !proj.doc["music"].is_array()) proj.doc["music"] = json::array();
     json &mus = proj.doc["music"];
-    std::string w = wavBytes(render(song, 22050), 22050);   // 22 kHz: la mitad de peso, de sobra para un juego
+    std::string w = wavBytes(render(song, 22050), 22050);
     std::string data = "data:audio/wav;base64," + base64Encode((const unsigned char *)w.data(), w.size());
     json *e = musicId.empty() ? nullptr : findById(mus, musicId);
     if (!e) { mus.push_back({{"id", makeUid("m")}, {"name", jstr(song, "name", "Sonido")}}); e = &mus.back(); }
@@ -236,7 +233,6 @@ std::string saveToProject(Project &proj, const json &song, const std::string &mu
     return jstr(*e, "id");
 }
 
-/* ---------------- reproduccion ---------------- */
 static Sound g_song{}, g_notes[8]{};
 static int g_noteNext = 0;
 static bool ensureAudio() { if (!IsAudioDeviceReady()) InitAudioDevice(); return IsAudioDeviceReady(); }
@@ -253,7 +249,6 @@ void stopAll() {
 
 static Editor *g_playing = nullptr;
 bool anyPlaying() { return g_playing != nullptr; }
-// reproductor de la galeria (Inicio > Source Sound): uno a la vez, como las notas de voz
 static std::string g_clipKey;
 static double g_clipStart = 0, g_clipLen = 0;
 void clipStop() {
@@ -271,7 +266,7 @@ void clipPlay(const std::string &key, const json &song) {
     g_clipKey = key; g_clipStart = GetTime(); g_clipLen = pcm.size() / 44100.0;
 }
 std::string clipKey() {
-    if (!g_clipKey.empty() && (!g_song.frameCount || !IsSoundPlaying(g_song))) clipStop();   // termino solo
+    if (!g_clipKey.empty() && (!g_song.frameCount || !IsSoundPlaying(g_song))) clipStop();
     return g_clipKey;
 }
 float clipProgress() { return g_clipKey.empty() || g_clipLen <= 0 ? 0 : (float)std::min(1.0, (GetTime() - g_clipStart) / g_clipLen); }
@@ -301,7 +296,6 @@ void Editor::stop() {
 void Editor::play() {
     if (!ensureAudio()) { if (onStatus) onStatus("No hay salida de audio"); return; }
     g_clipKey.clear();
-    // la misma cancion que ya sono (repetir en bucle): no se vuelve a calcular
     if (g_song.frameCount && g_playing == this && song == playedSong) StopSound(g_song);
     else {
         if (g_song.frameCount) { StopSound(g_song); UnloadSound(g_song); }
@@ -311,8 +305,6 @@ void Editor::play() {
     PlaySound(g_song);
     g_playing = this;
     school::note("sound.play");
-    // reloj real tomado despues de calcularla: con el de ImGui el cabezal contaba tambien lo que tardo en calcularse
-    // y se veia segundos por delante del sonido
     playStart = GetTime();
 }
 void Editor::preview(int midi) {
@@ -330,7 +322,6 @@ void Editor::preview(int midi) {
     PlaySound(s);
 }
 
-/* ---------------- interfaz ---------------- */
 std::string Editor::title(Project &) { return "Sonido: " + jstr(song, "name", "Sonido") + "###snd_" + musicId; }
 
 static std::string noteName(int m) { return std::string(kNoteNames[((m % 12) + 12) % 12]) + std::to_string(m / 12 - 1); }
@@ -399,7 +390,7 @@ void Editor::drawTracks() {
         ImGui::SetNextItemWidth(-1);
         if (ImGui::BeginCombo("##inst", inName.c_str())) {
             for (auto &k : kInst) if (ImGui::Selectable(k.name, in == k.id)) {
-                if ((in == "bateria") != (std::string(k.id) == "bateria")) t["notes"] = json::array();   // las filas cambian de sentido
+                if ((in == "bateria") != (std::string(k.id) == "bateria")) t["notes"] = json::array();
                 t["inst"] = k.id; track = i; touched();
             }
             ImGui::EndCombo();
@@ -429,7 +420,7 @@ void Editor::drawRoll() {
     ImVec2 avail = ImGui::GetContentRegionAvail();
     ImGui::BeginChild("##roll", ImVec2(avail.x, avail.y - 96), ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar);
     school::anchorRect("sound.roll", ImGui::GetWindowPos(), ImVec2(ImGui::GetWindowPos().x + std::min(ImGui::GetWindowSize().x, 700.0f), ImGui::GetWindowPos().y + std::min(ImGui::GetWindowSize().y, 320.0f)));
-    if ((scrollY < 0 || track != lastTrack) && !drums) {   // empieza centrado en las notas de la pista (sin notas, cerca del Do central)
+    if ((scrollY < 0 || track != lastTrack) && !drums) {
         double sum = 0; int k = 0;
         for (auto &nt : notes) if (nt.is_array() && nt.size() >= 3) { sum += nt[1].get<int>(); k++; }
         int mid = k ? (int)std::round(sum / k) : 66;
@@ -444,7 +435,6 @@ void Editor::drawRoll() {
     bool hov = ImGui::IsItemHovered();
     ImVec2 mp = ImGui::GetIO().MousePos;
     auto rowY = [&](int m) { return o.y + (hi - m) * rowH; };
-    // fondo y teclas
     for (int m = lo; m <= hi; m++) {
         float y = rowY(m);
         bool blk = !drums && isBlack(m);
@@ -458,7 +448,6 @@ void Editor::drawRoll() {
         float x = o.x + keysW + s * cellW;
         dl->AddLine(ImVec2(x, o.y), ImVec2(x, o.y + H), s % 16 == 0 ? IM_COL32(255, 255, 255, 70) : s % 4 == 0 ? IM_COL32(255, 255, 255, 30) : IM_COL32(255, 255, 255, 10));
     }
-    // notas
     int hit = -1;
     for (int i = 0; i < (int)notes.size(); i++) {
         const json &n = notes[i];
@@ -471,7 +460,6 @@ void Editor::drawRoll() {
         dl->AddRectFilled(a, b, i == dragNote ? ui::kPrimaryLight : over ? IM_COL32(180, 150, 255, 255) : ui::kPrimary, 3);
         dl->AddRectFilled(ImVec2(b.x - 4, a.y + 2), ImVec2(b.x - 2, b.y - 2), IM_COL32(255, 255, 255, 90));
     }
-    // raton: izquierdo pone (y arrastra para alargar) o mueve; derecho borra
     int cs = (int)std::floor((mp.x - o.x - keysW) / cellW), cm = hi - (int)std::floor((mp.y - o.y) / rowH);
     if (hov && mp.x > o.x + keysW && ImGui::IsMouseClicked(0)) {
         if (hit >= 0) {
@@ -483,7 +471,7 @@ void Editor::drawRoll() {
             dragNote = (int)notes.size() - 1; dragMode = 1;
             preview(cm); touched();
         }
-    } else if (hov && mp.x < o.x + keysW && ImGui::IsMouseClicked(0) && cm >= lo && cm <= hi) preview(cm);   // tocar la tecla
+    } else if (hov && mp.x < o.x + keysW && ImGui::IsMouseClicked(0) && cm >= lo && cm <= hi) preview(cm);
     if (dragNote >= 0 && dragNote < (int)notes.size()) {
         if (!ImGui::IsMouseDown(0)) dragNote = -1;
         else {
@@ -495,13 +483,12 @@ void Editor::drawRoll() {
             }
         }
     } else dragNote = -1;
-    if (hov && ImGui::IsMouseClicked(1) && hit >= 0) {   // borrar: los indices de detras cambian, asi que se olvidan
+    if (hov && ImGui::IsMouseClicked(1) && hit >= 0) {
         notes.erase(notes.begin() + hit);
         hit = -1; dragNote = -1;
         touched();
     }
     if (hov && hit >= 0) ImGui::SetTooltip("%s  ·  arrastra para mover, desde el borde derecho para alargar  ·  clic derecho borra", drums ? kDrums[notes[hit][1].get<int>()] : noteName(notes[hit][1].get<int>()).c_str());
-    // cabezal
     if (playing()) {
         double sd = 60.0 / jnum(song, "bpm", 120) / 4, t = GetTime() - playStart;
         float x = o.x + keysW + (float)(std::fmod(t / sd, (double)steps)) * cellW;
@@ -510,7 +497,6 @@ void Editor::drawRoll() {
     ImGui::EndChild();
 }
 
-// teclado de abajo (dos octavas desde Do4); tambien con el teclado del ordenador
 void Editor::drawKeyboard() {
     json &tr = song["tracks"][track];
     bool drums = jstr(tr, "inst") == "bateria";
@@ -519,7 +505,7 @@ void Editor::drawKeyboard() {
     int base = drums ? 0 : 60;
     auto played = [&](int m) {
         preview(m);
-        if (rec && playing()) {   // grabar: se apunta en el paso que suena
+        if (rec && playing()) {
             double sd = 60.0 / jnum(song, "bpm", 120) / 4;
             int steps = std::max(1, (int)jnum(song, "bars", 4)) * 16;
             int st = (int)std::fmod(std::round((GetTime() - playStart) / sd), (double)steps);
@@ -618,7 +604,6 @@ void Editor::drawSfx() {
     row("Volumen"); ch |= editNum("##vo", p, "vol", 0.8, 0.01f, "%.2f", 0, 1.5);
     if (ch) touched();
     if (ImGui::IsItemDeactivatedAfterEdit()) play();
-    // forma de la onda
     ImGui::SeparatorText("Forma");
     std::vector<int16_t> pcm = render(song, 8000);
     ImVec2 o = ImGui::GetCursorScreenPos(), sz(std::min(ImGui::GetContentRegionAvail().x, 700.0f), 90);
@@ -655,7 +640,6 @@ void Editor::drawBody() {
         drawKeyboard();
         ImGui::EndChild();
     }
-    // en un proyecto: se guarda solo un momento despues del ultimo cambio
     if (editedAt >= 0 && ImGui::GetTime() - editedAt > 0.8 && !ImGui::IsMouseDown(0)) { editedAt = -1; if (onChanged) onChanged(); }
 }
 

@@ -1,22 +1,9 @@
 #!/usr/bin/env python3
-# Source 2D - Source Store: revisar y publicar paquetes de sprites o de sonidos (lo usan Controladores/Source-Sprite.sh y
-# Controladores/Source-Sound.sh). Igual que Source Play (tools/source_play.py), con su propio repositorio y catalogo:
-#   sprites: FloppaKFC/source2d-sprites (copia local ../source2d-sprites o S2D_SPRITES_DIR)
-#   sonidos: FloppaKFC/source2d-sonidos (copia local ../source2d-sonidos o S2D_SONIDOS_DIR)
-# Los envios llegan a FloppaKFC/source2d-envios con el titulo "Sprites: ..." o "Sonidos: ..." (carpeta sprites/ o sonidos/).
-#   source_store.py sprites|sonidos envios
-#   source_store.py sprites|sonidos probar N            descarga el envio, lo comprueba y saca su contenido a una carpeta
-#   source_store.py sprites|sonidos aprobar N
-#   source_store.py sprites|sonidos rechazar N "motivo"
-#   source_store.py sprites|sonidos anadir CARPETA      un paquete guardado con "Guardar en una carpeta"
-#   source_store.py sprites|sonidos probar-carpeta CARPETA
-#   source_store.py sprites|sonidos lista | retirar ID | destacar ID | no-destacar ID | denuncias
-# --sin-subir: firma pero no sube (los archivos se quedan en la carpeta del repositorio, como en las pruebas).
 import argparse, datetime, json, os, re, secrets, shutil, subprocess, sys, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from anunciar import AUTOR, RAIZ, guardar_y_firmar, huella  # noqa: E402
-from source_play import ENVIOS, MAX_TAM, descargar_envio, editor, gh, insignia, slug  # noqa: E402
+from anunciar import AUTOR, RAIZ, guardar_y_firmar, huella
+from source_play import ENVIOS, MAX_TAM, descargar_envio, editor, gh, insignia, slug
 
 TIPOS = {
     "sprites": {"repo": "FloppaKFC/source2d-sprites", "env": "S2D_SPRITES_DIR", "titulo": "Sprites",
@@ -27,14 +14,12 @@ TIPOS = {
 LICENCIAS = ("Libre", "Libre dando crédito", "Solo juegos no comerciales")
 ARCHIVOS = ("info.json", "paquete.s2dpaquete", "portada.png")
 
-
 def repo(tipo):
     t = TIPOS[tipo]
     d = os.environ.get(t["env"]) or os.path.join(os.path.dirname(RAIZ), "source2d-" + tipo)
     if not os.path.isdir(d):
         sys.exit(f"No existe {d}. Clona alli el repositorio:\n  git clone https://github.com/{t['repo']}.git \"{d}\"")
     return d
-
 
 def cargar(d, tipo):
     p = os.path.join(d, "catalogo.json")
@@ -44,7 +29,6 @@ def cargar(d, tipo):
     j["tipo"] = "catalogo-" + tipo
     j["autor"] = AUTOR
     return j
-
 
 def subir(d, mensaje, sin_subir):
     if sin_subir:
@@ -57,7 +41,6 @@ def subir(d, mensaje, sin_subir):
     subprocess.run(["git", "-C", d, "commit", "-q", "-m", mensaje], check=True)
     subprocess.run(["git", "-C", d, "push", "-q"], check=True)
     print("Subido. Los editores lo verán en Source Store al abrirse (o en menos de una hora).")
-
 
 def leer_paquete(carpeta, tipo):
     p = os.path.join(carpeta, "info.json")
@@ -84,7 +67,6 @@ def leer_paquete(carpeta, tipo):
         info["licencia"] = LICENCIAS[1]
     return info
 
-
 def comprobar(carpeta, tipo, extraer=None):
     """El editor abre el paquete y comprueba que solo trae lo que toca (en sonidos: solo creaciones de Source Sound).
     Devuelve el contenido {"sprites": n, ...}; con extraer, saca cada cosa a esa carpeta (.s2dsprite / .s2dsound)."""
@@ -96,13 +78,11 @@ def comprobar(carpeta, tipo, extraer=None):
     m = re.search(r"CONTENIDO (\{.*\})", r.stdout)
     return json.loads(m.group(1)) if m else {}
 
-
 def mostrar(info):
     print(f"\n  {info['nombre']}  ·  por {info.get('autor', '?')}  ·  {info.get('categoria')}  ·  licencia: {info.get('licencia')}")
     if info.get("descripcion"):
         print("  " + info["descripcion"].replace("\n", "\n  "))
     print()
-
 
 def publicar(carpeta, info, autor, tipo, contenido, sin_subir):
     d = repo(tipo)
@@ -147,7 +127,6 @@ def publicar(carpeta, info, autor, tipo, contenido, sin_subir):
                 subprocess.run([gh(), "release", "delete", r["tagName"], "-R", TIPOS[tipo]["repo"], "--yes", "--cleanup-tag"])
     print(f"Publicado: {e['nombre']} (id {pid}, versión {version})")
     return e
-
 
 def main():
     ap = argparse.ArgumentParser(description="Source Store: revisar y publicar paquetes")
@@ -234,7 +213,7 @@ def main():
     if a.orden in ("destacar", "no-destacar"):
         cj["destacados"] = [x for x in cj["destacados"] if x != a.arg] + ([a.arg] if a.orden == "destacar" else [])
         msg = f"{a.arg} {'está en Destacados' if a.orden == 'destacar' else 'ya no está en Destacados'}."
-    else:   # retirar
+    else:
         cj["paquetes"] = [p for p in cj["paquetes"] if p["id"] != a.arg]
         cj["destacados"] = [x for x in cj["destacados"] if x != a.arg]
         if a.arg not in cj["retirados"]:
@@ -245,7 +224,6 @@ def main():
     guardar_y_firmar(d, {"catalogo.json": cj})
     subir(d, f"Source Store ({tipo}): {a.orden} {a.arg}", a.sin_subir)
     print(msg)
-
 
 if __name__ == "__main__":
     main()

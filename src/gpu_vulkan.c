@@ -1,12 +1,3 @@
-/* Source 2D engine - dibujo con Vulkan (experimental: version "(Vulkan)").
- * Hace lo mismo que el dibujo con OpenGL de platform_raylib.c (lienzos, texturas, rellenos, degradados, filtros,
- * desenfoque, shaders de capa y presentacion con bandas) pero con Vulkan. La ventana, el teclado, el mando y el
- * sonido siguen siendo de raylib: aqui solo se crea una superficie de Vulkan sobre la misma ventana.
- * Vulkan se carga en tiempo de ejecucion (libvulkan.so.1 / vulkan-1.dll): si no esta o algo falla al iniciar,
- * vk_init devuelve error y el juego sigue con OpenGL como siempre. Los shaders GLSL del proyecto se compilan con
- * shaderc si esta instalado (libshaderc_shared); si no, esas capas se dibujan sin shader.
- * Todo con alfa premultiplicado. Las imagenes viven en VK_IMAGE_LAYOUT_GENERAL y entre pases hay una barrera
- * completa: mas sencillo que seguir cada estado, y de sobra para un juego 2D. */
 #define VK_NO_PROTOTYPES
 #include <math.h>
 #include <stdint.h>
@@ -19,7 +10,6 @@
 #include "vulkan/vulkan_win32.h"
 #else
 #include <dlfcn.h>
-/* sin las cabeceras de X11: solo hacen falta estos tipos */
 typedef struct _XDisplay Display;
 typedef unsigned long Window;
 typedef unsigned long VisualID;
@@ -28,7 +18,6 @@ typedef unsigned long VisualID;
 #include "gpu_vulkan.h"
 #include "vk_shaders.h"
 
-/* ---------------- funciones de Vulkan (se cargan a mano) ---------------- */
 #define VK_GLOBAL(X) X(vkCreateInstance) X(vkEnumerateInstanceExtensionProperties)
 #define VK_INSTANCE(X) X(vkDestroyInstance) X(vkEnumeratePhysicalDevices) X(vkGetPhysicalDeviceProperties) \
     X(vkGetPhysicalDeviceQueueFamilyProperties) X(vkGetPhysicalDeviceMemoryProperties) X(vkGetPhysicalDeviceSurfaceSupportKHR) \
@@ -58,7 +47,6 @@ typedef unsigned long VisualID;
 static PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
 VK_GLOBAL(DECL) VK_INSTANCE(DECL) VK_DEVICE(DECL)
 
-/* ventana de raylib (GLFW por dentro) */
 typedef struct GLFWwindow GLFWwindow;
 GLFWwindow *glfwGetCurrentContext(void);
 #ifdef _WIN32
@@ -70,8 +58,8 @@ Window glfwGetX11Window(GLFWwindow *w);
 
 #define VT_MAX 1024
 #define VX_MAX 16384
-#define VB_BYTES (16u << 20)            /* vertices de un fotograma */
-#define ST_BYTES (64u << 20)            /* texturas subidas en un fotograma */
+#define VB_BYTES (16u << 20)
+#define ST_BYTES (64u << 20)
 #define BLOCK_BYTES (64u << 20)
 
 typedef struct { float x, y, u, v; uint8_t c[4]; } Vert;
@@ -91,17 +79,14 @@ static struct {
     VkDescriptorSetLayout dsl; VkDescriptorPool dpool; VkPipelineLayout pl; VkSampler samp;
     VkShaderModule vs, fs[SH_COUNT];
     VkPipeline pipe[SH_COUNT][4], pipe_present;
-    /* dos fotogramas en vuelo: mientras la GPU dibuja uno, la CPU prepara el siguiente */
     VkCommandPool cpool; VkCommandBuffer cb, cbs[2]; VkFence fences[2]; VkSemaphore sems_img[2], sems_done[2]; int fi, sub[2];
     VkBuffer vb, st, rb; Mem vbm, stm, rbm; void *vbp, *stp, *rbp; VkDeviceSize rb_size;
     uint32_t vb_n, st_off;
     int recording, inpass, cur, uncapped, ok, need_resize;
-    /* lote pendiente: mismos pipeline e imagen */
     VkPipeline b_pipe, bound_pipe; VkDescriptorSet b_ds, bound_ds; uint32_t b_first, b_count;
     VImg white;
     Block blocks[64]; int nblocks;
     VImg *dead[2]; int ndead[2], capdead[2];
-    /* shaders del proyecto (con shaderc si esta) */
     void *shaderc; int shaderc_tried;
     struct { char *src; VkPipeline pipe; int ok; } user[32]; int nuser;
 } V;
@@ -130,7 +115,6 @@ static void *vk_open(const char *const *names) {
     return NULL;
 }
 
-/* ---------------- memoria: bloques grandes repartidos (hay un limite de reservas en cada GPU) ---------------- */
 static int mem_type(uint32_t bits, VkMemoryPropertyFlags want) {
     for (uint32_t i = 0; i < V.memp.memoryTypeCount; i++)
         if ((bits & (1u << i)) && (V.memp.memoryTypes[i].propertyFlags & want) == want) return (int)i;
@@ -141,7 +125,7 @@ static int mem_alloc(VkMemoryRequirements rq, VkMemoryPropertyFlags want, Mem *o
     if (t < 0) return -1;
     memset(out, 0, sizeof *out);
     out->block = -1;
-    if (rq.size > BLOCK_BYTES / 4) {                       /* las grandes van solas */
+    if (rq.size > BLOCK_BYTES / 4) {
         VkMemoryAllocateInfo ai = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, NULL, rq.size, (uint32_t)t };
         if (vkAllocateMemory(V.dev, &ai, NULL, &out->own) != VK_SUCCESS) return -1;
         out->size = rq.size;
@@ -156,7 +140,6 @@ static int mem_alloc(VkMemoryRequirements rq, VkMemoryPropertyFlags want, Mem *o
                 if (B->fs[i] < pad + rq.size) continue;
                 VkDeviceSize end = B->fo[i] + B->fs[i];
                 out->block = b; out->off = a; out->size = rq.size;
-                /* el hueco se parte: lo de antes (alineacion) y lo de despues */
                 if (pad) { B->fs[i] = pad; if (end > a + rq.size) { if (B->nf == B->cap) { B->cap *= 2; B->fo = realloc(B->fo, B->cap * sizeof *B->fo); B->fs = realloc(B->fs, B->cap * sizeof *B->fs); }
                            memmove(B->fo + i + 2, B->fo + i + 1, (B->nf - i - 1) * sizeof *B->fo); memmove(B->fs + i + 2, B->fs + i + 1, (B->nf - i - 1) * sizeof *B->fs);
                            B->fo[i + 1] = a + rq.size; B->fs[i + 1] = end - a - rq.size; B->nf++; } }
@@ -185,7 +168,6 @@ static void mem_free(Mem *m) {
     if (B->nf == B->cap) { B->cap *= 2; B->fo = realloc(B->fo, B->cap * sizeof *B->fo); B->fs = realloc(B->fs, B->cap * sizeof *B->fs); }
     memmove(B->fo + i + 1, B->fo + i, (B->nf - i) * sizeof *B->fo); memmove(B->fs + i + 1, B->fs + i, (B->nf - i) * sizeof *B->fs);
     B->fo[i] = m->off; B->fs[i] = m->size; B->nf++;
-    /* se junta con los huecos de al lado */
     if (i + 1 < B->nf && B->fo[i] + B->fs[i] == B->fo[i + 1]) { B->fs[i] += B->fs[i + 1]; memmove(B->fo + i + 1, B->fo + i + 2, (B->nf - i - 2) * sizeof *B->fo); memmove(B->fs + i + 1, B->fs + i + 2, (B->nf - i - 2) * sizeof *B->fs); B->nf--; }
     if (i > 0 && B->fo[i - 1] + B->fs[i - 1] == B->fo[i]) { B->fs[i - 1] += B->fs[i]; memmove(B->fo + i, B->fo + i + 1, (B->nf - i - 1) * sizeof *B->fo); memmove(B->fs + i, B->fs + i + 1, (B->nf - i - 1) * sizeof *B->fs); B->nf--; }
     m->block = -1;
@@ -197,11 +179,9 @@ static int make_buffer(VkDeviceSize size, VkBufferUsageFlags use, VkBuffer *b, M
     vkGetBufferMemoryRequirements(V.dev, *b, &rq);
     if (mem_alloc(rq, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m)) return -1;
     vkBindBufferMemory(V.dev, *b, mem_of(m), m->off);
-    /* los buffers van siempre solos (own) o al principio de su bloque: se mapea su trozo */
     return vkMapMemory(V.dev, mem_of(m), m->off, size, 0, map) == VK_SUCCESS ? 0 : -1;
 }
 
-/* ---------------- grabacion de ordenes ---------------- */
 static void barrier(void) {
     VkMemoryBarrier mb = { VK_STRUCTURE_TYPE_MEMORY_BARRIER, NULL, VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT };
     vkCmdPipelineBarrier(V.cb, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 1, &mb, 0, NULL, 0, NULL);
@@ -214,7 +194,6 @@ static void destroy_img(VImg *im) {
     mem_free(&im->mem);
     memset(im, 0, sizeof *im);
 }
-/* lo que ya se grabo puede usar la imagen: se borra cuando la GPU termine este fotograma */
 static void kill_later(VImg *im) {
     if (!im->img) return;
     int f = V.fi;
@@ -222,7 +201,6 @@ static void kill_later(VImg *im) {
     V.dead[f][V.ndead[f]++] = *im;
     memset(im, 0, sizeof *im);
 }
-/* espera a que la GPU termine lo que se mando desde la ranura f y borra lo que quedo pendiente de ella */
 static void wait_slot(int f) {
     if (V.sub[f]) { vkWaitForFences(V.dev, 1, &V.fences[f], VK_TRUE, UINT64_MAX); V.sub[f] = 0; }
     for (int i = 0; i < V.ndead[f]; i++) destroy_img(&V.dead[f][i]);
@@ -254,7 +232,6 @@ static void end_pass(void) {
     if (V.inpass) vkCmdEndRenderPass(V.cb);
     V.inpass = 0; V.cur = -1;
 }
-/* manda lo grabado y espera (para leer de la GPU o cuando se llena un buffer) */
 static void submit_wait(void) {
     if (!V.recording) return;
     end_pass();
@@ -291,7 +268,7 @@ static int bind_target(int t) {
     return 1;
 }
 static Vert *verts(VkPipeline p, VkDescriptorSet ds, uint32_t n) {
-    if ((V.vb_n + n) * sizeof(Vert) > (size_t)(V.fi + 1) * (VB_BYTES / 2)) {   /* mitad llena: se manda lo que hay y se sigue */
+    if ((V.vb_n + n) * sizeof(Vert) > (size_t)(V.fi + 1) * (VB_BYTES / 2)) {
         int t = V.cur;
         submit_wait();
         begin();
@@ -305,7 +282,6 @@ static Vert *verts(VkPipeline p, VkDescriptorSet ds, uint32_t n) {
 }
 static void vtx(Vert *v, float x, float y, float u, float w, const uint8_t c[4]) { v->x = x; v->y = y; v->u = u; v->v = w; memcpy(v->c, c, 4); }
 
-/* ---------------- imagenes ---------------- */
 static VkDescriptorSet make_ds(VkImageView view) {
     VkDescriptorSet ds;
     VkDescriptorSetAllocateInfo ai = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, NULL, V.dpool, 1, &V.dsl };
@@ -315,7 +291,6 @@ static VkDescriptorSet make_ds(VkImageView view) {
     vkUpdateDescriptorSets(V.dev, 1, &w, 0, NULL);
     return ds;
 }
-/* imagen RGBA vacia (transparente) en GENERAL; target: tambien se puede dibujar en ella */
 static int make_img(VImg *im, int w, int h, int target) {
     memset(im, 0, sizeof *im);
     VkImageCreateInfo ci = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, NULL, 0, VK_IMAGE_TYPE_2D, VK_FORMAT_R8G8B8A8_UNORM, { (uint32_t)w, (uint32_t)h, 1 }, 1, 1,
@@ -336,7 +311,6 @@ static int make_img(VImg *im, int w, int h, int target) {
         vkCreateFramebuffer(V.dev, &fi, NULL, &im->fb);
     }
     im->w = w; im->h = h;
-    /* UNDEFINED -> GENERAL y transparente */
     begin();
     end_pass();
     VkImageMemoryBarrier ib = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, NULL, 0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
@@ -348,7 +322,6 @@ static int make_img(VImg *im, int w, int h, int target) {
     barrier();
     return 0;
 }
-/* sube pixeles ya premultiplicados (los escribe fill en el buffer de subida) */
 static int upload(VImg *im, int w, int h, void (*fill)(uint8_t *, const void *, size_t), const void *arg) {
     size_t n = (size_t)w * h * 4;
     if (n > ST_BYTES / 2) return -1;
@@ -375,7 +348,6 @@ static void fill_premul(uint8_t *pm, const void *arg, size_t n) {
     }
 }
 
-/* ---------------- pipelines ---------------- */
 static VkShaderModule module(const uint32_t *code, size_t bytes) {
     VkShaderModule m = VK_NULL_HANDLE;
     VkShaderModuleCreateInfo ci = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, NULL, 0, bytes, code };
@@ -426,7 +398,6 @@ static VkRenderPass make_rp(VkFormat fmt, int present) {
     return rp;
 }
 
-/* ---------------- cadena de presentacion ---------------- */
 static void destroy_swapchain(void) {
     for (uint32_t i = 0; i < V.nimg; i++) {
         if (V.scfb[i]) vkDestroyFramebuffer(V.dev, V.scfb[i], NULL);
@@ -441,7 +412,7 @@ static int make_swapchain(int w, int h) {
     if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(V.pd, V.surf, &caps) != VK_SUCCESS) return -1;
     VkExtent2D e = caps.currentExtent;
     if (e.width == 0xFFFFFFFFu) { e.width = (uint32_t)w; e.height = (uint32_t)h; }
-    if (!e.width || !e.height) return -1;                   /* ventana minimizada */
+    if (!e.width || !e.height) return -1;
     uint32_t nf = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(V.pd, V.surf, &nf, NULL);
     VkSurfaceFormatKHR fm[64];
@@ -483,7 +454,6 @@ static int make_swapchain(int w, int h) {
     return 0;
 }
 
-/* ---------------- inicio ---------------- */
 int vk_init(int w, int h, int uncapped, char *info, size_t ninfo) {
     memset(&V, 0, sizeof V);
     V.cur = -1; V.uncapped = uncapped;
@@ -521,7 +491,6 @@ int vk_init(int w, int h, int uncapped, char *info, size_t ninfo) {
     VkXlibSurfaceCreateInfoKHR sci = { VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR, NULL, 0, dpy, xw };
     if (vkCreateXlibSurfaceKHR(V.inst, &sci, NULL, &V.surf) != VK_SUCCESS) return -1;
 #endif
-    /* GPU: la primera dedicada que pueda presentar en la ventana; si no, cualquiera que pueda */
     uint32_t npd = 0;
     vkEnumeratePhysicalDevices(V.inst, &npd, NULL);
     VkPhysicalDevice pds[16];
@@ -596,7 +565,6 @@ int vk_init(int w, int h, int uncapped, char *info, size_t ninfo) {
         make_buffer(ST_BYTES, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &V.st, &V.stm, &V.stp)) return -1;
     if (make_swapchain(w, h)) return -1;
     if (!pipe(SH_TEX, 0) || !V.pipe_present) { if (info) snprintf(info, ninfo, "no se pudieron crear los pipelines"); return -1; }
-    /* textura blanca 1x1 para los rellenos lisos */
     static const uint8_t white[4] = { 255, 255, 255, 255 };
     if (make_img(&V.white, 1, 1, 0) || upload(&V.white, 1, 1, fill_premul, white)) return -1;
     V.ok = 1;
@@ -618,7 +586,6 @@ void vk_shutdown(void) {
     V.dev = VK_NULL_HANDLE; V.ok = 0;
 }
 
-/* ---------------- las operaciones de dibujo (mismo contrato que plat_gpu_*) ---------------- */
 int vk_target(int w, int h) {
     for (int i = 0; i < VT_MAX; i++) {
         if (vt[i].used) continue;
@@ -701,7 +668,7 @@ int vk_fill_grad(int target, const double *pts, int n, const double *grad, doubl
         pc.pos[i] = (float)st[0];
         pc.col[4 * i] = (float)(st[1] / 255.0); pc.col[4 * i + 1] = (float)(st[2] / 255.0); pc.col[4 * i + 2] = (float)(st[3] / 255.0); pc.col[4 * i + 3] = (float)st[4];
     }
-    flush_batch();                                          /* cada degradado lleva sus constantes */
+    flush_batch();
     uint8_t c[4] = { 255, 255, 255, 255 };
     Vert *v = verts(pipe(SH_GRAD, mode), V.white.ds, (uint32_t)(n - 2) * 3);
     for (int i = 1; i + 1 < n; i++, v += 3) {
@@ -714,7 +681,6 @@ int vk_fill_grad(int target, const double *pts, int n, const double *grad, doubl
     return 0;
 }
 
-/* cuadrado de todo el lienzo (uv de 0 a 1) */
 static void full_quad(VkPipeline p, VkDescriptorSet ds, int w, int h) {
     uint8_t c[4] = { 255, 255, 255, 255 };
     Vert *v = verts(p, ds, 6);
@@ -727,7 +693,6 @@ static int ensure_alt(VTarget *g) {
     g->has_alt = 1;
     return 0;
 }
-/* pase sobre una zona: de la imagen a la de reserva con el shader y de vuelta tal cual */
 static int zone_pass(int target, int sh, const void *pc, uint32_t pcs, const int rc[4]) {
     if (target < 0 || target >= VT_MAX || !vt[target].used) return -1;
     VTarget *g = &vt[target];
@@ -778,7 +743,6 @@ int vk_blur(int target, int r, const int rc[4]) {
     return 0;
 }
 
-/* ---------------- shaders GLSL del proyecto (con shaderc, si esta instalado) ---------------- */
 typedef void *(*PFN_sc_init)(void);
 typedef void *(*PFN_sc_compile)(void *, const char *, size_t, int, const char *, const char *, void *);
 typedef int (*PFN_sc_status)(void *);
@@ -817,7 +781,6 @@ static char *rep(const char *s, const char *from, const char *to) {
     strcpy(w, p);
     return out;
 }
-/* GLSL ES 1.0 del editor (v_uv, u_tex, texture2D, gl_FragColor, u_time...) -> GLSL 450 de Vulkan */
 static char *user_glsl(const char *src) {
     static const char *HEAD =
         "#version 450\n"
@@ -848,7 +811,7 @@ static VkPipeline user_pipe(const char *glsl) {
     if (!shaderc_ready()) return VK_NULL_HANDLE;
     char *code = user_glsl(glsl);
     if (!code) return VK_NULL_HANDLE;
-    void *res = SC.compile(SC.comp, code, strlen(code), 1 /* fragmento */, "capa.frag", "main", NULL);
+    void *res = SC.compile(SC.comp, code, strlen(code), 1  , "capa.frag", "main", NULL);
     free(code);
     if (!res) return VK_NULL_HANDLE;
     if (SC.status(res) == 0) {
@@ -877,7 +840,6 @@ int vk_shader(int target, const char *glsl, double t, const float cam[3], float 
     return 0;
 }
 
-/* ---------------- leer y presentar ---------------- */
 int vk_read(int target, int x, int y, int w, int h, uint8_t *out) {
     if (target < 0 || target >= VT_MAX || !vt[target].used || !out || w <= 0 || h <= 0) return -1;
     VImg *im = &vt[target].rt;
@@ -917,7 +879,7 @@ void vk_present(int target, int ww, int wh, int pixel_perfect, int *dx, int *dy,
         vkDeviceWaitIdle(V.dev);
         destroy_swapchain();
         V.need_resize = 0;
-        if (make_swapchain(ww, wh)) return;                 /* minimizada: no se presenta */
+        if (make_swapchain(ww, wh)) return;
         begin();
     }
     int W0 = (int)V.ext.width, H0 = (int)V.ext.height;
@@ -945,7 +907,7 @@ void vk_present(int target, int ww, int wh, int pixel_perfect, int *dx, int *dy,
     V.recording = 0; V.sub[V.fi] = 1;
     VkPresentInfoKHR pi = { VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, NULL, 1, &V.sems_done[V.fi], 1, &V.sc, &idx, NULL };
     VkResult pr = vkQueuePresentKHR(V.q, &pi);
-    V.fi ^= 1;                                              /* el siguiente se graba en la otra ranura */
+    V.fi ^= 1;
     if (pr == VK_ERROR_OUT_OF_DATE_KHR || pr == VK_SUBOPTIMAL_KHR) V.need_resize = 1;
 }
 int vk_active(void) { return V.ok; }

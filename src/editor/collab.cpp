@@ -11,13 +11,11 @@
 #include "raylib.h"
 #include "sys.hpp"
 
-/* Protocolo: tramas [largo u32 LE][tipo u8][datos]; el largo cuenta el tipo. Los datos son JSON, salvo DOC (el
-   proyecto en JSON comprimido con deflate). */
 namespace collab {
 namespace {
 enum : uint8_t { HELLO = 1, WELCOME, DENY, DOC, PATCH, PRES, PEERS, HASH, RESYNC, COPIES, CHAT };
-constexpr int kVersion = 3;   // 2: los invitados no se quedan el proyecto (COPIES); 3: chat de la sesion (CHAT)
-constexpr size_t kChatMax = 300;   // letras (bytes) por mensaje; se guardan los ultimos 200 y solo en memoria
+constexpr int kVersion = 3;
+constexpr size_t kChatMax = 300;
 constexpr uint32_t kMaxFrame = 512u << 20;
 
 struct Conn {
@@ -26,22 +24,21 @@ struct Conn {
     size_t outOff = 0;
     int id = 0;
     bool ready = false, connecting = false, dead = false, closeAfterFlush = false;
-    std::vector<double> chatAt;   // anfitrion: cuando escribio esta persona (no mas de 5 mensajes cada 5 s)
+    std::vector<double> chatAt;
 };
 
 Role g_role = Role::None;
 net::Sock g_listen = net::kBad, g_beacon = net::kBad, g_disc = net::kBad;
 int g_port = kPort;
-std::vector<Conn> g_conns;              // anfitrion: las personas conectadas; cliente: la conexion con el anfitrion
+std::vector<Conn> g_conns;
 std::vector<Peer> g_peers;
 Peer g_self;
 std::string g_code, g_status, g_hostName, g_joinCode;
-json g_shadow;                          // ultima version del proyecto ya enviada (con lo recibido aplicado)
+json g_shadow;
 bool g_copies = false;
 double now();
 std::vector<ChatMsg> g_chat;
 int g_chatSinLeer = 0;
-// mensaje de la sesion: texto limpio (sin saltos raros ni mas de kChatMax bytes, cortado sin partir una letra)
 std::string limpiaChat(std::string t) {
     for (auto &c : t) if (c == '\n' || c == '\r' || c == '\t') c = ' ';
     if (t.size() > kChatMax) { t.resize(kChatMax); while (!t.empty() && (t.back() & 0xC0) == 0x80) t.pop_back(); if (!t.empty() && (t.back() & 0x80)) t.pop_back(); }
@@ -52,9 +49,9 @@ void pushChat(int id, const std::string &name, uint32_t color, const std::string
     g_chat.push_back({id, name, color, text, now()});
     if (g_chat.size() > 200) g_chat.erase(g_chat.begin());
     if (id != g_self.id) { g_chatSinLeer++; ev.chat = name + ": " + text; }
-}                 // anfitrion: deja que los invitados guarden una copia; cliente: lo que dijo el anfitrion
+}
 bool g_haveShadow = false, g_connected = false, g_presDirty = true, g_discover = false;
-int g_nextId = 2, g_pending = 0;        // cliente: cambios propios que el anfitrion aun no devolvio
+int g_nextId = 2, g_pending = 0;
 uint64_t g_seq = 0, g_hashSeq = ~0ull;
 double g_lastDiff = 0, g_lastPres = 0, g_lastBeacon = 0, g_lastHash = 0, g_lastResync = -100;
 std::map<std::string, Found> g_found;
@@ -80,7 +77,7 @@ void flush(Conn &c) {
 }
 void pump(Conn &c) {
     static char buf[1 << 16];
-    for (int k = 0; k < 4096 && !c.dead; k++) {             // como mucho 256 MB por fotograma
+    for (int k = 0; k < 4096 && !c.dead; k++) {
         long n = net::recv(c.s, buf, sizeof buf);
         if (n > 0) c.in.append(buf, (size_t)n);
         else { if (n < 0) c.dead = true; break; }
@@ -115,7 +112,6 @@ bool unpackDoc(const std::string &z, json &doc) {
     return doc.is_object();
 }
 
-/* huella del proyecto: el orden de las claves de los objetos no cuenta (puede variar entre equipos) */
 uint64_t mix(uint64_t h) { h ^= h >> 33; h *= 0xff51afd7ed558ccdull; h ^= h >> 33; h *= 0xc4ceb9fe1a85ec53ull; return h ^ (h >> 33); }
 uint64_t hashOf(const json &j) {
     switch (j.type()) {
@@ -132,14 +128,11 @@ uint64_t hashOf(const json &j) {
     }
 }
 
-/* aplica las operaciones una a una (si una no encaja, se salta: la huella lo arreglara) en el proyecto y en la copia */
 void applyOps(Project &proj, const json &ops, Events &ev, bool onlyIdempotent) {
     if (!ops.is_array()) return;
     for (auto &op : ops) {
         std::string path = jstr(op, "path"), kind = jstr(op, "op");
         if (onlyIdempotent) {
-            /* cambios propios que vuelven del anfitrion: se reafirman los que dan igual repetir (valores y claves
-               de objetos), asi el orden final es el del anfitrion; anadir o quitar en listas no se repite */
             if (kind == "add") {
                 size_t sl = path.rfind('/');
                 json::json_pointer parent(sl == std::string::npos || sl == 0 ? "" : path.substr(0, sl));
@@ -187,9 +180,6 @@ void broadcast(uint8_t type, const std::string &data, int except = -1) {
     for (auto &c : g_conns) if (c.ready && c.id != except) queue(c, type, data);
 }
 
-/* cambios propios: diferencia con la copia; despues de esto la copia es igual al proyecto. Se compara por secciones:
-   las pesadas (archivos, musica y fuentes incrustados, que casi nunca cambian) una por segundo y por turnos, para no
-   frenar el editor con proyectos grandes; el resto en cada pasada. */
 std::string ptrKey(const std::string &k) {
     std::string o = "/";
     for (char ch : k) { if (ch == '~') o += "~0"; else if (ch == '/') o += "~1"; else o += ch; }
@@ -259,7 +249,6 @@ void updateHost(Project &proj, Events &ev) {
             } else if (t == RESYNC) {
                 queue(c, DOC, packDoc(proj.doc));
             } else if (t == CHAT) {
-                // el anfitrion pone el nombre (nadie puede escribir en nombre de otro) y frena a quien escribe de golpe
                 Peer *p = peerById(c.id);
                 std::string txt = limpiaChat(jstr(j, "text"));
                 double tn = now();
@@ -291,12 +280,12 @@ void updateHost(Project &proj, Events &ev) {
         g_lastBeacon = t;
         std::string msg = "S2DCOLAB1\n" + std::to_string(g_port) + "\n" + g_self.name + "\n" + proj.name();
         net::udpSend(g_beacon, "255.255.255.255", kPort + 1, msg);
-        net::udpSend(g_beacon, "127.0.0.1", kPort + 1, msg);                 /* otro editor en esta misma PC */
+        net::udpSend(g_beacon, "127.0.0.1", kPort + 1, msg);
         for (auto &i : net::interfaces()) if (!i.broadcast.empty()) net::udpSend(g_beacon, i.broadcast, kPort + 1, msg);
     }
     if (!g_conns.empty() && g_seq != g_hashSeq && t - g_lastHash > 3.0) {
         g_lastHash = t; g_hashSeq = g_seq;
-        broadcast(HASH, json{{"h", std::to_string(hashOf(g_shadow))}}.dump());   /* lo ya enviado (sin lo que se edita ahora) */
+        broadcast(HASH, json{{"h", std::to_string(hashOf(g_shadow))}}.dump());
     }
 }
 
@@ -313,7 +302,7 @@ void updateClient(Project &proj, Events &ev) {
     }
     pump(c);
     uint8_t t; std::string d;
-    while (nextFrame(c, t, d)) {                     /* tambien lo que llego justo antes de cerrarse (DENY) */
+    while (nextFrame(c, t, d)) {
         if (t == DOC) {
             json doc;
             if (!unpackDoc(d, doc)) { finish(ev, "El proyecto de la sesión llegó dañado", true); return; }
@@ -387,7 +376,7 @@ void pollDiscovery() {
         e.addr = ip; e.port = std::atoi(f[1].c_str()); e.host = f[2]; e.project = f[3]; e.seen = now();
     }
 }
-}  // namespace
+}
 
 Role role() { return g_role; }
 const std::vector<Peer> &peers() { return g_peers; }
@@ -405,7 +394,7 @@ bool host(Project &proj, const std::string &name, uint32_t color, std::string &e
     err.clear();
     g_beacon = net::udpOpen(0);
     std::random_device rd;
-    const char *fixed = std::getenv("S2D_COLAB_CODE");             // pruebas automaticas
+    const char *fixed = std::getenv("S2D_COLAB_CODE");
     g_code = fixed && *fixed ? fixed : std::to_string(100000 + rd() % 900000);
     g_self = Peer{}; g_self.id = 1; g_self.name = name; g_self.color = color;
     g_peers.clear(); g_nextId = 2; g_seq = 0; g_hashSeq = ~0ull;
@@ -450,7 +439,7 @@ void sendChat(const std::string &text, Events &ev) {
         broadcast(CHAT, m.dump());
         pushChat(g_self.id, g_self.name, g_self.color, txt, ev);
     } else if (!g_conns.empty() && g_connected) {
-        queueJson(g_conns[0], CHAT, {{"text", txt}});   // el anfitrion lo devuelve a todos, tambien a mi
+        queueJson(g_conns[0], CHAT, {{"text", txt}});
     }
 }
 const std::vector<ChatMsg> &chat() { return g_chat; }
@@ -458,7 +447,7 @@ int chatSinLeer() { return g_chatSinLeer; }
 void chatLeido() { g_chatSinLeer = 0; }
 
 void stop() {
-    g_chat.clear(); g_chatSinLeer = 0;   // el chat no se guarda: se acaba con la sesion
+    g_chat.clear(); g_chatSinLeer = 0;
     for (auto &c : g_conns) { flush(c); net::close(c.s); }
     g_conns.clear();
     net::close(g_listen); g_listen = net::kBad;
@@ -472,7 +461,6 @@ void update(Project &proj, Events &ev) {
     pollDiscovery();
     if (g_role == Role::None) return;
     double t = now();
-    /* primero lo propio (asi la copia queda igual al proyecto) y despues lo que llega */
     if (t - g_lastDiff > 0.15 && (g_role == Role::Host || g_connected)) { g_lastDiff = t; sendLocalChanges(proj); }
     if (g_role == Role::Host) updateHost(proj, ev); else updateClient(proj, ev);
     if (g_role == Role::None) return;
@@ -561,7 +549,7 @@ bool hotspotStop(std::string &out) {
 
 std::string firewallHint() {
 #ifdef _WIN32
-    return "";                          /* Windows pregunta solo la primera vez que el editor comparte: hay que Permitir */
+    return "";
 #else
     static int active = -1;
     if (active < 0) active = sys::run({"systemctl", "is-active", "--quiet", "ufw"}) == 0;

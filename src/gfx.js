@@ -1,14 +1,3 @@
-/* Source 2D engine - capa nativa del runtime (src/runtime.js) sobre las primitivas de __native (main.c).
-   Da al runtime, sin imitar al navegador:
-     S2D.surface(w, h)        lienzo en la GPU (render texture) con su contexto 2D: surface.ctx
-     S2D.image(w, h, pixels)  imagen de pixeles RGBA (alfa directo) que se sube como textura al dibujarla
-     S2D.decodeImage(base64)  PNG, JPG, BMP, GIF o QOI -> imagen
-     S2D.display              superficie que se presenta en la ventana cada fotograma
-     S2D.onFrame(ms)          lo llama cada fotograma; S2D.onInput(ev) cada tecla o raton (x, y ya en pixeles del juego)
-     S2D.store                guardado (archivo JSON del usuario); localStorage es lo mismo para el codigo de los proyectos
-   El contexto 2D (Ctx2D) tiene la forma del canvas 2D de siempre porque los proyectos lo usan en su JavaScript
-   (shaders de escena en JS), pero todo va a la GPU: imagenes y rectangulos en lote, poligonos en triangulos,
-   degradados y filtros CSS con shaders. */
 (function () {
 'use strict';
 const N = __native;
@@ -18,7 +7,6 @@ function report(e) { N.print('Source 2D: ' + (e && e.stack ? e.stack : String(e)
 const say = function () { N.print(Array.prototype.map.call(arguments, String).join(' ')); };
 G.console = { log: say, info: say, warn: say, error: say };
 
-/* ---------- temporizadores (los usa el codigo de los proyectos) ---------- */
 let tmId = 0, timers = [];
 G.setTimeout = (fn, ms) => { timers.push({ id: ++tmId, at: N.now() + (ms || 0), fn, rep: 0 }); return tmId; };
 G.setInterval = (fn, ms) => { timers.push({ id: ++tmId, at: N.now() + (ms || 0), fn, rep: ms || 1 }); return tmId; };
@@ -26,7 +14,6 @@ G.clearTimeout = (id) => { timers = timers.filter(t => t.id !== id); };
 G.clearInterval = G.clearTimeout;
 G.performance = { now: () => N.now() };
 
-/* ---------- guardado: un archivo JSON del usuario (__native.storeRead/storeWrite) ---------- */
 let store = null;
 function storeData() {
   if (store) return store;
@@ -45,7 +32,6 @@ const Store = {
 };
 G.localStorage = Store;
 
-/* ---------- colores ---------- */
 const NAMED = { white: [255, 255, 255, 1], black: [0, 0, 0, 1], red: [255, 0, 0, 1], transparent: [0, 0, 0, 0] };
 const colorCache = new Map();
 function parseColor(s) {
@@ -76,7 +62,6 @@ class Gradient {
   }
 }
 
-/* ---------- geometria ---------- */
 function toDev(m, pts) {
   const out = [];
   for (const p of pts) out.push(m[0] * p[0] + m[2] * p[1] + m[4], m[1] * p[0] + m[3] * p[1] + m[5]);
@@ -92,7 +77,6 @@ function roundPts(x, y, w, h, r) {
   seg(x + r, y + r, Math.PI);
   return pts;
 }
-/* poligono (x0, y0, x1, y1...) -> abanicos que la GPU rellena: el mismo si es convexo, triangulos (orejas) si no */
 function convex(d) {
   const n = d.length / 2;
   let sign = 0;
@@ -135,7 +119,7 @@ function fans(d) {
       cut = true;
       break;
     }
-    if (!cut) break;                                   /* poligono que se cruza: lo que quede, en abanico */
+    if (!cut) break;
   }
   if (idx.length >= 3) { const r = []; for (const i of idx) r.push(X(i), Y(i)); out.push(r); }
   return out;
@@ -143,9 +127,6 @@ function fans(d) {
 
 const MODES = { 'source-over': 0, 'lighter': 1, 'copy': 2, 'destination-out': 3 };
 
-/* ---------- cola de dibujos de la GPU ----------
-   Imagenes y rectangulos se escriben aqui y se mandan juntos (N.gpuBatch). Antes de cualquier otra llamada a la
-   GPU (subir texturas, poligonos, filtros, shaders, leer, presentar) se vacia, para respetar el orden. */
 const QCAP = 20 * 8192, Q = new Float64Array(QCAP);
 let qn = 0;
 function qflush() { if (qn) { N.gpuBatch(Q.buffer, qn); qn = 0; } }
@@ -163,24 +144,20 @@ function qRect(t, x0, y0, x1, y1, r, g, b, a, mode) {
   Q[i] = 2; Q[i + 1] = t; Q[i + 2] = x0; Q[i + 3] = y0; Q[i + 4] = x1; Q[i + 5] = y1; Q[i + 6] = r; Q[i + 7] = g; Q[i + 8] = b; Q[i + 9] = a; Q[i + 10] = mode;
   qn = i + 11;
 }
-/* las demas llamadas de la GPU (tambien las del runtime, como gpuShader) vacian antes la cola */
 for (const name of ['gpuTex', 'gpuTexFree', 'gpuFill', 'gpuFillGrad', 'gpuShader', 'gpuColor', 'gpuBlur', 'gpuRead', 'gpuPresent', 'gpuTargetFree', 'gpuTarget']) {
   const f = N[name];
   if (f) N[name] = function () { qflush(); return f.apply(N, arguments); };
 }
 
-/* ---------- imagenes: pixeles en la CPU, textura en la GPU ---------- */
 const texReg = typeof FinalizationRegistry !== 'undefined' ? new FinalizationRegistry(h => {
   if (h.tex >= 0) N.gpuTexFree(h.tex);
   if (h.rt >= 0) N.gpuTargetFree(h.rt);
 }) : null;
 let uid = 0;
 class Img {
-  /* pixels: ArrayBuffer o vista con w*h*4 bytes RGBA (alfa directo); sin pixels, transparente */
   constructor(w, h, pixels) {
     this._w = Math.max(1, w | 0); this._h = Math.max(1, h | 0);
     const n = this._w * this._h * 4;
-    /* data empieza siempre en el byte 0 de su bufer (asi se sube tal cual) */
     if (pixels instanceof ArrayBuffer && pixels.byteLength === n) this.data = new Uint8ClampedArray(pixels);
     else { this.data = new Uint8ClampedArray(n); if (pixels) this.data.set(new Uint8Array(pixels.buffer || pixels, pixels.byteOffset || 0, n)); }
     this._ver = 1; this._h_ = { tex: -1, rt: -1, ver: 0 }; this._uid = ++uid;
@@ -188,7 +165,6 @@ class Img {
   }
   get width() { return this._w; }
   get height() { return this._h; }
-  /* tras cambiar data: la textura se vuelve a subir al dibujarla */
   update() { this._ver++; }
   _tex() {
     const h = this._h_;
@@ -197,7 +173,6 @@ class Img {
   }
 }
 
-/* ---------- superficies: lienzos en la GPU ---------- */
 class Surface {
   constructor(w, h) {
     this._w = Math.max(1, w | 0); this._h = Math.max(1, h | 0);
@@ -210,7 +185,6 @@ class Surface {
   get width() { return this._w; }
   get height() { return this._h; }
   getContext() { return this.ctx; }
-  /* cambiar el tamano la deja transparente */
   resize(w, h) {
     w = Math.max(1, w | 0); h = Math.max(1, h | 0);
     if (w === this._w && h === this._h) return;
@@ -221,7 +195,6 @@ class Surface {
   free() { if (this._gpu >= 0) N.gpuTargetFree(this._gpu); this._gpu = this._h_.rt = -1; }
 }
 
-/* lienzo auxiliar para dibujar con filtro (uno por tamano; nunca es el destino) */
 const temps = new Map();
 function tempFor(w, h) {
   const k = w + 'x' + h;
@@ -230,7 +203,6 @@ function tempFor(w, h) {
   return t;
 }
 
-/* textos ya rasterizados (text.c) como texturas, los ultimos 512 */
 const textTex = new Map();
 function textTexture(key, r) {
   let e = textTex.get(key);
@@ -241,7 +213,6 @@ function textTexture(key, r) {
   return e;
 }
 
-/* ---------- filtros CSS (subconjunto) ---------- */
 function pct(arg, def) {
   if (arg === '') return def;
   if (arg.endsWith('%')) return parseFloat(arg) / 100;
@@ -251,7 +222,6 @@ function pct(arg, def) {
 const clamp01 = v => (v < 0 ? 0 : v > 1 ? 1 : v);
 const COLOR_OPS = { grayscale: 0, sepia: 1, saturate: 2, 'hue-rotate': 3, invert: 4, brightness: 5, contrast: 6, opacity: 7 };
 const filterCache = new Map();
-/* "grayscale(0.5) blur(2px)" -> [[tipo, cantidad]...] (tipo 8 = blur); margen = lo que el desenfoque se extiende */
 function parseFilter(str) {
   let f = filterCache.get(str);
   if (f) return f;
@@ -260,7 +230,7 @@ function parseFilter(str) {
   while ((m = re.exec(str))) {
     const name = m[1], arg = m[2].trim();
     if (name === 'blur') { const r = parseFloat(arg) || 0; if (r > 0) { ops.push([8, r]); margin += Math.ceil(r * 3) + 2; } continue; }
-    if (!(name in COLOR_OPS)) continue;                 /* drop-shadow y otros: no soportados */
+    if (!(name in COLOR_OPS)) continue;
     const k = COLOR_OPS[name];
     const v = k === 3 ? (parseFloat(arg) || 0) : k <= 1 || k === 4 || k === 7 ? clamp01(pct(arg, 1)) : pct(arg, 1);
     ops.push([k, v]);
@@ -271,7 +241,6 @@ function parseFilter(str) {
   return f;
 }
 
-/* ---------- contexto 2D ---------- */
 class Ctx2D {
   constructor(cv) {
     this.canvas = cv;
@@ -291,7 +260,6 @@ class Ctx2D {
     this.textBaseline = 'alphabetic';
     this.imageSmoothingEnabled = false;
   }
-  /* save/restore sin crear objetos en cada llamada (miles por fotograma): estados reutilizados de una pila */
   save() {
     const d = ++this._depth;
     let st = this._stack[d - 1];
@@ -314,7 +282,6 @@ class Ctx2D {
     this.font = st.font; this.textAlign = st.textAlign; this.textBaseline = st.textBaseline; this.imageSmoothingEnabled = st.imageSmoothingEnabled;
   }
 
-  /* la matriz se cambia en su sitio (this.m no se comparte: save copia los numeros) */
   setTransform(a, b, c, d, e, f) { const m = this.m; m[0] = a; m[1] = b; m[2] = c; m[3] = d; m[4] = e; m[5] = f; }
   resetTransform() { this.setTransform(1, 0, 0, 1, 0, 0); }
   transform(a, b, c, d, e, f) {
@@ -351,8 +318,6 @@ class Ctx2D {
 
   _mode() { return MODES[this.globalCompositeOperation] ?? 0; }
   _filtered() { return this.filter && this.filter !== 'none'; }
-  /* dibujo con filtro: draw(t, alpha, mode) pinta en un lienzo auxiliar limpio, los filtros se aplican en la GPU a la
-     zona bbox (dispositivo) y el resultado se compone en este lienzo con la opacidad y el modo actuales */
   _withFilter(draw, bbox) {
     const cv = this.canvas, w = cv._w, h = cv._h, f = parseFilter(this.filter);
     const mg = f.margin;
@@ -382,7 +347,6 @@ class Ctx2D {
     if (!devs.length) return;
     let grad = null, r = 0, g = 0, b = 0, a = 1;
     if (style instanceof Gradient) {
-      /* el degradado se define en coordenadas del usuario: centro y radios pasan por la transformacion */
       const m = this.m, sc = Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2])) || 1;
       grad = [m[0] * style.cx + m[2] * style.cy + m[4], m[1] * style.cx + m[3] * style.cy + m[5], style.r0 * sc, style.r1 * sc, style.stops.length];
       for (const st of style.stops) grad.push(st[0], st[1], st[2], st[3], st[4]);
@@ -404,8 +368,6 @@ class Ctx2D {
   }
   fill() { this._fillPolys(this._path, this.fillStyle); }
   stroke() {}
-  /* rectangulo con el color ya en numeros (r, g, b 0-255, a 0-1), sin analizar texto: para dibujar muchos
-     (particulas). lighter: suma de color. */
   fillRectRGBA(x, y, w, h, r, g, b, a, lighter) {
     const m = this.m;
     if (m[1] === 0 && m[2] === 0 && !this._filtered()) {
@@ -441,8 +403,6 @@ class Ctx2D {
     else N.gpuFill(t, toDev(m, [[x, y], [x + w, y], [x + w, y + h], [x, y + h]]), 0, 0, 0, 0, 2);
   }
 
-  /* sprite centrado en (x, y), girado rad, escalado (sx, sy) y con opacidad alpha: lo mismo que save + translate +
-     rotate + scale + drawImage + restore, pero en una sola llamada (son miles por fotograma) */
   drawSprite(img, x, y, rad, sx, sy, alpha) {
     const src = img._gpu !== undefined ? img._gpu : img._tex();
     if (src < 0) return;
@@ -457,11 +417,9 @@ class Ctx2D {
     }
     qDraw(this.canvas._gpu, img._gpu !== undefined ? 1 : 0, src, 0, 0, w, h, -w / 2, -h / 2, w, h, a, b, c2, d, e, f, this.globalAlpha * alpha, this._mode());
   }
-  /* img: Img (pixeles) o Surface (lienzo de la GPU) */
   drawImage(img, a1, a2, a3, a4, a5, a6, a7, a8) {
     if (!img) return;
     let sx = 0, sy = 0, sw = img._w, sh = img._h, dx, dy, dw, dh;
-    /* sin 'arguments': evitar un objeto nuevo en cada llamada (son miles por fotograma) */
     if (a3 === undefined) { dx = a1; dy = a2; dw = sw; dh = sh; }
     else if (a5 === undefined) { dx = a1; dy = a2; dw = a3; dh = a4; }
     else { sx = a1; sy = a2; sw = a3; sh = a4; dx = a5; dy = a6; dw = a7; dh = a8; }
@@ -475,7 +433,6 @@ class Ctx2D {
 
   _fontSize() { const m = /(\d+(?:\.\d+)?)px/.exec(this.font); return m ? parseFloat(m[1]) : 10; }
   _bold() { return /bold/.test(this.font); }
-  /* "s2d:N" en la familia elige una fuente cargada con __native.fontLoad (0 = la embebida) */
   _fontSlot() { const m = /s2d:(\d+)/.exec(this.font); return m ? +m[1] : 0; }
   measureText(t) { return { width: N.textWidth(String(t), this._fontSize(), this._bold(), this._fontSlot()) }; }
   fillText(text, x, y) {
@@ -506,7 +463,6 @@ class Ctx2D {
 
   createRadialGradient(x0, y0, r0, x1, y1, r1) { return new Gradient(x0, y0, r0, x1, y1, r1); }
 
-  /* pixeles: se leen de la GPU (lento: solo para casos raros) */
   getImageData(x, y, w, h) {
     w |= 0; h |= 0;
     return { width: w, height: h, data: new Uint8ClampedArray(N.gpuRead(this.canvas._gpu, x | 0, y | 0, w, h)) };
@@ -518,8 +474,7 @@ class Ctx2D {
   }
 }
 
-/* ---------- S2D: lo que usa el runtime ---------- */
-let lastRect = null;          /* [x, y, w, h] del area de juego en la ventana */
+let lastRect = null;
 const S2D = G.S2D = {
   surface: (w, h) => new Surface(w, h),
   image: (w, h, pixels) => new Img(w, h, pixels),
@@ -538,7 +493,6 @@ const S2D = G.S2D = {
   isFullscreen: () => !!N.isFullscreen(),
 };
 
-/* ---------- puntos de entrada llamados desde C ---------- */
 G.__dispatch = function (type, key, rep, x, y, btn) {
   if (!S2D.onInput) return;
   const d = S2D.display, r = lastRect;
@@ -547,7 +501,6 @@ G.__dispatch = function (type, key, rep, x, y, btn) {
     gx = (x - r[0]) / r[2] * d._w; gy = (y - r[1]) / r[3] * d._h;
     inside = x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3];
   }
-  /* el raton solo cuenta dentro del area de juego (salvo al soltar el boton) */
   if ((type === 'mousedown' || type === 'mousemove' || type === 'wheel') && !inside) return;
   try { S2D.onInput({ type, key, repeat: !!rep, x: gx, y: gy, button: btn }); } catch (e) { report(e); }
 };

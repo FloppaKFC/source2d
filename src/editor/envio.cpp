@@ -1,7 +1,3 @@
-// Source 2D - enviar juegos a Source Play (ver envio.hpp).
-// Cada llamada a GitHub es un curl en segundo plano: el cuerpo va en un archivo (--data-binary @) y las cabeceras con el
-// token tambien (-H @), asi el token no aparece en la lista de procesos. La respuesta se lee de su archivo y el estado
-// HTTP de las cabeceras guardadas (-D).
 #include "envio.hpp"
 #include "sys.hpp"
 #include "ui.hpp"
@@ -23,8 +19,6 @@ namespace fs = std::filesystem;
 
 namespace envio {
 namespace {
-// OAuth App "Source 2D" de FloppaKFC (github.com/settings/developers, con "Enable Device Flow"). Es publico: no es un
-// secreto. Mientras este vacio, "Entrar con GitHub" explica que falta.
 const char *kClientId = "Ov23lipmhcQcBtNRYcEX";
 const char *kDueno = "FloppaKFC", *kRepo = "source2d-envios", *kRepoJuegos = "source2d-juegos";
 
@@ -43,7 +37,6 @@ std::string leer(const std::string &p) {
     ss << in.rdbuf();
     return ss.str();
 }
-// archivo solo para este usuario del sistema (token, cabeceras)
 bool escribirPrivado(const std::string &p, const std::string &data) {
     std::error_code ec;
     fs::create_directories(fs::u8path(p).parent_path(), ec);
@@ -78,12 +71,11 @@ std::string urlEnc(const std::string &s) {
     return e;
 }
 
-// una peticion a GitHub; al acabar se llama a fin(estado HTTP, cuerpo como JSON). Estado 0: curl no llego
 struct Pet {
     std::string metodo, url, cuerpo;
     bool form = false, conToken = true;
     std::function<void(int, const json &)> fin;
-    bool estrellas = false;   // Accept: application/vnd.github.star+json (fechas de las estrellas)
+    bool estrellas = false;
 };
 std::deque<Pet> g_cola;
 bool g_activa = false;
@@ -117,8 +109,6 @@ void terminarPeticion() {
     g_activa = false;
     std::string st = leer(tmp("estado"));
     int code = 0;
-    // con redirecciones hay varias lineas "HTTP/x NNN": vale la ultima (solo las que empiezan asi: "Server:
-    // BaseHTTP/0.6" tambien lleva "HTTP/")
     for (size_t p = 0; p < st.size(); p = st.find('\n', p) == std::string::npos ? st.size() : st.find('\n', p) + 1) {
         if (st.compare(p, 5, "HTTP/") != 0) continue;
         size_t sp = st.find(' ', p);
@@ -157,7 +147,6 @@ void guardarMio(const Mio &m) {
     sys::writeDurable(dir() + "/github-envios.json", out.dump());
 }
 
-// registro en Source Play: una estrella en el repositorio de juegos (PUT es idempotente: repetirlo no cambia nada)
 void registrar() {
     pedir({"PUT", g_api + "/user/starred/" + kDueno + "/" + kRepoJuegos, "", false, true, nullptr});
 }
@@ -187,7 +176,6 @@ void sondearToken() {
     }});
 }
 
-// pasos del envio
 struct Envio { Paquete p; std::string rama, sha; int intentos = 0; std::vector<std::string> pendientes; };
 Envio g_env;
 void fallar(const std::string &msg) { g_enviando = false; g_fallo = true; g_estado = msg; }
@@ -215,12 +203,11 @@ void crearRama() {
     }});
 }
 void esperarCopia() {
-    // la copia (fork) tarda unos segundos en existir: se pregunta por su rama main hasta que responde
     pedir({"GET", g_api + "/repos/" + g_user + "/" + kRepo + "/git/ref/heads/main", "", false, true, [](int code, const json &b) {
         if (code == 200 && b.is_object() && b.contains("object")) { g_env.sha = b["object"].value("sha", ""); crearRama(); return; }
         if (++g_env.intentos > 30) { fallar("GitHub tardó demasiado en crear tu copia del repositorio. Prueba otra vez en un rato."); return; }
         g_estado = "Esperando a GitHub...";
-        g_proximoSondeo = reloj() + 2;   // lo relanza tick()
+        g_proximoSondeo = reloj() + 2;
     }});
 }
 void abrirPR() {
@@ -241,14 +228,14 @@ void abrirPR() {
         g_env = Envio{};
     }});
 }
-}  // namespace
+}
 
 void iniciar(bool pruebas) {
     g_pruebas = pruebas;
     if (const char *a = getenv("S2D_GITHUB_API")) g_api = a;
     if (const char *w = getenv("S2D_GITHUB_WEB")) g_web = w;
     if (const char *c = getenv("S2D_GITHUB_CLIENT_ID")) g_clientId = c;
-    if (pruebas && !getenv("S2D_GITHUB_API")) return;   // las pruebas no tocan GitHub de verdad
+    if (pruebas && !getenv("S2D_GITHUB_API")) return;
     json j = json::parse(leer(dir() + "/github.json"), nullptr, false);
     if (j.is_object()) { g_token = j.value("token", ""); g_user = j.value("usuario", ""); }
     if (!g_token.empty()) { cargarMios(); pedirUsuario(); }
@@ -259,8 +246,8 @@ std::map<std::string, Perfil> g_perfiles;
 std::vector<std::pair<std::string, std::string>> g_registrados, g_regNuevos;
 bool g_registradosListos = false;
 double g_registradosAt = -1e9;
-std::set<std::string> g_regSet;                  // logins registrados, en minusculas
-std::set<std::string> g_yoSigo;                  // a quien sigo yo (minusculas); vale si g_yoSigoListo
+std::set<std::string> g_regSet;
+std::set<std::string> g_yoSigo;
 bool g_yoSigoListo = false, g_yoSigoPedido = false;
 struct Avatar { sys::Proc p; std::string login, dest; };
 std::vector<Avatar> g_avatares;
@@ -275,7 +262,6 @@ std::vector<std::string> logins(const json &b) {
     if (b.is_array()) for (auto &x : b) if (x.is_object() && x.contains("login") && x["login"].is_string()) r.push_back(x["login"]);
     return r;
 }
-// una lista de GitHub pagina a pagina (100 por pagina, hasta 10 paginas); fin(todos) al acabar
 void paginas(const std::string &url, int pag, std::shared_ptr<std::vector<std::string>> acc, std::function<void(std::vector<std::string> &)> fin) {
     pedir({"GET", url + (url.find('?') == std::string::npos ? "?" : "&") + "per_page=100&page=" + std::to_string(pag), "", false, true,
            [url, pag, acc, fin](int code, const json &b) {
@@ -295,7 +281,6 @@ void pedirYoSigo() {
     });
 }
 void pedirRegistradosPag(int pag) {
-    // con la cabecera star+json cada estrella trae su fecha (starred_at)
     Pet p{"GET", g_api + "/repos/" + kDueno + "/" + kRepoJuegos + "/stargazers?per_page=100&page=" + std::to_string(pag), "", false, true, [pag](int code, const json &b) {
         if (code != 200 || !b.is_array()) { g_registradosAt = -1e9; return; }
         for (auto &x : b) {
@@ -314,7 +299,7 @@ void pedirRegistradosPag(int pag) {
     p.estrellas = true;
     pedir(p);
 }
-}  // namespace
+}
 
 void pedirPerfil(const std::string &login) {
     pedirRegistrados();
@@ -345,7 +330,6 @@ const Perfil *perfil(const std::string &login) {
     auto it = g_perfiles.find(login);
     if (it == g_perfiles.end()) return nullptr;
     Perfil &p = it->second;
-    // seguidores y siguiendo: solo cuentas de Source Play
     p.seguidoresSP.clear(); p.siguiendoSP.clear();
     for (auto &l : p.listaSeguidores) if (g_regSet.count(minus(l))) p.seguidoresSP.push_back(l);
     for (auto &l : p.listaSiguiendo) if (g_regSet.count(minus(l))) p.siguiendoSP.push_back(l);
@@ -376,7 +360,6 @@ void seguir(const std::string &login, bool si) {
     pedir({si ? "PUT" : "DELETE", g_api + "/user/following/" + login, "", false, true, [login, si](int code, const json &) {
         if (code != 204) return;
         if (si) g_yoSigo.insert(minus(login)); else g_yoSigo.erase(minus(login));
-        // las listas de los dos perfiles cambian: yo en sus seguidores y el en mis seguidos
         auto quita = [](std::vector<std::string> &v, const std::string &x) { v.erase(std::remove_if(v.begin(), v.end(), [&](const std::string &y) { return minus(y) == minus(x); }), v.end()); };
         auto it = g_perfiles.find(login);
         if (it != g_perfiles.end()) { quita(it->second.listaSeguidores, g_user); if (si) it->second.listaSeguidores.push_back(g_user); }
@@ -401,7 +384,6 @@ void tickAvatares() {
     for (auto it = g_avatares.begin(); it != g_avatares.end();) {
         int code = 0;
         if (!sys::finished(it->p, &code)) { ++it; continue; }
-        // la foto se guarda con su extension de verdad (raylib elige el formato por la extension)
         std::string head = leer(it->dest).substr(0, 4), ext = head.rfind("\x89PNG", 0) == 0 ? ".png" : head.rfind("\xFF\xD8", 0) == 0 ? ".jpg" : "";
         std::error_code ec;
         if (code == 0 && !ext.empty()) {
@@ -412,7 +394,7 @@ void tickAvatares() {
         it = g_avatares.erase(it);
     }
 }
-}  // namespace
+}
 
 void tick() {
     tickAvatares();
@@ -497,7 +479,6 @@ void mirarMios() {
     for (auto &m : g_mios) {
         if (m.estado != "revisando" || !m.numero) continue;
         int n = m.numero;
-        // el revisor cierra el envio con un comentario que empieza por "Aprobado" o "Rechazado: motivo"
         pedir({"GET", g_api + "/repos/" + kDueno + "/" + kRepo + "/issues/" + std::to_string(n) + "/comments", "", false, true, [n](int code, const json &b) {
             if (code != 200 || !b.is_array()) return;
             for (auto it = b.rbegin(); it != b.rend(); ++it) {
@@ -518,4 +499,4 @@ void mirarMios() {
         }});
     }
 }
-}  // namespace envio
+}

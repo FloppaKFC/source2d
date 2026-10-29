@@ -9,7 +9,6 @@ import sys
 
 RAIZ = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 
-# (nombre, uso, archivo de licencia o texto, va en los juegos exportados)
 PARTES = [
     ('raylib', 'ventanas, graficos y audio (licencia zlib)', 'third_party/raylib/LICENSE', True),
     ('GLFW', 'ventanas y entrada, dentro de raylib (licencia zlib)', 'third_party/raylib/src/external/glfw/LICENSE.md', True),
@@ -52,7 +51,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE."""
 
-
 def reunir(solo_jugador):
     out = ['Source 2D usa estas bibliotecas y fuentes de terceros. Gracias a sus autores.\n']
     for nombre, uso, archivo, en_jugador in PARTES:
@@ -71,7 +69,6 @@ def reunir(solo_jugador):
         out.append('')
     return '\n'.join(out) + '\n'
 
-
 def cadena_c(nombre, texto):
     lineas = ['/* generado por tools/gen_licencias.py: no editar */', '#pragma once',
               'static const char %s[] =' % nombre]
@@ -80,7 +77,6 @@ def cadena_c(nombre, texto):
         lineas.append('  "%s\\n"' % l)
     lineas[-1] += ';'
     return '\n'.join(lineas) + '\n'
-
 
 def main():
     if len(sys.argv) != 3 or sys.argv[1] not in ('texto', 'editor', 'jugador'):
@@ -93,7 +89,6 @@ def main():
         res = cadena_c('licencias_' + modo, texto)
     with open(salida, 'w', encoding='utf-8', newline='\n') as f:
         f.write(res)
-
 
 if __name__ == '__main__':
     main()

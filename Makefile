@@ -1,10 +1,3 @@
-# Source 2D - editor nativo y jugador, sin dependencias externas.
-# Resultado: build/source2d (editor, un solo ejecutable) y build/source2d-player (jugador).
-# Ambos dependen solo de libc/libm: X11/Wayland y OpenGL se cargan en tiempo de ejecucion (GLFW + dlopen).
-#   make            -> editor y jugador PARA ESTE EQUIPO (pruebas): piden la glibc de este sistema, y los juegos de
-#                      Linux que exporte este editor tampoco abriran en distribuciones mas viejas (Ubuntu, Mint...)
-#   tools/release.sh -> carpeta Release (editores de Linux y Windows, para repartir)
-#   make STRICT=1   -> falla en vez de avisar si el jugador incrustado pide una glibc mayor que GLIBC_PORTABLE
 QJS_DIR    ?= third_party/quickjs
 RAYLIB_DIR  = third_party/raylib/src
 IMGUI_DIR   = third_party/imgui
@@ -29,9 +22,6 @@ editor: $(EDITOR)
 build build/gen:
 	mkdir -p $@
 
-# ---- dependencias propias ----
-# raylib con OpenGL 2.1: abre tambien en graficas viejas (Intel GMA y similares); lo moderno sigue igual de rapido
-# GLFW lleva un parche de Source 2D (aviso de archivos arrastrandose encima): si cambia, se rehace rglfw.o
 GLFW_PATCHED = $(RAYLIB_DIR)/external/glfw/src/input.c $(RAYLIB_DIR)/external/glfw/src/x11_window.c
 $(RAYLIB_A): $(GLFW_PATCHED)
 	rm -f $(RAYLIB_DIR)/rglfw.o
@@ -41,19 +31,15 @@ $(QJS_A):
 	cmake -S $(QJS_DIR) -B $(QJS_DIR)/b-os -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
 	cmake --build $(QJS_DIR)/b-os --target qjs -j4
 
-# capa nativa del runtime (superficies de la GPU, imagenes, contexto 2D, entrada y fotogramas)
 src/gfx_js.h: src/gfx.js tools/gen_gfx.py tools/jsmin.py
 	python3 tools/gen_gfx.py src/gfx.js src/gfx_js.h
 
-# capa del runtime para el navegador (exportacion HTML): la lleva el editor
 build/gen/gfx_web_js.h: src/web/gfx_web.js tools/gen_gfx.py tools/jsmin.py | build/gen
 	python3 tools/gen_gfx.py src/web/gfx_web.js $@ gfx_web_js
 
-# runtime JS del juego embebido en el jugador
 src/runtime_js.h: src/runtime.js tools/gen_runtime.py tools/jsmin.py
 	python3 tools/gen_runtime.py src/runtime.js src/runtime_js.h
 
-# licencias de terceros: dentro del jugador (./juego --licencias), del editor (Ayuda) y junto a la Release
 LIC_SRC = tools/gen_licencias.py third_party/raylib/LICENSE third_party/raylib/src/external/glfw/LICENSE.md third_party/quickjs/LICENSE third_party/vulkan/LICENSE.txt \
           third_party/dejavu/LICENSE.txt third_party/imgui/LICENSE.txt third_party/rlImGui/LICENSE third_party/outfit/OFL.txt third_party/monocypher/LICENCE.md
 src/licencias_jugador.h: $(LIC_SRC)
@@ -63,7 +49,6 @@ build/gen/licencias_editor.h: $(LIC_SRC) | build/gen
 LICENCIAS-TERCEROS.txt: $(LIC_SRC)
 	python3 tools/gen_licencias.py texto $@
 
-# ---- jugador ----
 PLAYER_SRC = src/main.c src/platform_raylib.c src/text.c src/gpu_vulkan.c src/steam.c
 $(PLAYER): $(PLAYER_SRC) src/platform.h src/text.h src/gfx_js.h src/font_data.h src/runtime_js.h src/licencias_jugador.h src/gpu_vulkan.h src/vk_shaders.h $(RAYLIB_A) $(QJS_A) | build
 	$(CC) $(CFLAGS) -Isrc -I$(QJS_DIR) -I$(RAYLIB_DIR) -I$(RAYLIB_DIR)/external -DPLAYER -c src/main.c -o build/main_player.o
@@ -73,11 +58,6 @@ $(PLAYER): $(PLAYER_SRC) src/platform.h src/text.h src/gfx_js.h src/font_data.h 
 	$(CC) $(CFLAGS) -Isrc -c src/steam.c -o build/steam.o
 	$(CC) build/main_player.o build/platform_raylib.o build/text.o build/gpu_vulkan.o build/steam.o -o $@ $(RAYLIB_A) $(QJS_A) $(LDLIBS) $(LDSTATIC)
 
-# ---- editor ----
-# El editor lleva los motores para exportar a Linux y a Windows (tools/gen_players.py, todos en LZMA): el completo y,
-# para la exportacion ligera, el ligero y el lanzador. Los de Windows, el ligero y los lanzadores los compilan
-# Makefile.win y Makefile.linux (tools/release.sh); los que falten no se ofrecen al exportar.
-# Este editor de pruebas lleva el jugador de Linux del gcc del sistema (ver check-portable).
 PLAYERS_IN = build/lnx/lite/stub $(PLAYER) build/lnx/lite/source2d-lite build/win/lite/stub.exe build/win/source2d-player.exe build/win/lite/source2d-lite.exe
 build/gen/players_bin.c: $(PLAYER) $(wildcard $(PLAYERS_IN)) tools/gen_players.py | build/gen
 	python3 tools/gen_players.py $@ $(PLAYERS_IN)
@@ -85,7 +65,6 @@ build/gen/players_bin.h: build/gen/players_bin.c
 build/gen/%.o: build/gen/%.c
 	$(CC) -c $< -o $@
 
-# presets pequenos incrustados (shader de lluvia, plugin de estilo, plantilla de extension)
 build/gen/presets.h: $(wildcard src/editor/presets/*) tools/bin2h.py | build/gen
 	python3 tools/bin2h.py src/editor/presets/lluvia.glsl preset_lluvia build/gen/preset_lluvia.h
 	python3 tools/bin2h.py src/editor/presets/estilo.js preset_estilo build/gen/preset_estilo.h
@@ -96,9 +75,6 @@ build/gen/presets.h: $(wildcard src/editor/presets/*) tools/bin2h.py | build/gen
 	python3 tools/bin2h.py src/editor/presets/cancion_floppa.s2dsound preset_cancion build/gen/preset_cancion.h
 	printf '#pragma once\n#include "preset_lluvia.h"\n#include "preset_estilo.h"\n#include "preset_extension.h"\n#include "preset_steam.h"\n#include "preset_floppa1.h"\n#include "preset_floppa2.h"\n#include "preset_cancion.h"\n' > $@
 
-# Project Ry-mik (juego de ejemplo, el unico): no va dentro del editor (ni en la Release). El editor de pruebas lo encuentra
-# aqui, en la raiz. Lo genera tools/make_rymik.py desde el proyecto de GDevelop de la carpeta "Proyect Ry-mik".
-# el proyecto original de GDevelop no siempre esta (no va en las copias del motor): sin el se usa el .json ya generado
 RYMIK_SRC = $(wildcard Proyect\ Ry-mik/Project\ Ry-mik.json)
 ifneq ($(RYMIK_SRC),)
 examples_rymik.source2d.json: tools/make_rymik.py Proyect\ Ry-mik/Project\ Ry-mik.json src/editor/presets/lluvia.glsl
@@ -109,11 +85,9 @@ templates: tools/make_templates.py test/proyecto_prueba.source2d.json
 idioma: tools/gen_idioma.py src/editor/instructions.json
 	python3 tools/gen_idioma.py
 
-# definiciones de condiciones y acciones (frases, parametros, categorias) incrustadas en el editor
 build/gen/instructions_json.h: src/editor/instructions.json tools/bin2h.py | build/gen
 	python3 tools/bin2h.py src/editor/instructions.json instructions_json $@
 
-# fuente de la interfaz del editor: Outfit (OFL, ver third_party/outfit/OFL.txt)
 build/gen/editor_fonts.h: third_party/outfit/Outfit-Medium.ttf third_party/outfit/Outfit-SemiBold.ttf tools/bin2h.py | build/gen
 	python3 tools/bin2h.py third_party/outfit/Outfit-Medium.ttf outfit_medium build/gen/outfit_medium.h
 	python3 tools/bin2h.py third_party/outfit/Outfit-SemiBold.ttf outfit_semibold build/gen/outfit_semibold.h
@@ -140,7 +114,6 @@ $(EDITOR): $(EDITOR_OBJ) $(IMGUI_OBJ) build/gen/players_bin.o $(RAYLIB_A) $(QJS_
 	$(CXX) $(EDITOR_OBJ) $(IMGUI_OBJ) build/gen/players_bin.o -o $@ $(RAYLIB_A) $(QJS_A) $(LDLIBS) -static-libstdc++ $(LDSTATIC)
 	@$(MAKE) --no-print-directory check-portable || { rm -f $@; exit 1; }
 
-# avisa (o falla con STRICT=1) si el jugador que lleva el editor pide una glibc mas nueva que GLIBC_PORTABLE
 GLIBC_PORTABLE = 2.28
 check-portable: $(PLAYER)
 	@v=$$(objdump -T $(PLAYER) 2>/dev/null | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1); \
@@ -154,11 +127,9 @@ check-portable: $(PLAYER)
 	  if [ -n "$(STRICT)" ]; then exit 1; fi; \
 	fi
 
-# comprueba que los ejecutables no dependen de bibliotecas del sistema (solo libc/libm)
 check-deps: $(PLAYER) $(EDITOR)
 	@for f in $(PLAYER) $(EDITOR); do echo "== $$f"; ldd $$f; done
 
-# herramienta para firmar noticias y versiones (solo la usa quien publica; ver tools/firma.c)
 firma: build/firma
 build/firma: tools/firma.c third_party/monocypher/monocypher.c | build
 	$(CC) -O2 -Wall -Ithird_party/monocypher tools/firma.c third_party/monocypher/monocypher.c -o $@

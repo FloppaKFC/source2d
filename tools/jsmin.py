@@ -6,21 +6,18 @@ Uso como modulo: jsmin.thin(texto) -> texto"""
 import sys
 
 ID = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$\\')
-# tras estas palabras una / empieza una expresion regular
 RE_KW = {'return', 'typeof', 'case', 'in', 'of', 'new', 'delete', 'void', 'throw', 'else', 'do', 'instanceof', 'yield', 'await'}
-
 
 def is_id(c):
     return c in ID or ord(c) > 127
 
-
 def thin(src):
-    out = []          # trozos de salida
+    out = []
     i, n = 0, len(src)
     pend_space = False
-    last = ''         # ultimo caracter significativo emitido (para decidir espacios y si / es regex)
+    last = ''
     last_word = ''
-    braces = []       # pila: 't' = llave que abrio ${ de una plantilla, 'c' = llave de codigo
+    braces = []
 
     def emit(s):
         nonlocal pend_space, last, last_word
@@ -92,7 +89,7 @@ def thin(src):
             continue
         if c == '}' and braces and braces[-1] == 't':
             braces.pop()
-            j, opened = template(i)      # sigue la plantilla: desde la } (el codigo de template() salta el primer caracter)
+            j, opened = template(i)
             emit(src[i:j])
             if opened:
                 braces.append('t')
@@ -105,7 +102,7 @@ def thin(src):
         if c == '/':
             prev = last if last != '\n' else ''
             k = len(out) - 1
-            while not prev and k >= 0:      # el ultimo caracter significativo antes del salto de linea
+            while not prev and k >= 0:
                 s = out[k].rstrip('\n ')
                 if s:
                     prev = s[-1]
@@ -146,7 +143,6 @@ def thin(src):
         last_word = ''
         i += 1
     return ''.join(out)
-
 
 if __name__ == '__main__':
     s = open(sys.argv[1], encoding='utf-8').read()

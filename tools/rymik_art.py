@@ -3,11 +3,9 @@ Lo usa tools/make_rymik.py."""
 import math, random
 from PIL import Image, ImageDraw
 
-
 def rgba(h, a=255):
     h = h.lstrip('#')
     return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), a)
-
 
 def casete(w=176, h=112):
     """casete de musica: cuerpo oscuro, etiqueta clara (ahi va el logo y el nombre), ventana con las bobinas"""
@@ -15,19 +13,18 @@ def casete(w=176, h=112):
     d = ImageDraw.Draw(im)
     d.rounded_rectangle((0, 0, w - 1, h - 1), 8, fill=rgba('#1d1d26'), outline=rgba('#0a0a0f'), width=2)
     d.rounded_rectangle((3, 3, w - 4, h - 4), 6, outline=rgba('#3a3a4a'), width=1)
-    for x, y in ((7, 7), (w - 8, 7), (7, h - 8), (w - 8, h - 8)):        # tornillos
+    for x, y in ((7, 7), (w - 8, 7), (7, h - 8), (w - 8, h - 8)):
         d.ellipse((x - 3, y - 3, x + 3, y + 3), fill=rgba('#8a8a99'), outline=rgba('#0a0a0f'))
         d.line((x - 2, y, x + 2, y), fill=rgba('#3a3a4a'))
-    d.rounded_rectangle((12, 8, w - 13, 64), 4, fill=rgba('#efe6cf'), outline=rgba('#0a0a0f'), width=1)   # etiqueta
+    d.rounded_rectangle((12, 8, w - 13, 64), 4, fill=rgba('#efe6cf'), outline=rgba('#0a0a0f'), width=1)
     d.rectangle((12, 8, w - 13, 16), fill=rgba('#e0475a'))
     d.line((12, 16, w - 13, 16), fill=rgba('#0a0a0f'))
-    d.rounded_rectangle((44, 70, w - 45, 94), 10, fill=rgba('#0b0b10'), outline=rgba('#5a5a6a'), width=1)  # ventana
-    d.rectangle((70, 76, w - 71, 88), fill=rgba('#3b2a20'))                 # cinta
+    d.rounded_rectangle((44, 70, w - 45, 94), 10, fill=rgba('#0b0b10'), outline=rgba('#5a5a6a'), width=1)
+    d.rectangle((70, 76, w - 71, 88), fill=rgba('#3b2a20'))
     d.polygon([(30, h - 1), (40, h - 13), (w - 41, h - 13), (w - 31, h - 1)], fill=rgba('#2b2b36'), outline=rgba('#0a0a0f'))
     for x in (54, w // 2 - 4, w // 2 + 4, w - 55):
         d.ellipse((x - 2, h - 9, x + 2, h - 5), fill=rgba('#0a0a0f'))
     return im
-
 
 def bobina(s=22):
     """bobina de la cinta (gira cuando el casete esta elegido)"""
@@ -42,7 +39,6 @@ def bobina(s=22):
         d.rectangle((x - 1, y - 1, x + 1, y + 1), fill=rgba('#0a0a0f'))
     return im
 
-
 def logo_vacio(s=44):
     """etiqueta sin logo: una nota musical sobre un degradado"""
     im = Image.new('RGBA', (s, s))
@@ -56,7 +52,6 @@ def logo_vacio(s=44):
     d.rectangle((0, 0, s - 1, s - 1), outline=rgba('#0a0a0f'))
     return im
 
-
 def boton(w=200, h=28):
     """boton del menu principal (blanco: se tine al elegirlo)"""
     im = Image.new('RGBA', (w, h))
@@ -67,12 +62,10 @@ def boton(w=200, h=28):
     d.line((6, 4, w - 7, 4), fill=rgba('#ffffff'))
     return im
 
-
 def circulo(s=48):
     im = Image.new('RGBA', (s, s))
     ImageDraw.Draw(im).ellipse((0, 0, s - 1, s - 1), fill=rgba('#ffffff'))
     return im
-
 
 def ruido(w=160, h=90, frames=4, seed=3):
     """ruido de tele (cambio de canal)"""
@@ -89,7 +82,6 @@ def ruido(w=160, h=90, frames=4, seed=3):
         out.append(im)
     return out
 
-
 def rebobinar(w=44, h=24):
     """icono de rebobinar (dos triangulos hacia la izquierda) con borde negro"""
     im = Image.new('RGBA', (w, h))
@@ -98,14 +90,12 @@ def rebobinar(w=44, h=24):
         d.polygon([(ox, h // 2), (ox + 19, 1), (ox + 19, h - 2)], fill=rgba('#ffffff'), outline=rgba('#0a0a0f'))
     return im
 
-
 def fila(w=360, h=16):
     """barra para resaltar la fila elegida de una lista"""
     im = Image.new('RGBA', (w, h))
     d = ImageDraw.Draw(im)
     d.rectangle((0, 0, w - 1, h - 1), fill=rgba('#ffffff'))
     return im
-
 
 def flecha(s=16, izquierda=True):
     im = Image.new('RGBA', (s, s))

@@ -57,8 +57,6 @@ std::string colorToString(Px c) {
     return buf;
 }
 
-// Proyectos de antes de los objetos y eventos por escena: si solo tienen una escena, sus objetos y sus eventos
-// pasan a ser de esa escena (en el juego funciona igual). Con varias escenas se quedan globales y comunes.
 static void migrateSingleScene(json &d) {
     if (!d["scenes"].is_array() || d["scenes"].size() != 1 || !d["objects"].is_array()) return;
     json &sc = d["scenes"][0];
@@ -76,7 +74,7 @@ bool Project::load(const std::string &file, std::string &err) {
     try {
         std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         json d;
-        if (exporter::isSourcePack(bytes)) { if (!exporter::sourceUnpack(bytes, d, err)) return false; }   // .source2d comprimido
+        if (exporter::isSourcePack(bytes)) { if (!exporter::sourceUnpack(bytes, d, err)) return false; }
         else d = json::parse(bytes);
         if (!d.is_object() || !d.contains("sprites") || !d.contains("objects") || !d.contains("scenes")) {
             err = "El archivo no es un proyecto de Source 2D";

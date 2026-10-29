@@ -1,5 +1,3 @@
-// Source 2D - proyecto (.source2d.json) como documento JSON completo.
-// Cada editor modifica solo su parte; lo demas se guarda tal cual.
 #pragma once
 #include <cstdint>
 #include <string>
@@ -14,9 +12,9 @@ inline bool operator!=(const Px &x, const Px &y) { return !(x == y); }
 
 struct Project {
     json doc;
-    std::string path;      // vacio si nunca se guardo
+    std::string path;
     bool dirty = false;
-    int rev = 0;           // sube cuando cambian sprites/tiles (invalida texturas)
+    int rev = 0;
 
     bool load(const std::string &file, std::string &err);
     bool save(const std::string &file, std::string &err);
@@ -27,5 +25,5 @@ struct Project {
 };
 
 std::string makeUid(const char *prefix);
-Px parseColor(const std::string &s);          // '#rgb', '#rrggbb', '#rrggbbaa', 'rgb()', 'rgba()', '' = transparente
-std::string colorToString(Px c);               // '' si transparente; '#rrggbb' o '#rrggbbaa'
+Px parseColor(const std::string &s);
+std::string colorToString(Px c);

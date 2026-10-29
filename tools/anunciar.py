@@ -1,27 +1,12 @@
 #!/usr/bin/env python3
-# Source 2D - publica anuncios en Inicio > Noticias de todos los editores (firmados por @floppa-1550).
-# Trabaja sobre una copia local del repositorio publico FloppaKFC/source2d-versiones (por defecto ../source2d-versiones,
-# o S2D_VERSIONES_DIR): cambia noticias.json, lo firma con build/firma (pide tu contrasena) y lo sube con git.
-#   anunciar.py "Titulo" "Texto"  [--tipo aviso|evento|actualizacion|consejo] [--imagen foto.png] [--enlace https://...]
-#                                 [--inferior "texto que va debajo de la imagen"]
-# En el texto y en --inferior, {lista:Uno, Dos, Tres} sale como una lista con puntos; lo de fuera, como texto normal.
-# En el texto, {encuesta: "Pregunta", "Opcion 1", "Opcion 2", ..., "3d"} pone una encuesta en ese sitio. Lo ultimo es
-# cuanto dura (30m, 12h, 3d, 2 semanas, o una fecha AAAA-MM-DD [HH:MM]); sin eso, o con "", no se cierra nunca.
-# Los votos van a un contador publico (abacus.jasoncameron.dev); --resultados ID los muestra.
-#                                 [--fijar] [--hasta 2026-12-31] [--importante] [--notificar] [--para "Beta 0.1" --para windows]
-#   anunciar.py --lista
-#   anunciar.py --editar 3 [--titulo ...] [--texto ...] [las mismas opciones; --sin-imagen --sin-enlace --soltar ...]
-#   anunciar.py --borrar 3
-# --sin-subir deja los cambios firmados en la carpeta sin hacer git commit ni push.
 import argparse, datetime, hashlib, json, os, re, secrets, shutil, subprocess, sys, urllib.request
 
 AUTOR = "@floppa-1550"
 TIPOS = ["aviso", "evento", "actualizacion", "consejo"]
 CONTADOR = os.environ.get("S2D_CONTADOR_URL", "https://abacus.jasoncameron.dev/")
-ESPACIO = "source2d-floppa"   # el editor usa el mismo (novedades.cpp)
+ESPACIO = "source2d-floppa"
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIRMA = os.path.join(RAIZ, "build", "firma")
-
 
 def repo():
     d = os.environ.get("S2D_VERSIONES_DIR") or os.path.join(os.path.dirname(RAIZ), "source2d-versiones")
@@ -31,14 +16,12 @@ def repo():
                  "(o indica otra carpeta con S2D_VERSIONES_DIR)")
     return d
 
-
 def huella(path):
-    h = hashlib.blake2b(digest_size=32)   # la misma que crypto_blake2b(.., 32, ..) de Monocypher
+    h = hashlib.blake2b(digest_size=32)
     with open(path, "rb") as f:
         for trozo in iter(lambda: f.read(1 << 16), b""):
             h.update(trozo)
     return h.hexdigest()
-
 
 def cargar(d, nombre, tipo, lista):
     p = os.path.join(d, nombre)
@@ -51,7 +34,6 @@ def cargar(d, nombre, tipo, lista):
     j["tipo"] = tipo
     j["autor"] = AUTOR
     return j
-
 
 def guardar_y_firmar(d, archivos):
     """archivos: {nombre: json}. Escribe, firma todos con una sola contrasena y comprueba las firmas."""
@@ -69,9 +51,7 @@ def guardar_y_firmar(d, archivos):
     for p in rutas:
         subprocess.run([FIRMA, "verificar", p], check=True)
 
-
 def subir(d, mensaje, extra=()):
-    # git add falla entero si falta alguna ruta (imagenes/ no existe hasta el primer anuncio con imagen)
     rutas = [r for r in ("noticias.json", "noticias.json.firma", "versiones.json", "versiones.json.firma", "imagenes", *extra)
              if os.path.exists(os.path.join(d, r))]
     subprocess.run(["git", "-C", d, "add", *rutas], check=True)
@@ -81,7 +61,6 @@ def subir(d, mensaje, extra=()):
     subprocess.run(["git", "-C", d, "commit", "-q", "-m", mensaje], check=True)
     subprocess.run(["git", "-C", d, "push", "-q"], check=True)
     print("Subido. Los editores lo veran al abrirse (o en menos de 3 horas si ya estan abiertos).")
-
 
 def copiar_imagen(d, origen):
     ext = os.path.splitext(origen)[1].lower()
@@ -95,11 +74,9 @@ def copiar_imagen(d, origen):
     shutil.copyfile(origen, os.path.join(d, rel))
     return {"archivo": rel, "blake2b": h}
 
-
 def fecha_valida(s):
     datetime.date.fromisoformat(s)
     return s
-
 
 def duracion(t):
     """segundos hasta el cierre (o fecha absoluta) -> instante unix; None = sin limite"""
@@ -107,19 +84,18 @@ def duracion(t):
     if not t:
         return None
     m = re.fullmatch(r"(\d+)\s*(m|min|minutos?|h|horas?|d|d[ií]as?|s|sem|semanas?)", t)
-    if m:   # la unidad por su primera letra: minutos, horas, dias, semanas
+    if m:
         seg = {"m": 60, "h": 3600, "d": 86400, "s": 7 * 86400}[m.group(2)[0]]
         return int(datetime.datetime.now().timestamp()) + int(m.group(1)) * seg
     for f in ("%Y-%m-%d %H:%M", "%Y-%m-%d"):
         try:
             d = datetime.datetime.strptime(t, f)
             if f == "%Y-%m-%d":
-                d += datetime.timedelta(days=1)   # hasta el final de ese dia
+                d += datetime.timedelta(days=1)
             return int(d.timestamp())
         except ValueError:
             pass
-    return False   # no es una duracion: es una opcion mas
-
+    return False
 
 def sacar_encuesta(texto, id_):
     """Busca {encuesta: "P", "A", "B", "3d"} en el texto. Devuelve (texto con {encuesta} en su sitio, encuesta) o (texto, None)."""
@@ -128,7 +104,7 @@ def sacar_encuesta(texto, id_):
         return texto, None
     b = a
     dentro = False
-    while b < len(texto):   # la llave que cierra, sin contar las que vayan entre comillas
+    while b < len(texto):
         c = texto[b]
         if c == '"':
             dentro = not dentro
@@ -167,7 +143,6 @@ def sacar_encuesta(texto, id_):
         e["cierra"] = cierra
     return texto[:a] + "{encuesta}" + texto[b + 1:], e
 
-
 def votos(e):
     r = []
     for i in range(len(e["opciones"])):
@@ -179,7 +154,6 @@ def votos(e):
         except Exception:
             r.append(None)
     return r
-
 
 def main():
     ap = argparse.ArgumentParser(description="Publica un anuncio en Inicio > Noticias de Source 2D")
@@ -273,9 +247,9 @@ def main():
             texto, e = sacar_encuesta(a.texto2 if a.texto2 is not None else a.texto, n["id"])
             n["texto"] = texto
             if e:
-                n["encuesta"] = e   # encuesta nueva (votos desde cero)
+                n["encuesta"] = e
             elif "{encuesta}" not in texto and n.get("encuesta"):
-                n["texto"] = texto + " {encuesta}"   # se cambio el texto: la encuesta que habia sigue, al final
+                n["texto"] = texto + " {encuesta}"
         if a.sin_encuesta:
             n.pop("encuesta", None)
             n["texto"] = n.get("texto", "").replace("{encuesta}", "").strip()
@@ -301,14 +275,13 @@ def main():
 
     archivos = {"noticias.json": nj}
     vp = os.path.join(d, "versiones.json")
-    if not os.path.exists(vp):   # el editor espera los dos archivos
+    if not os.path.exists(vp):
         archivos["versiones.json"] = cargar(d, "versiones.json", "versiones", "versiones")
     guardar_y_firmar(d, archivos)
     if a.sin_subir:
         print("Firmado. No se ha subido (--sin-subir).")
     else:
         subir(d, mensaje)
-
 
 if __name__ == "__main__":
     main()

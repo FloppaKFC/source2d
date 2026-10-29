@@ -44,7 +44,7 @@ bool init() {
 
 static void tuneTcp(RawSock s) {
     int one = 1;
-    setsockopt(s, IPPROTO_TCP, TCP_NODELAY, (const char *)&one, sizeof one);   // el cursor no espera a llenar paquetes
+    setsockopt(s, IPPROTO_TCP, TCP_NODELAY, (const char *)&one, sizeof one);
     setNonBlocking(s);
 }
 
@@ -108,7 +108,7 @@ int connectDone(Sock s) {
 long recv(Sock s, char *buf, long n) {
     long r = (long)::recv(raw(s), buf, (int)n, 0);
     if (r > 0) return r;
-    if (r == 0) return -1;                       // el otro lado cerro
+    if (r == 0) return -1;
     return wouldBlock() ? 0 : -1;
 }
 
@@ -137,7 +137,7 @@ Sock udpOpen(int bindPort) {
     if (wrap(s) == kBad) return kBad;
     int one = 1;
     setsockopt(s, SOL_SOCKET, SO_BROADCAST, (const char *)&one, sizeof one);
-    setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (const char *)&one, sizeof one);   // varios editores en la misma PC
+    setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (const char *)&one, sizeof one);
 #ifdef SO_REUSEPORT
     setsockopt(s, SOL_SOCKET, SO_REUSEPORT, (const char *)&one, sizeof one);
 #endif

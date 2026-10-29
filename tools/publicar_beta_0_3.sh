@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-# Source 2D - publica la Beta 0.3 en Noticias y en el selector de versiones (firma con tu clave: pide la contrasena).
-# Antes: tools/release.sh (genera Release/Linux/Source2D y Release/Windows/Source2D.exe con la Beta 0.3).
-#   tools/publicar_beta_0_3.sh                  canal experimental (aun falta probarla)
-#   CANAL=estable tools/publicar_beta_0_3.sh    para todos
-#   S2D_SIN_SUBIR=1 tools/publicar_beta_0_3.sh  firma pero no sube (para probar)
 set -eu
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CANAL="${CANAL:-experimental}"

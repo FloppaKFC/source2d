@@ -1,7 +1,3 @@
-/* Source 2D - diagnostico ("--diagnostico" en el editor y en los juegos): un informe en ~/source2d-diagnostico.txt (en
-   Windows, en la carpeta del usuario) con el sistema, el procesador, la parte grafica y todo lo que dice raylib al abrir
-   la ventana (version de OpenGL, errores de GLFW...). Sirve para saber por que no abre en un equipo que no es el
-   nuestro. Necesita raylib.h incluido antes. */
 #ifndef S2D_DIAG_H
 #define S2D_DIAG_H
 #include <stdarg.h>
@@ -67,7 +63,6 @@ static void s2d_diag_begin(const char *programa) {
     SetTraceLogLevel(LOG_INFO);
     SetTraceLogCallback(s2d_diag_trace);
 }
-/* fin del informe: ok = la ventana y la parte grafica funcionan */
 static void s2d_diag_end(int ok, const char *detalle) {
     if (s2d_diag_file && s2d_diag_file != stderr) {
         fprintf(s2d_diag_file, "\nResultado: %s\n%s\n", ok ? "FUNCIONA" : "NO FUNCIONA", detalle ? detalle : "");

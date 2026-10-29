@@ -1,4 +1,3 @@
-// Source 2D - editor de escena nativo: colocar y editar instancias, pintar tiles, capas, camara y propiedades.
 #pragma once
 #include <functional>
 #include <map>
@@ -18,25 +17,24 @@ public:
     std::function<void()> onNewObject;
     std::function<void(const std::string &)> onOpenTileset;
     std::function<void()> onOpenLayers;
-    std::function<void(ObjectEditor &)> onSetupObject;   // conecta el editor de objeto de dentro (abrir sprites...)
-    std::unique_ptr<ObjectEditor> objView;               // objeto abierto dentro de la escena (en lugar del lienzo)
+    std::function<void(ObjectEditor &)> onSetupObject;
+    std::unique_ptr<ObjectEditor> objView;
     void editObject(const std::string &objId);
     std::function<std::string()> onNewTileObject;
 
     void draw(Project &proj);
     std::string title(Project &proj);
 
-    // operaciones (tambien para las pruebas automaticas)
     Mode mode = Select;
-    std::string placeObj, paintObj;    // paintObj: objeto Tile con el que se pinta
+    std::string placeObj, paintObj;
     int paintTile = 0;
-    bool newPiece = false;              // el siguiente trazo empieza un mapa aparte (otra instancia)
+    bool newPiece = false;
     std::vector<std::string> sel;
-    std::string placeAt(Project &proj, json &sc, float wx, float wy);   // devuelve el id de la instancia
+    std::string placeAt(Project &proj, json &sc, float wx, float wy);
     void deleteSelected(json &sc);
     void duplicateSelected(json &sc);
     void paintCell(Project &proj, json &sc, float wx, float wy, int tile);
-    std::string pickAt(Project &proj, json &sc, float wx, float wy);    // instancia bajo el punto ('' si ninguna)
+    std::string pickAt(Project &proj, json &sc, float wx, float wy);
     void moveSelected(json &sc, float dx, float dy);
     bool undo(json &sc) { return hist.doUndo(sc); }
     bool redo(json &sc) { return hist.doRedo(sc); }
@@ -53,9 +51,9 @@ private:
     std::vector<json> clip;
     JsonHistory hist;
     ImVec2 canvasPos;
-    std::string popId;                  // instancia recien soltada (animacion de aparecer)
+    std::string popId;
     double popAt = -1;
-    ImVec2 ghost{0, 0};                 // fantasma del objeto arrastrado desde la lista
+    ImVec2 ghost{0, 0};
     bool ghostOn = false;
 
     ImVec2 toScreen(float x, float y) const { return ImVec2(canvasPos.x + panX + x * zoom, canvasPos.y + panY + y * zoom); }
@@ -73,4 +71,4 @@ private:
     void shortcuts(Project &proj, json &sc);
 };
 
-json &projectLayers(Project &proj);    // garantiza la capa 'base'
+json &projectLayers(Project &proj);
