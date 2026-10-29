@@ -70,13 +70,26 @@ retirar() {
     "${SP[@]}" retirar "$id" "${EXTRA[@]}"
 }
 
+destacar() {
+    titulo "Destacados"
+    echo "${D}Los juegos destacados salen arriba del todo en Source Play, en su propia fila. Pon los que más te gusten"
+    echo "o los que quieras enseñar (se puede quitar cuando quieras).${N}"
+    "${SP[@]}" lista || return
+    local id; pedir "Id del juego (vacío = volver)" id
+    [ -z "$id" ] && return
+    echo "  1) Ponerlo en Destacados   2) Quitarlo de Destacados"
+    local o; pedir "Elige" o 1
+    if [ "$o" = 2 ]; then "${SP[@]}" no-destacar "$id" "${EXTRA[@]}"; else "${SP[@]}" destacar "$id" "${EXTRA[@]}"; fi
+}
+
 while :; do
     titulo "Source Play"
     echo "  1) Envíos nuevos        ${D}probar los juegos que mandaron y aprobarlos o rechazarlos${N}"
     echo "  2) Publicar uno mío     ${D}un paquete guardado desde el editor${N}"
     echo "  3) Juegos publicados    ${D}lista con id, versión y si es abierto o cerrado${N}"
     echo "  4) Retirar un juego     ${D}quitarlo de Source Play y de los equipos que lo tienen${N}"
-    echo "  5) Denuncias            ${D}lo que la gente denunció desde el editor${N}"
+    echo "  5) Denuncias            ${D}lo que la gente denunció desde el editor (juegos y cuentas)${N}"
+    echo "  6) Destacados           ${D}poner o quitar juegos en la fila de Destacados${N}"
     echo "  0) Salir"
     pedir "Elige" op
     case "$op" in
@@ -85,6 +98,7 @@ while :; do
         3) "${SP[@]}" lista ;;
         4) retirar ;;
         5) "${SP[@]}" denuncias ;;
+        6) destacar ;;
         0|q|"") exit 0 ;;
         *) echo "${R}Opción no válida${N}" ;;
     esac

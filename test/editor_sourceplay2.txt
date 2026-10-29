@@ -8,6 +8,10 @@ tienda.portadas
 tienda.insignia Floppa 1
 tienda.insignia otro 2
 tienda.insignia nadie 0
+tienda.insignia floppakfc 3
+tienda.destacado otro-aventura-de-plataformas 1
+tienda.destacado floppa-aventura-de-plataformas 0
+tienda.favorito floppa-aventura-de-plataformas
 tienda.descargar
 tienda.instalados
 tienda.fuente clave-mala-12345 0

@@ -54,6 +54,13 @@ class H(BaseHTTPRequestHandler):
             if j.get("sha") != "abc123" or not j["ref"].startswith("refs/heads/envio-"):
                 return self.responder(422, {"message": "bad ref"})
             return self.responder(201, {"ref": j["ref"]})
+        if self.path == "/repos/FloppaKFC/source2d-envios/issues":
+            j = json.loads(b)
+            if not j["title"].startswith("Denuncia: ") or "**Motivo:**" not in j["body"]:
+                return self.responder(422, {"message": "bad issue"})
+            with open(os.path.join(SALIDA, "denuncia.json"), "w") as f:
+                json.dump(j, f)
+            return self.responder(201, {"number": 9})
         if self.path == "/repos/FloppaKFC/source2d-envios/pulls":
             j = json.loads(b)
             if not j["head"].startswith("creador:envio-") or j["base"] != "main":
@@ -97,9 +104,12 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self.autorizado():
             return
+        ruta, _, q = self.path.partition("?")
+        if "page=" in q and "page=1" not in q.split("&"):   # listas por paginas: todo cabe en la primera
+            return self.responder(200, [])
         if self.path == "/user":
             return self.responder(200, {"login": "creador"})
-        if self.path == "/repos/FloppaKFC/source2d-juegos/stargazers?per_page=100":
+        if ruta == "/repos/FloppaKFC/source2d-juegos/stargazers":
             if "star+json" not in (self.headers.get("Accept") or ""):
                 return self.responder(200, [{"login": "creador"}])
             gente = [{"starred_at": "2026-10-01T09:00:00Z", "user": {"login": "amiga"}}]
@@ -113,10 +123,15 @@ class H(BaseHTTPRequestHandler):
                                         "following": 1 if estado["sigo"] else 0, "avatar_url": ""})
         if self.path == "/user/following/amiga":
             return self.responder(204 if estado["sigo"] else 404, {})
-        if self.path == "/users/amiga/followers?per_page=100":
+        # listas de GitHub: el editor solo cuenta las cuentas de Source Play (amiga y creador)
+        if ruta == "/users/amiga/followers":
             return self.responder(200, [{"login": "uno"}, {"login": "dos"}, {"login": "tres"}] + ([{"login": "creador"}] if estado["sigo"] else []))
-        if self.path == "/users/amiga/following?per_page=100":
-            return self.responder(200, [{"login": "uno"}])
+        if ruta == "/users/amiga/following":
+            return self.responder(200, [{"login": "uno"}, {"login": "creador"}])
+        if ruta == "/user/following":
+            return self.responder(200, [{"login": "uno"}] + ([{"login": "amiga"}] if estado["sigo"] else []))
+        if ruta in ("/users/creador/followers", "/users/creador/following"):
+            return self.responder(200, [{"login": "amiga"}] if ruta.endswith("followers") or estado["sigo"] else [])
         if self.path == "/repos/creador/source2d-envios/git/ref/heads/main":
             estado["refs"] += 1   # la copia tarda un poco en existir
             if estado["refs"] < 2:

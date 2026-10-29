@@ -6,14 +6,16 @@ Programas para llevar lo que se publica (se abren desde la terminal, desde cualq
 |---|---|
 | `Controladores/Noticias.sh` | Noticias de Inicio > Noticias (con encuestas) y publicar versiones nuevas del editor |
 | `Controladores/Source-Play.sh` | Source Play: revisar envíos, aprobarlos o rechazarlos, publicar tus juegos, retirar, denuncias |
-| `Controladores/Source-Cuentas.sh` | Cuentas registradas en Source Play e insignias: cuenta verificada (azul) o admin (dorada) |
+| `Controladores/Source-Cuentas.sh` | Cuentas registradas en Source Play e insignias: verificada (azul), admin (dorada) o creador (morada con estrella) |
 
 Los dos firman con tu clave (piden la contraseña). Con `S2D_SIN_SUBIR=1` delante firman pero no suben nada (para probar).
 
 ## Preparar Source Play (una vez)
 
-1. **Repositorios** (ya creados): `FloppaKFC/source2d-envios` (llegan los envíos) y `FloppaKFC/source2d-juegos`
-   (catálogo firmado y juegos aprobados), clonado en `../source2d-juegos`.
+1. **Repositorios** (ya creados): `FloppaKFC/source2d-envios` (llegan los envíos y las denuncias) y
+   `FloppaKFC/source2d-juegos` (catálogo y cuentas firmados), clonado en `../source2d-juegos`.
+   **Los juegos van como archivos de Releases** de `source2d-juegos` (una por juego y versión): son gratis, cada archivo
+   puede pesar hasta 2 GB y no cuentan para el tamaño del repositorio, que solo guarda el catálogo (unos KB).
 2. **Normas:** sube `Controladores/NORMAS.md` a la raíz de `source2d-envios` (el editor enlaza a
    `https://github.com/FloppaKFC/source2d-envios/blob/main/NORMAS.md`).
 3. **Entrar con GitHub desde el editor:** la aplicación *Source 2D* de GitHub ya está puesta (Client ID
@@ -24,5 +26,8 @@ Los dos firman con tu clave (piden la contraseña). Con `S2D_SIN_SUBIR=1` delant
 
 - **Registrarse:** al entrar con GitHub desde el editor, la cuenta pone una estrella en `FloppaKFC/source2d-juegos`.
   Esa lista de estrellas es la lista de cuentas de Source Play, y la fecha de la estrella es "se unió".
-- **Seguir** es el de GitHub: los seguidores y seguidos que se ven en el perfil son los de GitHub.
+- **Seguir** usa el de GitHub, pero el perfil solo cuenta y muestra las cuentas de Source Play.
+- **Denuncias** de juegos y cuentas: llegan como incidencias a `source2d-envios` y se ven en Source-Play.sh > Denuncias
+  (con la insignia de quien denuncia y de la cuenta denunciada).
+- **Destacados:** Source-Play.sh > Destacados. Salen arriba del todo en Source Play; debajo, los favoritos de cada persona.
 - **Insignias:** `cuentas.json` en `source2d-juegos`, firmado con tu clave. Lo cambia `Source-Cuentas.sh`.

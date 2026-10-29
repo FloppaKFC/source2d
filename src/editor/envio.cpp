@@ -14,6 +14,9 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <map>
+#include <memory>
+#include <set>
 #include <sstream>
 
 namespace fs = std::filesystem;
@@ -253,10 +256,15 @@ void iniciar(bool pruebas) {
 
 namespace {
 std::map<std::string, Perfil> g_perfiles;
-std::vector<std::pair<std::string, std::string>> g_registrados;
+std::vector<std::pair<std::string, std::string>> g_registrados, g_regNuevos;
+bool g_registradosListos = false;
 double g_registradosAt = -1e9;
+std::set<std::string> g_regSet;                  // logins registrados, en minusculas
+std::set<std::string> g_yoSigo;                  // a quien sigo yo (minusculas); vale si g_yoSigoListo
+bool g_yoSigoListo = false, g_yoSigoPedido = false;
 struct Avatar { sys::Proc p; std::string login, dest; };
 std::vector<Avatar> g_avatares;
+std::string minus(std::string s) { for (auto &c : s) c = (char)tolower((unsigned char)c); return s; }
 bool loginSeguro(const std::string &s) {
     if (s.empty() || s.size() > 39) return false;
     for (char c : s) if (!(isalnum((unsigned char)c) || c == '-')) return false;
@@ -267,9 +275,50 @@ std::vector<std::string> logins(const json &b) {
     if (b.is_array()) for (auto &x : b) if (x.is_object() && x.contains("login") && x["login"].is_string()) r.push_back(x["login"]);
     return r;
 }
+// una lista de GitHub pagina a pagina (100 por pagina, hasta 10 paginas); fin(todos) al acabar
+void paginas(const std::string &url, int pag, std::shared_ptr<std::vector<std::string>> acc, std::function<void(std::vector<std::string> &)> fin) {
+    pedir({"GET", url + (url.find('?') == std::string::npos ? "?" : "&") + "per_page=100&page=" + std::to_string(pag), "", false, true,
+           [url, pag, acc, fin](int code, const json &b) {
+               auto l = code == 200 ? logins(b) : std::vector<std::string>();
+               acc->insert(acc->end(), l.begin(), l.end());
+               if (l.size() == 100 && pag < 10) paginas(url, pag + 1, acc, fin);
+               else fin(*acc);
+           }});
+}
+void pedirYoSigo() {
+    if (!conectado() || g_yoSigoPedido) return;
+    g_yoSigoPedido = true;
+    paginas(g_api + "/user/following", 1, std::make_shared<std::vector<std::string>>(), [](std::vector<std::string> &l) {
+        g_yoSigo.clear();
+        for (auto &x : l) g_yoSigo.insert(minus(x));
+        g_yoSigoListo = true;
+    });
+}
+void pedirRegistradosPag(int pag) {
+    // con la cabecera star+json cada estrella trae su fecha (starred_at)
+    Pet p{"GET", g_api + "/repos/" + kDueno + "/" + kRepoJuegos + "/stargazers?per_page=100&page=" + std::to_string(pag), "", false, true, [pag](int code, const json &b) {
+        if (code != 200 || !b.is_array()) { g_registradosAt = -1e9; return; }
+        for (auto &x : b) {
+            if (!x.is_object() || !x.contains("user") || !x["user"].is_object()) continue;
+            std::string l = x["user"].value("login", ""), f = x.value("starred_at", "");
+            if (loginSeguro(l)) g_regNuevos.push_back({l, f.substr(0, 10)});
+        }
+        if (b.size() == 100 && pag < 30) { pedirRegistradosPag(pag + 1); return; }
+        std::sort(g_regNuevos.begin(), g_regNuevos.end(), [](auto &a, auto &b) { return a.second > b.second; });
+        g_registrados.swap(g_regNuevos);
+        g_regNuevos.clear();
+        g_regSet.clear();
+        for (auto &r : g_registrados) g_regSet.insert(minus(r.first));
+        g_registradosListos = true;
+    }};
+    p.estrellas = true;
+    pedir(p);
+}
 }  // namespace
 
 void pedirPerfil(const std::string &login) {
+    pedirRegistrados();
+    pedirYoSigo();
     if (!loginSeguro(login) || g_perfiles.count(login)) return;
     Perfil &p = g_perfiles[login];
     p.login = login;
@@ -280,7 +329,6 @@ void pedirPerfil(const std::string &login) {
         p.nombre = b.contains("name") && b["name"].is_string() ? b["name"].get<std::string>() : "";
         p.bio = b.contains("bio") && b["bio"].is_string() ? b["bio"].get<std::string>() : "";
         p.creado = b.contains("created_at") && b["created_at"].is_string() ? b["created_at"].get<std::string>().substr(0, 10) : "";
-        p.seguidores = b.value("followers", 0); p.siguiendo = b.value("following", 0);
         std::string av = b.contains("avatar_url") && b["avatar_url"].is_string() ? b["avatar_url"].get<std::string>() : "";
         if (av.rfind("https://", 0) == 0 || (g_pruebas && av.rfind("file://", 0) == 0)) {
             Avatar a; a.login = login; a.dest = dir() + "/avatares/" + login + ".img";
@@ -291,58 +339,60 @@ void pedirPerfil(const std::string &login) {
                 g_avatares.push_back(a);
         }
     }});
-    if (conectado() && login != g_user)
-        pedir({"GET", g_api + "/user/following/" + login, "", false, true, [login](int code, const json &) {
-            g_perfiles[login].sigo = code == 204 ? 1 : code == 404 ? 0 : -1;
-        }});
+    pedirListas(login);
 }
 const Perfil *perfil(const std::string &login) {
     auto it = g_perfiles.find(login);
-    return it == g_perfiles.end() ? nullptr : &it->second;
+    if (it == g_perfiles.end()) return nullptr;
+    Perfil &p = it->second;
+    // seguidores y siguiendo: solo cuentas de Source Play
+    p.seguidoresSP.clear(); p.siguiendoSP.clear();
+    for (auto &l : p.listaSeguidores) if (g_regSet.count(minus(l))) p.seguidoresSP.push_back(l);
+    for (auto &l : p.listaSiguiendo) if (g_regSet.count(minus(l))) p.siguiendoSP.push_back(l);
+    bool listo = g_registradosListos && p.seguidoresListos && p.siguiendoListos;
+    p.seguidores = listo ? (int)p.seguidoresSP.size() : -1;
+    p.siguiendo = listo ? (int)p.siguiendoSP.size() : -1;
+    p.sigo = !conectado() || login == g_user || !g_yoSigoListo ? -1 : g_yoSigo.count(minus(login)) ? 1 : 0;
+    return &p;
 }
 void pedirListas(const std::string &login) {
     auto it = g_perfiles.find(login);
     if (it == g_perfiles.end() || it->second.listas) return;
     it->second.listas = true;
-    pedir({"GET", g_api + "/users/" + login + "/followers?per_page=100", "", false, true, [login](int code, const json &b) {
-        if (code == 200) g_perfiles[login].listaSeguidores = logins(b);
-    }});
-    pedir({"GET", g_api + "/users/" + login + "/following?per_page=100", "", false, true, [login](int code, const json &b) {
-        if (code == 200) g_perfiles[login].listaSiguiendo = logins(b);
-    }});
+    paginas(g_api + "/users/" + login + "/followers", 1, std::make_shared<std::vector<std::string>>(), [login](std::vector<std::string> &l) {
+        g_perfiles[login].listaSeguidores = l; g_perfiles[login].seguidoresListos = true;
+    });
+    paginas(g_api + "/users/" + login + "/following", 1, std::make_shared<std::vector<std::string>>(), [login](std::vector<std::string> &l) {
+        g_perfiles[login].listaSiguiendo = l; g_perfiles[login].siguiendoListos = true;
+    });
+}
+int sigo(const std::string &login) {
+    if (!conectado() || minus(login) == minus(g_user)) return -1;
+    pedirYoSigo();
+    return g_yoSigoListo ? (g_yoSigo.count(minus(login)) ? 1 : 0) : -1;
 }
 void seguir(const std::string &login, bool si) {
     if (!conectado() || !loginSeguro(login) || login == g_user) return;
     pedir({si ? "PUT" : "DELETE", g_api + "/user/following/" + login, "", false, true, [login, si](int code, const json &) {
         if (code != 204) return;
-        Perfil &p = g_perfiles[login];
-        if (p.sigo != (si ? 1 : 0) && p.seguidores >= 0) p.seguidores += si ? 1 : -1;
-        p.sigo = si ? 1 : 0;
-        p.listas = false; p.listaSeguidores.clear(); p.listaSiguiendo.clear();
-        auto yo = g_perfiles.find(g_user);   // y mis "siguiendo"
-        if (yo != g_perfiles.end() && yo->second.siguiendo >= 0) { yo->second.siguiendo += si ? 1 : -1; yo->second.listas = false; }
+        if (si) g_yoSigo.insert(minus(login)); else g_yoSigo.erase(minus(login));
+        // las listas de los dos perfiles cambian: yo en sus seguidores y el en mis seguidos
+        auto quita = [](std::vector<std::string> &v, const std::string &x) { v.erase(std::remove_if(v.begin(), v.end(), [&](const std::string &y) { return minus(y) == minus(x); }), v.end()); };
+        auto it = g_perfiles.find(login);
+        if (it != g_perfiles.end()) { quita(it->second.listaSeguidores, g_user); if (si) it->second.listaSeguidores.push_back(g_user); }
+        auto yo = g_perfiles.find(g_user);
+        if (yo != g_perfiles.end()) { quita(yo->second.listaSiguiendo, login); if (si) yo->second.listaSiguiendo.push_back(login); }
     }});
 }
 void pedirRegistrados() {
-    if (reloj() - g_registradosAt < (g_pruebas ? 1 : 120)) return;
+    if (reloj() - g_registradosAt < (g_pruebas ? 1 : 120) || !g_regNuevos.empty()) return;
     g_registradosAt = reloj();
-    // con la cabecera star+json cada estrella trae su fecha (starred_at)
-    Pet p{"GET", g_api + "/repos/" + kDueno + "/" + kRepoJuegos + "/stargazers?per_page=100", "", false, true, [](int code, const json &b) {
-        if (code != 200 || !b.is_array()) return;
-        g_registrados.clear();
-        for (auto &x : b) {
-            if (!x.is_object() || !x.contains("user") || !x["user"].is_object()) continue;
-            std::string l = x["user"].value("login", ""), f = x.value("starred_at", "");
-            if (loginSeguro(l)) g_registrados.push_back({l, f.substr(0, 10)});
-        }
-        std::sort(g_registrados.begin(), g_registrados.end(), [](auto &a, auto &b) { return a.second > b.second; });
-    }};
-    p.estrellas = true;
-    pedir(p);
+    g_regNuevos.clear();
+    pedirRegistradosPag(1);
 }
 const std::vector<std::pair<std::string, std::string>> &registrados() { return g_registrados; }
 std::string unido(const std::string &login) {
-    for (auto &r : g_registrados) if (r.first == login) return r.second;
+    for (auto &r : g_registrados) if (minus(r.first) == minus(login)) return r.second;
     return "";
 }
 
@@ -404,6 +454,7 @@ std::string codigo() { return g_codigo; }
 std::string urlCodigo() { return g_urlCodigo; }
 void salir() {
     g_token.clear(); g_user.clear(); g_entrando = false; g_codigo.clear(); g_mios.clear();
+    g_yoSigo.clear(); g_yoSigoListo = false; g_yoSigoPedido = false;
     guardarCuenta();
 }
 std::string errorCuenta() { return g_errCuenta; }
@@ -424,6 +475,20 @@ void enviar(const Paquete &p) {
 bool enviando() { return g_enviando; }
 std::string estadoEnvio() { return g_estado; }
 bool envioFallo() { return g_fallo; }
+
+namespace { std::string g_denuncia; bool g_denunciaFallo = false; }
+void denunciar(const std::string &titulo, const std::string &cuerpo) {
+    if (!conectado()) { g_denuncia = "Entra con GitHub para denunciar."; g_denunciaFallo = true; return; }
+    g_denuncia = "Enviando la denuncia..."; g_denunciaFallo = false;
+    json c = {{"title", titulo}, {"body", cuerpo + "\n\n---\nDenunciado desde el editor de Source 2D por @" + g_user + "."}};
+    pedir({"POST", g_api + "/repos/" + kDueno + "/" + kRepo + "/issues", c.dump(), false, true, [](int code, const json &b) {
+        if (code == 201) { g_denuncia = "Denuncia enviada. Gracias: la revisará el equipo de Source 2D."; g_denunciaFallo = false; }
+        else { g_denuncia = "No se pudo enviar la denuncia (" + std::to_string(code) + (b.is_object() ? " " + b.value("message", "") : "") + ")."; g_denunciaFallo = true; }
+    }});
+}
+std::string estadoDenuncia() { return g_denuncia; }
+bool denunciaFallo() { return g_denunciaFallo; }
+void limpiarDenuncia() { if (g_denuncia != "Enviando la denuncia...") { g_denuncia.clear(); g_denunciaFallo = false; } }
 
 const std::vector<Mio> &mios() { return g_mios; }
 void mirarMios() {

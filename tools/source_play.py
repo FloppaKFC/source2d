@@ -10,6 +10,7 @@
 #   source_play.py lista                      juegos publicados
 #   source_play.py retirar ID                 lo quita de Source Play y de los equipos que lo descargaron
 #   source_play.py denuncias                  incidencias "Denuncia:" abiertas en source2d-envios
+#   source_play.py destacar ID / no-destacar ID   lo pone (o lo quita) en Destacados, arriba en Source Play
 # El catalogo vive en una copia local de FloppaKFC/source2d-juegos (por defecto ../source2d-juegos, o
 # S2D_JUEGOS_DIR). Se firma con build/firma (pide la contrasena) y se sube con git. --sin-subir: firma pero no sube.
 import argparse, datetime, json, os, re, secrets, shutil, subprocess, sys, tempfile, urllib.request
@@ -50,9 +51,24 @@ def cargar_catalogo(d):
     j = json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}
     j.setdefault("juegos", [])
     j.setdefault("retirados", [])
+    j.setdefault("destacados", [])
     j["tipo"] = "catalogo"
     j["autor"] = AUTOR
     return j
+
+
+def insignia(login):
+    """[creador], [admin], [verificada] o "" segun cuentas.json (Controladores/Source-Cuentas.sh)"""
+    p = os.path.join(os.environ.get("S2D_JUEGOS_DIR") or os.path.join(os.path.dirname(RAIZ), "source2d-juegos"), "cuentas.json")
+    try:
+        c = json.load(open(p, encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    l = login.lower()
+    for k, nombre in (("creadores", "creador"), ("admins", "admin"), ("verificados", "verificada")):
+        if l in (x.lower() for x in c.get(k, [])):
+            return f" [{nombre}]"
+    return " [cuenta normal]"
 
 
 def slug(s):
@@ -158,46 +174,76 @@ def descargar_envio(n):
 
 
 # ---------- catalogo ----------
+JUEGOS = "FloppaKFC/source2d-juegos"
+RELEASES = f"https://github.com/{JUEGOS}/releases/download/"
+
+
+def releases_de(gid):
+    out = subprocess.run([gh(), "release", "list", "-R", JUEGOS, "--limit", "1000", "--json", "tagName"], capture_output=True, text=True)
+    if out.returncode != 0:
+        return []
+    return [r["tagName"] for r in json.loads(out.stdout) if re.fullmatch(re.escape(gid) + r"-v\d+", r["tagName"])]
+
+
 def publicar(carpeta, info, autor, sin_subir):
+    """Los archivos van como una Release de source2d-juegos (etiqueta <id>-v<version>): gratis, hasta 2 GB cada uno y
+    sin contar para el tamano del repositorio. Con --sin-subir (pruebas) se quedan en la carpeta del repositorio."""
     d = repo()
     cj = cargar_catalogo(d)
     gid = slug(f"{autor}-{info['nombre']}")
     previo = next((j for j in cj["juegos"] if j["id"] == gid), None)
     version = previo["version"] + 1 if previo else 1
-    dest_rel = f"juegos/{gid}/v{version}"
-    dest = os.path.join(d, dest_rel)
-    os.makedirs(dest, exist_ok=True)
+    tag = f"{gid}-v{version}"
+    nombres = [info["_juego"]] + [n for n in ("portada.png", "original.s2dcerrado") if os.path.exists(os.path.join(carpeta, n))]
+    if sin_subir:
+        dest_rel = f"juegos/{gid}/v{version}"
+        os.makedirs(os.path.join(d, dest_rel), exist_ok=True)
+        for n in nombres:
+            shutil.copyfile(os.path.join(carpeta, n), os.path.join(d, dest_rel, n))
+    else:
+        subprocess.run([gh(), "release", "create", tag, "-R", JUEGOS, "--title", f"{info['nombre'].strip()[:80]} (versión {version})",
+                        "--notes", f"Juego de Source Play por @{autor}. Lo descarga el editor de Source 2D.",
+                        *[os.path.join(carpeta, n) for n in nombres]], check=True)
 
-    def copiar(nombre):
-        shutil.copyfile(os.path.join(carpeta, nombre), os.path.join(dest, nombre))
-        p = os.path.join(dest, nombre)
-        return {"archivo": f"{dest_rel}/{nombre}", "blake2b": huella(p), "tam": os.path.getsize(p)}
+    def archivo(nombre):
+        p = os.path.join(carpeta, nombre)
+        a = {"archivo": nombre, "blake2b": huella(p), "tam": os.path.getsize(p)}
+        if sin_subir:
+            a["archivo"] = f"juegos/{gid}/v{version}/{nombre}"
+        else:
+            a["url"] = RELEASES + tag + "/" + nombre
+        return a
 
     e = {"id": gid, "nombre": info["nombre"].strip()[:80], "autor": autor, "descripcion": str(info.get("descripcion", ""))[:600],
          "categoria": info["categoria"], "version": version, "fecha": datetime.date.today().isoformat(),
          "motor": info.get("motor", ""), "abierto": info["_abierto"],
          "contador": previo["contador"] if previo else "j" + secrets.token_hex(6),
-         "juego": copiar(info["_juego"])}
-    if os.path.exists(os.path.join(carpeta, "portada.png")):
-        e["portada"] = copiar("portada.png")
+         "juego": archivo(info["_juego"])}
+    if "portada.png" in nombres:
+        e["portada"] = archivo("portada.png")
     if not info["_abierto"]:
         e["llave"] = info["llave"]
-        e["fuente"] = copiar("original.s2dcerrado")
-    # las versiones viejas se quitan del repositorio (los editores ya ven la nueva como "Actualizar")
-    for v in os.listdir(os.path.join(d, "juegos", gid)):
-        if v != f"v{version}":
-            shutil.rmtree(os.path.join(d, "juegos", gid, v), ignore_errors=True)
+        e["fuente"] = archivo("original.s2dcerrado")
     cj["juegos"] = [j for j in cj["juegos"] if j["id"] != gid] + [e]
     cj["retirados"] = [r for r in cj["retirados"] if r != gid]
     guardar_y_firmar(d, {"catalogo.json": cj})
     subir(d, f"Source Play: {e['nombre']} v{version}", sin_subir)
+    # las versiones viejas se borran (los editores ya ven la nueva como "Actualizar")
+    if sin_subir:
+        for v in os.listdir(os.path.join(d, "juegos", gid)):
+            if v != f"v{version}":
+                shutil.rmtree(os.path.join(d, "juegos", gid, v), ignore_errors=True)
+    else:
+        for t in releases_de(gid):
+            if t != tag:
+                subprocess.run([gh(), "release", "delete", t, "-R", JUEGOS, "--yes", "--cleanup-tag"])
     print(f"Publicado: {e['nombre']} (id {gid}, versión {version})")
     return e
 
 
 def main():
     ap = argparse.ArgumentParser(description="Source Play: revisar y publicar juegos")
-    ap.add_argument("orden", choices=["envios", "probar", "probar-carpeta", "aprobar", "rechazar", "anadir", "lista", "retirar", "denuncias"])
+    ap.add_argument("orden", choices=["envios", "probar", "probar-carpeta", "aprobar", "rechazar", "anadir", "lista", "retirar", "denuncias", "destacar", "no-destacar"])
     ap.add_argument("arg", nargs="?")
     ap.add_argument("motivo", nargs="?")
     ap.add_argument("--sin-subir", action="store_true")
@@ -212,10 +258,10 @@ def main():
         if not prs:
             print("No hay envíos esperando revisión.")
         for p in prs:
-            print(f"{p['number']:>4}  {p['createdAt'][:10]}  @{p['author']['login']}  {p['title']}")
+            print(f"{p['number']:>4}  {p['createdAt'][:10]}  @{p['author']['login']}{insignia(p['author']['login'])}  {p['title']}")
         return
     if a.orden == "denuncias":
-        out = subprocess.run([gh(), "issue", "list", "-R", ENVIOS, "--search", "Denuncia in:title", "--json", "number,title,author,createdAt,url"],
+        out = subprocess.run([gh(), "issue", "list", "-R", ENVIOS, "--search", "Denuncia in:title", "--json", "number,title,author,createdAt,url,body"],
                              capture_output=True, text=True)
         if out.returncode != 0:
             sys.exit(out.stderr.strip())
@@ -223,12 +269,20 @@ def main():
         if not iss:
             print("No hay denuncias abiertas.")
         for i in iss:
-            print(f"{i['number']:>4}  {i['createdAt'][:10]}  @{i['author']['login']}  {i['title']}\n      {i['url']}")
+            # quien denuncia y, si es una cuenta, que insignia tiene la denunciada
+            m = re.search(r"cuenta @([A-Za-z0-9-]+)", i["title"])
+            print(f"{i['number']:>4}  {i['createdAt'][:10]}  {i['title']}" + (insignia(m.group(1)) if m else ""))
+            print(f"      denuncia @{i['author']['login']}{insignia(i['author']['login'])}")
+            for linea in (i.get("body") or "").split("---")[0].strip().splitlines():
+                if linea.strip():
+                    print("      " + linea.strip())
+            print(f"      {i['url']}")
         return
     if a.orden == "lista":
         cj = cargar_catalogo(repo())
         for j in cj["juegos"]:
-            print(f"  {j['id']:<40} v{j['version']}  {j['fecha']}  {'abierto' if j['abierto'] else 'cerrado'}  {j['nombre']}")
+            print(f"  {j['id']:<40} v{j['version']}  {j['fecha']}  {'abierto' if j['abierto'] else 'cerrado'}  {j['nombre']}"
+                  + ("   [destacado]" if j["id"] in cj["destacados"] else ""))
         if not cj["juegos"]:
             print("Todavía no hay juegos publicados.")
         if cj["retirados"]:
@@ -244,6 +298,8 @@ def main():
             carpeta, autor = a.arg, None
         info = leer_paquete(carpeta)
         mostrar(info)
+        if autor:
+            print(f"  Enviado por @{autor}{insignia(autor)}\n")
         comprobar(carpeta, info, False)
         if a.orden == "anadir":
             publicar(carpeta, info, a.autor or info.get("autor") or "anónimo", a.sin_subir)
@@ -269,16 +325,30 @@ def main():
         subprocess.run([gh(), "pr", "close", a.arg, "-R", ENVIOS, "--comment", f"Rechazado: {a.motivo}"], check=True)
         print("Rechazado. El creador verá el motivo en el editor.")
         return
+    if a.orden in ("destacar", "no-destacar"):
+        d = repo()
+        cj = cargar_catalogo(d)
+        if not any(j["id"] == a.arg for j in cj["juegos"]):
+            sys.exit(f"No hay ningún juego con id {a.arg} (mira la lista)")
+        cj["destacados"] = [x for x in cj["destacados"] if x != a.arg] + ([a.arg] if a.orden == "destacar" else [])
+        guardar_y_firmar(d, {"catalogo.json": cj})
+        subir(d, f"Source Play: {'destacar' if a.orden == 'destacar' else 'quitar de destacados'} {a.arg}", a.sin_subir)
+        print(f"{a.arg} {'está en Destacados' if a.orden == 'destacar' else 'ya no está en Destacados'}.")
+        return
     if a.orden == "retirar":
         d = repo()
         cj = cargar_catalogo(d)
         if not any(j["id"] == a.arg for j in cj["juegos"]):
             sys.exit(f"No hay ningún juego con id {a.arg} (mira la lista)")
         cj["juegos"] = [j for j in cj["juegos"] if j["id"] != a.arg]
+        cj["destacados"] = [x for x in cj["destacados"] if x != a.arg]
         if a.arg not in cj["retirados"]:
             cj["retirados"].append(a.arg)
         if re.fullmatch(r"[a-z0-9-]+", a.arg):
             shutil.rmtree(os.path.join(d, "juegos", a.arg), ignore_errors=True)
+            if not a.sin_subir:
+                for t in releases_de(a.arg):
+                    subprocess.run([gh(), "release", "delete", t, "-R", JUEGOS, "--yes", "--cleanup-tag"])
         guardar_y_firmar(d, {"catalogo.json": cj})
         subir(d, f"Source Play: retirar {a.arg}", a.sin_subir)
         print(f"Retirado {a.arg}: desaparece de Source Play y se borra de los equipos que lo tenían.")

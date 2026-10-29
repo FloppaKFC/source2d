@@ -30,6 +30,7 @@ while :; do
     echo "  3) Verificar una cuenta     ${D}insignia azul: es quien dice ser${N}"
     echo "  4) Hacer admin              ${D}insignia de admin (equipo de Source 2D)${N}"
     echo "  5) Quitar insignia          ${D}vuelve a ser una cuenta normal${N}"
+    echo "  7) Insignia de creador      ${D}morada con estrella: la de quien hizo Source 2D (tú)${N}"
     echo "  6) Ver quién tiene insignia"
     echo "  0) Salir"
     pedir "Elige" op
@@ -40,6 +41,7 @@ while :; do
         4) titulo "Hacer admin"; cambiar admin ;;
         5) titulo "Quitar insignia"; cambiar quitar ;;
         6) "${SC[@]}" insignias ;;
+        7) titulo "Insignia de creador"; cambiar creador ;;
         0|q|"") exit 0 ;;
         *) echo "${R}Opción no válida${N}" ;;
     esac

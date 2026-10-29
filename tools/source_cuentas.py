@@ -6,6 +6,7 @@
 #   source_cuentas.py lista [texto]        cuentas registradas (las mas nuevas primero), con su insignia
 #   source_cuentas.py verificar LOGIN      insignia de cuenta verificada
 #   source_cuentas.py admin LOGIN          insignia de admin
+#   source_cuentas.py creador LOGIN        insignia de creador de Source 2D (la tuya)
 #   source_cuentas.py quitar LOGIN         sin insignia
 #   source_cuentas.py insignias            solo las cuentas con insignia
 # --sin-subir: firma pero no sube.
@@ -23,6 +24,7 @@ def cargar(d):
     j = json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}
     j.setdefault("verificados", [])
     j.setdefault("admins", [])
+    j.setdefault("creadores", [])
     j["tipo"] = "cuentas"
     j["autor"] = AUTOR
     return j
@@ -30,6 +32,8 @@ def cargar(d):
 
 def insignia(c, login):
     l = login.lower()
+    if l in (x.lower() for x in c["creadores"]):
+        return "creador"
     if l in (x.lower() for x in c["admins"]):
         return "admin"
     if l in (x.lower() for x in c["verificados"]):
@@ -63,7 +67,7 @@ def subir(d, mensaje, sin_subir):
 
 def main():
     ap = argparse.ArgumentParser(description="Cuentas de Source Play")
-    ap.add_argument("orden", choices=["lista", "verificar", "admin", "quitar", "insignias"])
+    ap.add_argument("orden", choices=["lista", "verificar", "admin", "creador", "quitar", "insignias"])
     ap.add_argument("arg", nargs="?")
     ap.add_argument("--sin-subir", action="store_true")
     a = ap.parse_args()
@@ -79,11 +83,13 @@ def main():
         print(f"\n{len(r)} cuenta(s)" + (f" con \"{a.arg}\"" if a.arg else " registradas"))
         return
     if a.orden == "insignias":
+        for login in c["creadores"]:
+            print(f"  {login:<40} [creador]")
         for login in c["admins"]:
             print(f"  {login:<40} [admin]")
         for login in c["verificados"]:
             print(f"  {login:<40} [verificada]")
-        if not c["admins"] and not c["verificados"]:
+        if not c["admins"] and not c["verificados"] and not c["creadores"]:
             print("Nadie tiene insignia todavía.")
         return
     if not a.arg or not re.fullmatch(r"[A-Za-z0-9-]{1,39}", a.arg):
@@ -91,12 +97,16 @@ def main():
     login = a.arg
     c["verificados"] = [x for x in c["verificados"] if x.lower() != login.lower()]
     c["admins"] = [x for x in c["admins"] if x.lower() != login.lower()]
-    if a.orden == "verificar":
+    c["creadores"] = [x for x in c["creadores"] if x.lower() != login.lower()]
+    if a.orden == "creador":
+        c["creadores"].append(login)
+    elif a.orden == "verificar":
         c["verificados"].append(login)
     elif a.orden == "admin":
         c["admins"].append(login)
     guardar_y_firmar(d, {"cuentas.json": c})
-    que = {"verificar": "ahora es cuenta verificada", "admin": "ahora es admin", "quitar": "ya no tiene insignia"}[a.orden]
+    que = {"verificar": "ahora es cuenta verificada", "admin": "ahora es admin", "creador": "ahora tiene la insignia de creador",
+           "quitar": "ya no tiene insignia"}[a.orden]
     subir(d, f"Cuentas: {login} {que}", a.sin_subir)
     print(f"{login} {que}.")
 

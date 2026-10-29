@@ -45,12 +45,15 @@ echo '{"value":3}' > "$T/cont/hit/source2d-floppa/$K1-1"
 XDG_CONFIG_HOME="$T/spcfg" S2D_NOVEDADES_URL="file://$T/news/" S2D_FIRMA_PUBLICA="$PUB" S2D_CONTADOR_URL="file://$T/cont/" \
     "$ED" --script test/editor_encuesta.txt | grep "S2DEDIT FAIL\|S2DEDIT FIN"
 cp examples_plataformas.source2d.json "$T/sp.json"
-sed "s|PROYECTO|$T/sp.json|; s|PAQ|$T/paq|g" test/editor_sourceplay.txt > "$T/guion_sp.txt"
+sed "s|PROYECTO|$T/sp.json|; s|PAQ|$T/paq|g; s|MINIATURA|$PWD/tools/maxwell_giro.png|" test/editor_sourceplay.txt > "$T/guion_sp.txt"
 XDG_CONFIG_HOME="$T/spcfg" "$ED" --script "$T/guion_sp.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
+python3 -c "import struct,sys; d=open(sys.argv[1],'rb').read(24); w,h=struct.unpack('>II',d[16:24]); print('miniatura propia', w, 'x', h, 'OK' if (w,h)==(768,432) else 'FAIL')" "$T/paq/cerrado/"*/portada.png
 S2D_JUEGOS_DIR="$T/juegos" S2D_EDITOR="$ED" python3 tools/source_play.py anadir "$T/paq/abierto/"* --sin-subir | grep "Publicado\|OK"
 S2D_JUEGOS_DIR="$T/juegos" S2D_EDITOR="$ED" python3 tools/source_play.py anadir "$T/paq/cerrado/"* --autor Otro --sin-subir | grep "Publicado\|OK"
 S2D_JUEGOS_DIR="$T/juegos" python3 tools/source_cuentas.py verificar Floppa --sin-subir | grep -v Firmado
 S2D_JUEGOS_DIR="$T/juegos" python3 tools/source_cuentas.py admin Otro --sin-subir | grep -v Firmado
+S2D_JUEGOS_DIR="$T/juegos" python3 tools/source_cuentas.py creador FloppaKFC --sin-subir | grep -v Firmado
+S2D_JUEGOS_DIR="$T/juegos" python3 tools/source_play.py destacar otro-aventura-de-plataformas --sin-subir | grep -v Firmado
 sed "s|CAPTURA|$T/sourceplay.png|" test/editor_sourceplay2.txt > "$T/guion_sp2.txt"
 XDG_CONFIG_HOME="$T/spcfg" S2D_TIENDA_URL="file://$T/juegos/" S2D_FIRMA_PUBLICA="$PUB" "$ED" --script "$T/guion_sp2.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
 echo "== Publicar en Source Play con un GitHub de mentira (entrar con codigo, envio, revision, registro, perfil y seguir)"

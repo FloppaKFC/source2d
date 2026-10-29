@@ -41,20 +41,29 @@ bool envioFallo();
 // perfiles (de GitHub): se piden al abrirlos y se guardan mientras el editor sigue abierto
 struct Perfil {
     std::string login, nombre, bio, creado, avatar;          // avatar: archivo local ya descargado ("" si aun no)
+    // seguidores y siguiendo: solo cuentas registradas en Source Play (-1 mientras se cargan)
     int seguidores = -1, siguiendo = -1;
+    std::vector<std::string> seguidoresSP, siguiendoSP;
     int sigo = -1;                                           // -1 no se sabe (o sin sesion), 0 no, 1 si
     bool cargado = false, error = false;
-    std::vector<std::string> listaSeguidores, listaSiguiendo;
-    bool listas = false;                                      // ya llegaron las dos listas
+    std::vector<std::string> listaSeguidores, listaSiguiendo; // las de GitHub enteras (hasta 1000)
+    bool listas = false, seguidoresListos = false, siguiendoListos = false;
 };
 void pedirPerfil(const std::string &login);
 const Perfil *perfil(const std::string &login);               // nullptr si no se pidio
 void pedirListas(const std::string &login);
 void seguir(const std::string &login, bool si);
+int sigo(const std::string &login);                           // -1 no se sabe (o sin sesion, o soy yo), 0 no, 1 si
 // cuentas registradas en Source Play (login, fecha AAAA-MM-DD en que se unio), de la mas nueva a la mas vieja
 void pedirRegistrados();
 const std::vector<std::pair<std::string, std::string>> &registrados();
 std::string unido(const std::string &login);                  // fecha en que se unio ("" si no esta o aun no se sabe)
+
+// denunciar un juego o una cuenta: abre una incidencia en source2d-envios (la ve @floppa-1550 en Source-Play.sh)
+void denunciar(const std::string &titulo, const std::string &cuerpo);
+std::string estadoDenuncia();                                 // "Enviando...", "Denuncia enviada", o el error
+bool denunciaFallo();
+void limpiarDenuncia();                                       // al abrir otra denuncia
 
 // los envios de esta cuenta y como van
 struct Mio { int numero = 0; std::string nombre, fecha, estado, motivo, url; };   // estado: revisando, aprobado, rechazado

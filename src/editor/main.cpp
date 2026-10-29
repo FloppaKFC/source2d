@@ -1545,6 +1545,8 @@ struct SourcePlayUI {
     envio::Paquete paquete;
     std::string carpeta, msg;
     bool msgErr = false;
+    std::string proyecto;                                 // id del proyecto de los campos de arriba
+    std::string portada, portadaArchivo;                  // miniatura elegida (PNG ya preparado) y de que archivo salio
     // Ver por dentro de un juego cerrado
     bool showFuente = false;
     std::string fuenteId, fuenteNombre, fuenteErr, fuenteArchivo;   // fuenteArchivo: un .s2dcerrado abierto desde el disco
@@ -1556,16 +1558,40 @@ struct SourcePlayUI {
     std::string perfilLogin;
     int perfilTab = 0;                                    // 0 juegos, 1 seguidores, 2 siguiendo
     char buscarGente[64] = "";
+    // denunciar un juego o una cuenta
+    bool showDenuncia = false, denunciaCuenta = false;
+    std::string denunciaId, denunciaNombre;
+    int denunciaMotivo = 0;
+    char denunciaTexto[800] = "";
 };
 static SourcePlayUI g_sp;
 
-// insignia junto a un nombre: circulo azul con palomita (verificada) o dorado (admin)
+static const char *badgeName(int ins) { return ins == 3 ? "Creador de Source 2D" : ins == 2 ? "Admin de Source 2D" : ins == 1 ? "Cuenta verificada" : ""; }
+static ImVec4 badgeColor(int ins) { return ins == 3 ? ImVec4(0.78f, 0.55f, 1, 1) : ins == 2 ? ImVec4(0.95f, 0.69f, 0.18f, 1) : ImVec4(0.36f, 0.6f, 1, 1); }
+// insignia junto a un nombre: circulo azul con palomita (verificada), dorado con aro (admin) o morado con estrella (creador)
 static void drawBadge(int ins) {
     if (!ins) return;
     ImGui::SameLine(0, 6);
     float h = ImGui::GetTextLineHeight(), r = h * 0.42f;
     ImVec2 p = ImGui::GetCursorScreenPos(), c(p.x + r, p.y + h * 0.5f);
     ImDrawList *dl = ImGui::GetWindowDrawList();
+    if (ins == 3) {
+        ImU32 col = IM_COL32(0x8B, 0x5C, 0xF6, 255);
+        dl->AddCircle(c, r + 2.0f, IM_COL32(0xC9, 0xB6, 0xFC, 255), 20, 1.5f);
+        dl->AddCircleFilled(c, r, col, 20);
+        // estrella de 5 puntas: el centro y un triangulo por punta
+        ImVec2 pt[10];
+        for (int i = 0; i < 10; i++) {
+            float a = -1.5708f + i * 0.6283f, rr = i % 2 ? r * 0.3f : r * 0.72f;
+            pt[i] = ImVec2(c.x + cosf(a) * rr, c.y + sinf(a) * rr);
+        }
+        for (int i = 0; i < 10; i += 2) dl->AddTriangleFilled(pt[i], pt[(i + 1) % 10], pt[(i + 9) % 10], IM_COL32_WHITE);
+        ImVec2 in[5] = {pt[1], pt[3], pt[5], pt[7], pt[9]};
+        dl->AddConvexPolyFilled(in, 5, IM_COL32_WHITE);
+        ImGui::Dummy(ImVec2(r * 2 + 2, h));
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", badgeName(ins));
+        return;
+    }
     ImU32 col = ins == 2 ? IM_COL32(0xF2, 0xB1, 0x2D, 255) : IM_COL32(0x3B, 0x8B, 0xF6, 255);
     if (ins == 2) dl->AddCircle(c, r + 2.0f, col, 20, 1.5f);   // admin: con aro
     dl->AddCircleFilled(c, r, col, 20);
@@ -1573,7 +1599,7 @@ static void drawBadge(int ins) {
     dl->AddLine(ImVec2(c.x - r * 0.45f, c.y + r * 0.02f), ImVec2(c.x - r * 0.1f, c.y + r * 0.38f), IM_COL32_WHITE, t);
     dl->AddLine(ImVec2(c.x - r * 0.1f, c.y + r * 0.38f), ImVec2(c.x + r * 0.5f, c.y - r * 0.35f), IM_COL32_WHITE, t);
     ImGui::Dummy(ImVec2(r * 2 + (ins == 2 ? 2 : 0), h));
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", ins == 2 ? "Admin de Source 2D" : "Cuenta verificada");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", badgeName(ins));
 }
 static void openPerfil(const std::string &login) {
     if (login.empty()) return;
@@ -1656,6 +1682,17 @@ static void sourcePlayCard(const tienda::Juego &j, float w) {
         ui::drawIcon(dl, ui::Icon::Gamepad, ImVec2(p.x + iw / 2, p.y + ih / 2), 40, ui::kDim);
         ImGui::Dummy(ImVec2(iw, ih));
     }
+    // etiquetas sobre la portada: Destacado y Favorito
+    float tx = p.x + 8;
+    for (int e = 0; e < 2; e++) {
+        bool on = e == 0 ? j.destacado : tienda::favorito(j.id);
+        if (!on) continue;
+        const char *lbl = e == 0 ? "Destacado" : "Favorito";
+        ImVec2 ts = ImGui::CalcTextSize(lbl);
+        dl->AddRectFilled(ImVec2(tx, p.y + 8), ImVec2(tx + ts.x + 14, p.y + 12 + ts.y), e == 0 ? IM_COL32(0xF2, 0xB1, 0x2D, 235) : ui::kPrimary, 6);
+        dl->AddText(ImVec2(tx + 7, p.y + 10), e == 0 ? IM_COL32(30, 22, 0, 255) : ui::kText, lbl);
+        tx += ts.x + 20;
+    }
     ImGui::PushFont(ui::boldFont(), 19);
     ImGui::TextUnformatted(j.nombre.c_str());
     ImGui::PopFont();
@@ -1699,8 +1736,12 @@ static void sourcePlayCard(const tienda::Juego &j, float w) {
                 g_sp.showFuente = true; g_sp.fuenteId = j.id; g_sp.fuenteNombre = j.nombre; g_sp.fuenteErr.clear(); g_sp.fuenteArchivo.clear();
                 tienda::pedirFuente(j);
             }
+            if (ImGui::MenuItem("Favorito", nullptr, tienda::favorito(j.id))) tienda::setFavorito(j.id, !tienda::favorito(j.id));
             if (ImGui::MenuItem("Borrar de este equipo", nullptr, false, inst)) { tienda::borrar(j.id); notify(j.nombre + " borrado"); }
-            if (ImGui::MenuItem("Denunciar...")) app.pendingLink = tienda::urlDenuncia(j);
+            if (ImGui::MenuItem("Denunciar...")) {
+                g_sp.showDenuncia = true; g_sp.denunciaCuenta = false; g_sp.denunciaId = j.id; g_sp.denunciaNombre = j.nombre;
+                g_sp.denunciaMotivo = 0; g_sp.denunciaTexto[0] = 0;
+            }
             ImGui::EndPopup();
         }
     }
@@ -1712,6 +1753,17 @@ static void sourcePlayCard(const tienda::Juego &j, float w) {
     ImGui::PopID();
 }
 
+// "Publicar en Source Play" del proyecto abierto (desde Exportar o desde Source Play)
+static void openPublish() {
+    if (!app.hasProject) { notify("Abre el proyecto de tu juego para publicarlo", true); return; }
+    if (guestBlocked()) return;
+    g_sp.showPublish = true; g_sp.msg.clear();
+    if (!g_sp.nombre[0] || g_sp.proyecto != jstr(app.proj.doc, "id")) {   // otro proyecto: empieza con su nombre
+        snprintf(g_sp.nombre, sizeof g_sp.nombre, "%s", app.proj.name().c_str());
+        g_sp.descripcion[0] = 0; g_sp.portada.clear(); g_sp.portadaArchivo.clear();
+        g_sp.proyecto = jstr(app.proj.doc, "id");
+    }
+}
 static bool containsNoCase(const std::string &hay, const std::string &needle) {
     if (needle.empty()) return true;
     std::string a = hay, b = needle;
@@ -1737,14 +1789,7 @@ static void drawSourcePlaySection() {
         ImGui::EndCombo();
     }
     ImGui::SameLine();
-    if (homeButton("Publicar mi juego", true, ImGui::GetFrameHeight())) {
-        if (!app.hasProject) notify("Abre el proyecto de tu juego para publicarlo", true);
-        else if (guestBlocked()) {}
-        else {
-            g_sp.showPublish = true; g_sp.msg.clear();
-            snprintf(g_sp.nombre, sizeof g_sp.nombre, "%s", app.proj.name().c_str());
-        }
-    }
+    if (homeButton("Publicar mi juego", true, ImGui::GetFrameHeight())) openPublish();
     ImGui::SameLine();
     if (envio::conectado()) { if (homeButton("Mi perfil", false, ImGui::GetFrameHeight())) openPerfil(envio::usuario()); }
     else if (homeButton("Entrar con GitHub", false, ImGui::GetFrameHeight())) g_sp.showCuenta = true;
@@ -1757,16 +1802,44 @@ static void drawSourcePlaySection() {
     float avail = ImGui::GetContentRegionAvail().x, gap = 20;
     int cols = std::max(1, std::min(3, (int)((avail + gap) / (360 + gap))));
     float w = std::min(460.0f, (avail - gap * (cols - 1)) / cols);
-    int k = 0;
+    // los que pasan la busqueda y la categoria
+    std::vector<const tienda::Juego *> vis;
     for (auto &j : tienda::juegos()) {
         if (g_sp.categoria && j.categoria != cats[g_sp.categoria - 1]) continue;
         if (!containsNoCase(j.nombre, g_sp.buscar) && !containsNoCase(j.autor, g_sp.buscar) && !containsNoCase(j.descripcion, g_sp.buscar)) continue;
-        if (k++ % cols) ImGui::SameLine(0, gap);
-        ImGui::BeginGroup();
-        sourcePlayCard(j, w);
-        ImGui::EndGroup();
+        vis.push_back(&j);
     }
-    if (!k && !tienda::juegos().empty()) ImGui::TextDisabled("Ningún juego coincide con la búsqueda.");
+    int fila = 0;   // un mismo juego puede salir en varias filas (Destacados, favoritos, todos): cada fila su propio id
+    auto grid = [&](const std::vector<const tienda::Juego *> &list) {
+        ImGui::PushID(fila++);
+        int k = 0;
+        for (auto *j : list) {
+            if (k++ % cols) ImGui::SameLine(0, gap);
+            ImGui::BeginGroup();
+            sourcePlayCard(*j, w);
+            ImGui::EndGroup();
+        }
+        ImGui::PopID();
+        ImGui::Dummy(ImVec2(0, 10));
+    };
+    // arriba: Destacados (los elige Source Play) y los favoritos de esta persona
+    std::vector<const tienda::Juego *> dest, favs;
+    for (auto *j : vis) { if (j->destacado) dest.push_back(j); if (tienda::favorito(j->id)) favs.push_back(j); }
+    if (!dest.empty()) { sectionTitle("Destacados", 22); grid(dest); }
+    if (!favs.empty()) { sectionTitle("Tus favoritos", 22); grid(favs); }
+    if (!vis.empty()) {
+        static int orden = 0;
+        static const char *ordenes[] = {"Más nuevos", "Más descargados", "Con más me gusta"};
+        sectionTitle("Todos los juegos", 22);
+        ImGui::SameLine(0, 16);
+        ImGui::SetNextItemWidth(190);
+        ImGui::Combo("##orden", &orden, ordenes, 3);
+        if (orden) std::stable_sort(vis.begin(), vis.end(), [](const tienda::Juego *a, const tienda::Juego *b) {
+            return orden == 1 ? tienda::descargas(a->id) > tienda::descargas(b->id) : tienda::meGusta(a->id) > tienda::meGusta(b->id);
+        });
+        grid(vis);
+    }
+    if (vis.empty() && !tienda::juegos().empty()) ImGui::TextDisabled("Ningún juego coincide con la búsqueda.");
     // descargados que ya no estan en el catalogo
     auto viejos = tienda::instaladosSinCatalogo();
     if (!viejos.empty()) {
@@ -1814,6 +1887,39 @@ static void drawSourcePlaySection() {
     }
 }
 
+// miniatura propia del juego: una imagen recortada al centro a 16:9 y escalada a 768x432 (PNG)
+static bool loadPortada(const std::string &file, std::string &err) {
+    Image im = LoadImage(file.c_str());
+    if (!im.data) { err = "No se pudo abrir la imagen (usa PNG o JPG)"; return false; }
+    ImageFormat(&im, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+    int w = im.width, h = im.height, cw = w, ch = w * 9 / 16;
+    if (ch > h) { ch = h; cw = h * 16 / 9; }
+    ImageCrop(&im, Rectangle{(float)(w - cw) / 2, (float)(h - ch) / 2, (float)cw, (float)ch});
+    ImageResize(&im, 768, 432);
+    int n = 0;
+    unsigned char *png = ExportImageToMemory(im, ".png", &n);
+    UnloadImage(im);
+    if (!png) { err = "No se pudo preparar la imagen"; return false; }
+    g_sp.portada.assign((const char *)png, (size_t)n);
+    MemFree(png);
+    g_sp.portadaArchivo = file;
+    return true;
+}
+static const Texture2D *portadaTexture() {   // la miniatura elegida, como textura para verla en la ventana
+    static Texture2D tex{};
+    static std::string key;
+    if (g_sp.portada.empty()) return nullptr;
+    std::string k = g_sp.portadaArchivo + std::to_string(g_sp.portada.size());
+    if (k != key) {
+        if (tex.id) UnloadTexture(tex);
+        Image im = LoadImageFromMemory(".png", (const unsigned char *)g_sp.portada.data(), (int)g_sp.portada.size());
+        tex = im.data ? LoadTextureFromImage(im) : Texture2D{};
+        if (im.data) { SetTextureFilter(tex, TEXTURE_FILTER_BILINEAR); UnloadImage(im); }
+        key = k;
+    }
+    return tex.id ? &tex : nullptr;
+}
+
 // arma el paquete del envio: info.json, portada.png y el juego (abierto: .source2d; cerrado: copia para jugar +
 // proyecto original con la clave). Lo pesado (LZMA, Argon2) va en segundo plano.
 static void startPackage(bool toFolder) {
@@ -1832,14 +1938,17 @@ static void startPackage(bool toFolder) {
     doc["engine"] = S2D_VERSION; doc["engineNum"] = S2D_VERSION_NUM;
     std::string autor = envio::conectado() ? envio::usuario() : prefs().name.empty() ? "anónimo" : prefs().name;
     std::string id = slugOf(autor + "-" + nombre);
-    // portada: la primera pantalla del juego
-    std::vector<Px> px;
-    renderProjectThumb(doc, kThumbW * 2, kThumbH * 2, px);
-    Image im = {px.data(), kThumbW * 2, kThumbH * 2, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8};
-    int pngN = 0;
-    unsigned char *png = ExportImageToMemory(im, ".png", &pngN);
-    std::string portada(png ? (const char *)png : "", png ? (size_t)pngN : 0);
-    if (png) MemFree(png);
+    // portada: la miniatura que eligio el creador o, si no, la primera pantalla del juego
+    std::string portada = g_sp.portada;
+    if (portada.empty()) {
+        std::vector<Px> px;
+        renderProjectThumb(doc, kThumbW * 2, kThumbH * 2, px);
+        Image im = {px.data(), kThumbW * 2, kThumbH * 2, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8};
+        int pngN = 0;
+        unsigned char *png = ExportImageToMemory(im, ".png", &pngN);
+        portada.assign(png ? (const char *)png : "", png ? (size_t)pngN : 0);
+        if (png) MemFree(png);
+    }
     char fecha[16]; time_t t = time(nullptr); tm lt; sys::localTime(t, lt); strftime(fecha, sizeof fecha, "%Y-%m-%d", &lt);
     json info = {{"formato", "source2d-envio"}, {"id", id}, {"nombre", nombre}, {"descripcion", std::string(g_sp.descripcion)},
                  {"categoria", kCategorias[std::clamp(g_sp.cat, 0, kNumCategorias - 1)]}, {"autor", autor}, {"abierto", g_sp.abierto},
@@ -1897,6 +2006,21 @@ static void drawGithubLogin(const char *why) {
     if (!ec.empty()) ImGui::TextColored(ImVec4(1, 0.55f, 0.5f, 1), "%s", ec.c_str());
 }
 
+// una cuenta en una lista (comunidad, seguidores...): su nombre (abre el perfil), insignia, un dato y Seguir / Siguiendo
+static void personRow(const std::string &login, const std::string &dato = "") {
+    ImGui::PushID(login.c_str());
+    ImGui::AlignTextToFramePadding();
+    authorLink(login);
+    if (!dato.empty()) { ImGui::SameLine(); ImGui::TextDisabled("%s", dato.c_str()); }
+    int s = envio::sigo(login);
+    if (s >= 0) {
+        ImGui::SameLine(ImGui::GetContentRegionMax().x - 100);
+        if (s ? ImGui::Button("Siguiendo", ImVec2(96, 0)) : ui::primaryButton("Seguir", ImVec2(96, 0))) envio::seguir(login, !s);
+        if (s && ImGui::IsItemHovered()) ImGui::SetTooltip("Dejar de seguir");
+    } else if (login == envio::usuario()) { ImGui::SameLine(ImGui::GetContentRegionMax().x - 100); ImGui::TextDisabled("Tú"); }
+    ImGui::PopID();
+}
+
 static void drawPerfil() {
     if (g_sp.showPerfil) { ImGui::OpenPopup("Perfil"); g_sp.showPerfil = false; }
     ImGui::SetNextWindowSize(ImVec2(640, 0), ImGuiCond_Always);
@@ -1924,7 +2048,7 @@ static void drawPerfil() {
     ImGui::PopFont();
     drawBadge(ins);
     ImGui::TextDisabled("@%s", login.c_str());
-    if (ins) ImGui::TextColored(ins == 2 ? ImVec4(0.95f, 0.69f, 0.18f, 1) : ImVec4(0.36f, 0.6f, 1, 1), "%s", ins == 2 ? "Admin de Source 2D" : "Cuenta verificada");
+    if (ins) ImGui::TextColored(badgeColor(ins), "%s", badgeName(ins));
     std::string un = envio::unido(login);
     if (!un.empty()) ImGui::TextDisabled("Se unió a Source Play el %s", fechaBonita(un).c_str());
     else if (pf && !pf->creado.empty()) ImGui::TextDisabled("En GitHub desde el %s", fechaBonita(pf->creado).c_str());
@@ -1978,15 +2102,59 @@ static void drawPerfil() {
         }
     } else if (pf) {
         envio::pedirListas(login);
-        const auto &lista = g_sp.perfilTab == 1 ? pf->listaSeguidores : pf->listaSiguiendo;
+        const auto &lista = g_sp.perfilTab == 1 ? pf->seguidoresSP : pf->siguiendoSP;
         int total = g_sp.perfilTab == 1 ? pf->seguidores : pf->siguiendo;
-        if (lista.empty()) ImGui::TextDisabled("%s", total == 0 ? "Nadie todavía." : "Cargando...");
-        for (auto &l : lista) { ImGui::PushID(l.c_str()); authorLink(l); ImGui::PopID(); }
-        if (total > (int)lista.size() && !lista.empty()) ImGui::TextDisabled("y %d más (en GitHub)", total - (int)lista.size());
+        if (lista.empty()) ImGui::TextDisabled("%s", total == 0 ? "Nadie de Source Play todavía." : "Cargando...");
+        for (auto &l : lista) personRow(l, envio::sigo(l) >= 0 && pf->login == envio::usuario() && g_sp.perfilTab == 1 && envio::sigo(l) == 0 ? "te sigue" : "");
     }
     ImGui::EndChild();
     if (ImGui::Button("Cerrar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
     if (login == envio::usuario()) { ImGui::SameLine(); if (ImGui::Button("Ver en GitHub")) app.pendingLink = "https://github.com/" + login; }
+    else {
+        ImGui::SameLine();
+        if (ImGui::Button("Denunciar cuenta...")) {
+            g_sp.showDenuncia = true; g_sp.denunciaCuenta = true; g_sp.denunciaId = login; g_sp.denunciaNombre = "@" + login;
+            g_sp.denunciaMotivo = 0; g_sp.denunciaTexto[0] = 0;
+            ImGui::CloseCurrentPopup();
+        }
+    }
+    ImGui::EndPopup();
+}
+
+// denuncia: motivo y detalles; llega como incidencia a source2d-envios (Controladores/Source-Play.sh > Denuncias)
+static void drawDenuncia() {
+    static const char *const motivosJuego[] = {"Copia el trabajo de otra persona", "Contenido inapropiado", "Hace cosas raras en mi PC",
+                                               "No funciona o engaña", "Otro motivo"};
+    static const char *const motivosCuenta[] = {"Se hace pasar por otra persona", "Acoso o insultos", "Spam o publicidad",
+                                                "Contenido inapropiado", "Otro motivo"};
+    if (g_sp.showDenuncia) { ImGui::OpenPopup("Denunciar"); g_sp.showDenuncia = false; envio::limpiarDenuncia(); }
+    ImGui::SetNextWindowSize(ImVec2(560, 0), ImGuiCond_Appearing);
+    if (!ui::beginModal("Denunciar", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
+    const char *const *motivos = g_sp.denunciaCuenta ? motivosCuenta : motivosJuego;
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 520);
+    ImGui::Text("Denunciar %s %s", g_sp.denunciaCuenta ? "la cuenta" : "el juego", g_sp.denunciaNombre.c_str());
+    ImGui::TextDisabled("La denuncia le llega al equipo de Source 2D, que la revisa. La otra persona no ve quién la hizo desde el editor.");
+    ImGui::PopTextWrapPos();
+    if (!envio::conectado()) {
+        drawGithubLogin("Para denunciar hay que entrar con GitHub (así se evitan denuncias falsas).");
+    } else {
+        ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Motivo"); ImGui::SameLine(90);
+        ImGui::SetNextItemWidth(330); ImGui::Combo("##motivo", &g_sp.denunciaMotivo, motivos, 5);
+        ImGui::TextUnformatted("Cuéntanos qué pasa");
+        ImGui::InputTextMultiline("##dtexto", g_sp.denunciaTexto, sizeof g_sp.denunciaTexto, ImVec2(520, 90));
+        bool busy = envio::estadoDenuncia() == "Enviando la denuncia...";
+        ImGui::BeginDisabled(busy);
+        if (ui::primaryButton("Enviar denuncia", ImVec2(160, 0))) {
+            std::string titulo = g_sp.denunciaCuenta ? "Denuncia: cuenta @" + g_sp.denunciaId : "Denuncia: juego " + g_sp.denunciaNombre + " (" + g_sp.denunciaId + ")";
+            std::string cuerpo = std::string("**Motivo:** ") + motivos[std::clamp(g_sp.denunciaMotivo, 0, 4)] + "\n\n" + g_sp.denunciaTexto;
+            envio::denunciar(titulo, cuerpo);
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+    }
+    if (ImGui::Button("Cerrar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
+    std::string st = envio::estadoDenuncia();
+    if (!st.empty()) ImGui::TextColored(envio::denunciaFallo() ? ImVec4(1, 0.55f, 0.5f, 1) : ImVec4(0.6f, 0.9f, 0.7f, 1), "%s", st.c_str());
     ImGui::EndPopup();
 }
 
@@ -2014,11 +2182,7 @@ static void drawCuentaYComunidad() {
         if (rs.empty()) ImGui::TextDisabled("Cargando (o todavía no se ha unido nadie)...");
         for (auto &r : rs) {
             if (!containsNoCase(r.first, g_sp.buscarGente)) continue;
-            ImGui::PushID(r.first.c_str());
-            authorLink(r.first);
-            ImGui::SameLine();
-            ImGui::TextDisabled("se unió el %s", fechaBonita(r.second).c_str());
-            ImGui::PopID();
+            personRow(r.first, "se unió el " + fechaBonita(r.second));
         }
         ImGui::EndChild();
         if (ImGui::Button("Cerrar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
@@ -2059,11 +2223,25 @@ static void drawSourcePlayDialogs() {
         ImGui::SetNextItemWidth(200); ImGui::Combo("##spcat", &g_sp.cat, kCategorias, kNumCategorias);
         ImGui::TextUnformatted("Descripción");
         ImGui::InputTextMultiline("##spdesc", g_sp.descripcion, sizeof g_sp.descripcion, ImVec2(570, 80));
-        if (ui::PixTexture *th = docThumb("sourceplay", app.proj.doc, app.proj.rev, false)) {
-            ImGui::Image((ImTextureID)(intptr_t)th->tex.id, ImVec2(192, 108));
-            ImGui::SameLine();
-            ImGui::TextDisabled("Portada: la primera pantalla\ndel juego.");
+        // miniatura: una imagen propia o la primera pantalla del juego
+        const Texture2D *pt = portadaTexture();
+        ui::PixTexture *th = pt ? nullptr : docThumb("sourceplay", app.proj.doc, app.proj.rev, false);
+        if (pt) ImGui::Image((ImTextureID)(intptr_t)pt->id, ImVec2(192, 108));
+        else if (th) ImGui::Image((ImTextureID)(intptr_t)th->tex.id, ImVec2(192, 108));
+        ImGui::SameLine();
+        ImGui::BeginGroup();
+        ImGui::TextUnformatted("Miniatura");
+        ImGui::TextDisabled(pt ? "Tu imagen (recortada a 16:9)." : "La primera pantalla del juego.");
+        if (ImGui::Button("Elegir imagen...")) {
+            ImGui::CloseCurrentPopup();   // el selector de archivos va encima; al elegir vuelve esta ventana
+            app.fileDlg.show(ui::FileDialog::Open, "Miniatura del juego", ".png|.jpg|.jpeg|.bmp", ui::homeDir(), "", [](const std::string &f) {
+                std::string err;
+                if (!loadPortada(f, err)) { g_sp.msg = err; g_sp.msgErr = true; }
+                g_sp.showPublish = true;
+            });
         }
+        if (pt) { ImGui::SameLine(); if (ImGui::Button("Usar la primera pantalla")) { g_sp.portada.clear(); g_sp.portadaArchivo.clear(); } }
+        ImGui::EndGroup();
         ImGui::Checkbox("Dejar ver por dentro (otros pueden abrirlo en el editor y aprender de él)", &g_sp.abierto);
         if (!g_sp.abierto) {
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 570);
@@ -3191,6 +3369,20 @@ static void drawStartDialogs() {
     if (app.showExport) { ImGui::OpenPopup("Exportar"); app.showExport = false; if (app.exportDir.empty()) app.exportDir = projectsDir(); }
     ImGui::SetNextWindowSize(ImVec2(620, 0));
     if (ui::beginModal("Exportar", nullptr, ImGuiWindowFlags_NoResize)) {
+        // Source Play: publicarlo para que lo juegue cualquiera con Source 2D
+        {
+            ImVec2 a = ImGui::GetCursorScreenPos();
+            float bw = ImGui::GetContentRegionAvail().x;
+            ImGui::GetWindowDrawList()->AddRectFilled(a, ImVec2(a.x + bw, a.y + 58), ui::kPanel2, 8);
+            ImGui::SetCursorScreenPos(ImVec2(a.x + 12, a.y + 8));
+            ImGui::BeginGroup();
+            ImGui::PushFont(ui::boldFont(), 0); ImGui::TextUnformatted("Source Play"); ImGui::PopFont();
+            ImGui::TextDisabled("Publícalo en la tienda de Source 2D para que lo juegue todo el mundo.");
+            ImGui::EndGroup();
+            ImGui::SetCursorScreenPos(ImVec2(a.x + bw - 190, a.y + 13));
+            if (ui::primaryButton("Subir a Source Play", ImVec2(178, 32))) { ImGui::CloseCurrentPopup(); openPublish(); }
+            ImGui::SetCursorScreenPos(ImVec2(a.x, a.y + 66));
+        }
         ImGui::SeparatorText("Tipo");
         static const char *kinds[][2] = {
             {"Ligera", "Motor y juego comprimidos sin perder calidad: ocupa muy poco (un juego pequeño, ~600 KB)."},
@@ -4000,6 +4192,7 @@ static void drawModals() {
     drawSourcePlayDialogs();
     drawPerfil();
     drawCuentaYComunidad();
+    drawDenuncia();
     if (app.showNewSprite) { ImGui::OpenPopup("Nuevo sprite"); app.showNewSprite = false; }
     if (ui::beginModal("Nuevo sprite", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::InputText("Nombre", app.nsName, sizeof app.nsName);
@@ -4834,6 +5027,12 @@ static void runScriptStep() {
         g_sp.carpeta = d;
         startPackage(true);
     }
+    else if (cmd == "sp.portada") {   // sp.portada <imagen>: miniatura propia para el siguiente paquete
+        std::string f, err; in >> f;
+        bool ok = loadPortada(f, err);
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s %s\n", ok ? "OK" : "FAIL", line.c_str(), err.c_str());
+    }
     else if (cmd == "sp.espera") {   // sp.espera: hasta que el paquete este en la carpeta
         if (g_sp.armando.valid()) app.scriptPos--;
         else { bool ok = !g_sp.msgErr; if (!ok) app.fails++; printf("S2DEDIT %s %s -> %s\n", ok ? "OK" : "FAIL", line.c_str(), g_sp.msg.c_str()); }
@@ -4872,7 +5071,7 @@ static void runScriptStep() {
         std::string l, want; in >> l; std::getline(in >> std::ws, want);
         if (app.scriptRetry == 0) openPerfil(l);
         const envio::Perfil *pf = envio::perfil(l);
-        bool listo = pf && (pf->cargado || pf->error) && (!pf->cargado || !pf->avatar.empty()) && (envio::conectado() ? pf->sigo >= 0 : true);
+        bool listo = pf && (pf->cargado || pf->error) && (!pf->cargado || !pf->avatar.empty()) && (envio::conectado() ? pf->sigo >= 0 : true) && pf->seguidores >= 0;
         if (!listo && app.scriptRetry++ < 900) { app.scriptPos--; return; }
         app.scriptRetry = 0;
         bool ok = pf && pf->cargado && pf->nombre == want && !pf->avatar.empty();
@@ -4894,11 +5093,21 @@ static void runScriptStep() {
         std::string l; int a = 0, b = 0; in >> l >> a >> b;
         envio::pedirListas(l);
         const envio::Perfil *pf = envio::perfil(l);
-        bool ok = pf && (int)pf->listaSeguidores.size() == a && (int)pf->listaSiguiendo.size() == b;
+        bool ok = pf && (int)pf->seguidoresSP.size() == a && (int)pf->siguiendoSP.size() == b;
         if (!ok && app.scriptRetry++ < 900) { app.scriptPos--; return; }
         app.scriptRetry = 0;
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s\n", ok ? "OK" : "FAIL", line.c_str());
+    }
+    else if (cmd == "sp.denunciar") {   // sp.denunciar <login>: denuncia una cuenta (motivo 1) y espera la respuesta
+        std::string l; in >> l;
+        if (app.scriptRetry == 0) envio::denunciar("Denuncia: cuenta @" + l, "**Motivo:** Acoso o insultos\n\nPrueba");
+        std::string st = envio::estadoDenuncia();
+        if (st == "Enviando la denuncia..." && app.scriptRetry++ < 900) { app.scriptPos--; return; }
+        app.scriptRetry = 0;
+        bool ok = !envio::denunciaFallo() && st.rfind("Denuncia enviada", 0) == 0;
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s -> %s\n", ok ? "OK" : "FAIL", line.c_str(), st.c_str());
     }
     else if (cmd == "sp.registrados") {   // sp.registrados <cuantos>: cuentas en Source Play (estrellas)
         int n; in >> n;
@@ -4908,6 +5117,21 @@ static void runScriptStep() {
         app.scriptRetry = 0;
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s -> %zu\n", ok ? "OK" : "FAIL", line.c_str(), envio::registrados().size());
+    }
+    else if (cmd == "tienda.destacado") {   // tienda.destacado <id> <0|1>
+        std::string id; int want = 0; in >> id >> want;
+        bool got = false;
+        for (auto &j : tienda::juegos()) if (j.id == id) got = j.destacado;
+        bool ok = got == (want != 0);
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s\n", ok ? "OK" : "FAIL", line.c_str());
+    }
+    else if (cmd == "tienda.favorito") {   // tienda.favorito <id>: lo marca y comprueba
+        std::string id; in >> id;
+        tienda::setFavorito(id, true);
+        bool ok = tienda::favorito(id);
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s\n", ok ? "OK" : "FAIL", line.c_str());
     }
     else if (cmd == "tienda.insignia") {   // tienda.insignia <login> <0|1|2>
         std::string l; int want = 0; in >> l >> want;
