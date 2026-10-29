@@ -1,1 +1,30 @@
 1 24 "source2d.manifest"
+
+1 VERSIONINFO
+FILEVERSION 0,3,0,0
+PRODUCTVERSION 0,3,0,0
+FILEFLAGSMASK 0x3f
+FILEFLAGS 0x0
+FILEOS 0x40004
+FILETYPE 0x1
+FILESUBTYPE 0x0
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "0C0A04B0"
+        BEGIN
+            VALUE "CompanyName", "FloppaKFC"
+            VALUE "FileDescription", "Source 2D - motor de juegos 2D"
+            VALUE "FileVersion", "0.3.0.0"
+            VALUE "InternalName", "Source2D"
+            VALUE "LegalCopyright", "FloppaKFC"
+            VALUE "OriginalFilename", "Source2D.exe"
+            VALUE "ProductName", "Source 2D"
+            VALUE "ProductVersion", "Beta 0.3"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0C0A, 1200
+    END
+END

@@ -28,7 +28,7 @@ rm -rf Release
 mkdir -p Release/Linux Release/Windows
 echo "== editores comprimidos (un solo archivo que se descomprime al abrirse)"
 python3 tools/pack_exe.py build/lnx/lite/stub build/lnx/Source2D Release/Linux/Source2D
-python3 tools/pack_exe.py build/win/lite/stub.exe build/win/Source2D.exe Release/Windows/Source2D.exe
+cp build/win/Source2D.exe Release/Windows/Source2D.exe
 make LICENCIAS-TERCEROS.txt
 cp LICENCIAS-TERCEROS.txt Release/LICENCIAS-TERCEROS.txt
 rm -rf Release/Idiomas && cp -r Idiomas Release/Idiomas
