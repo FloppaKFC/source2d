@@ -96,30 +96,15 @@ build/gen/presets.h: $(wildcard src/editor/presets/*) tools/bin2h.py | build/gen
 	python3 tools/bin2h.py src/editor/presets/cancion_floppa.s2dsound preset_cancion build/gen/preset_cancion.h
 	printf '#pragma once\n#include "preset_lluvia.h"\n#include "preset_estilo.h"\n#include "preset_extension.h"\n#include "preset_steam.h"\n#include "preset_floppa1.h"\n#include "preset_floppa2.h"\n#include "preset_cancion.h"\n' > $@
 
-# juegos de prueba: no van dentro del editor (ni en la Release). El editor de pruebas los encuentra aqui, en la raiz. Cada uno lo genera su guion:
-#   examples_ajedrez.source2d.json         tools/make_chess.py (con tools/chess_art.py)
-#   examples_maxwell.source2d.json         tools/make_maxwell.py (animacion de 36 imagenes en tools/maxwell_giro.png)
-#   examples_platform_test.source2d.json   tools/make_platform_test.py (nivel en tools/platform_level.py, arte en tools/platform_art.py)
-#   examples_rymik.source2d.json           tools/make_rymik.py (desde el proyecto de GDevelop de la carpeta "Proyect Ry-mik")
-#   examples_rpg.source2d.json             tools/make_rpg.py (arte en tools/rpg_art.py, letras de tools/chess_font.py)
-#   examples_benchmark.source2d.json       tools/make_benchmark.py (prueba de rendimiento: CPU, GPU y fisica)
-examples_ajedrez.source2d.json: tools/make_chess.py tools/chess_art.py
-	python3 tools/make_chess.py $@
-examples_maxwell.source2d.json: tools/make_maxwell.py tools/maxwell_giro.png
-	python3 tools/make_maxwell.py $@
-examples_platform_test.source2d.json: tools/make_platform_test.py tools/platform_level.py tools/platform_art.py
-	python3 tools/make_platform_test.py $@
+# Project Ry-mik (juego de ejemplo, el unico): no va dentro del editor (ni en la Release). El editor de pruebas lo encuentra
+# aqui, en la raiz. Lo genera tools/make_rymik.py desde el proyecto de GDevelop de la carpeta "Proyect Ry-mik".
 # el proyecto original de GDevelop no siempre esta (no va en las copias del motor): sin el se usa el .json ya generado
 RYMIK_SRC = $(wildcard Proyect\ Ry-mik/Project\ Ry-mik.json)
 ifneq ($(RYMIK_SRC),)
 examples_rymik.source2d.json: tools/make_rymik.py Proyect\ Ry-mik/Project\ Ry-mik.json src/editor/presets/lluvia.glsl
 	python3 tools/make_rymik.py "Proyect Ry-mik" $@
 endif
-examples_rpg.source2d.json: tools/make_rpg.py tools/rpg_art.py tools/chess_font.py
-	python3 tools/make_rpg.py $@
-examples_benchmark.source2d.json: tools/make_benchmark.py examples_plataformas.source2d.json
-	python3 tools/make_benchmark.py $@
-templates: tools/make_templates.py examples_plataformas.source2d.json
+templates: tools/make_templates.py test/proyecto_prueba.source2d.json
 	python3 tools/make_templates.py
 idioma: tools/gen_idioma.py src/editor/instructions.json
 	python3 tools/gen_idioma.py

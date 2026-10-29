@@ -1154,24 +1154,9 @@ static json exampleDoc(const char *file, const char *devFile) {
 static std::vector<ExampleGame> &exampleGames() {
     static std::vector<ExampleGame> g;
     if (g.empty()) {
-        g.push_back({"Ajedrez", "",
-                     "Avanzado", {"Funciones de eventos", "Bot con búsqueda alfa-beta", "Arrays", "Tweens", "Shaders"},
-                     exampleDoc("Ajedrez.source2d.json", "examples_ajedrez.source2d.json")});
-        g.push_back({"Maxwell el gato", "",
-                     "Fácil", {"Animación por eventos", "TiempoDelta()"},
-                     exampleDoc("Maxwell el gato.source2d.json", "examples_maxwell.source2d.json")});
-        g.push_back({"Platform Test", "",
-                     "Difícil", {"Doble salto y dash", "Mapa grande", "Parallax y capas", "Shader de viento", "Partículas"},
-                     exampleDoc("Platform Test.source2d.json", "examples_platform_test.source2d.json")});
         g.push_back({"Project Ry-mik", "",
                      "Avanzado", {"Juego de ritmo", "Archivos iniciales y JSON", "Editor de niveles", "Shaders CRT y brillo", "Funciones de eventos"},
                      exampleDoc("Project Ry-mik.source2d.json", "examples_rymik.source2d.json")});
-        g.push_back({"El Faro de Ámbar", "",
-                     "Intermedio", {"Menos de 1 MB", "Diálogos y elecciones", "Movimiento cenital", "Jefe final", "Guardar partida"},
-                     exampleDoc("El Faro de Ámbar.source2d.json", "examples_rpg.source2d.json")});
-        g.push_back({"Prueba de rendimiento", "",
-                     "Medir", {"CPU", "GPU", "Física", "Repetir y funciones"},
-                     exampleDoc("Prueba de rendimiento.source2d.json", "examples_benchmark.source2d.json")});
         // plantillas (tools/make_templates.py): solo "Ver por dentro"; cada evento lleva su comentario
         struct Tpl { const char *name, *desc, *file, *dev; std::vector<const char *> tags; };
         static const Tpl tpls[] = {
@@ -1557,6 +1542,7 @@ struct SourcePlayUI {
     bool showPerfil = false, showCuenta = false, showComunidad = false;
     std::string perfilLogin;
     int perfilTab = 0;                                    // 0 juegos, 1 seguidores, 2 siguiendo
+    ImVec2 tabPos[3];
     char buscarGente[64] = "";
     // denunciar un juego o una cuenta
     bool showDenuncia = false, denunciaCuenta = false;
@@ -2077,7 +2063,10 @@ static void drawPerfil() {
         if (t) ImGui::SameLine(0, 18);
         bool sel = g_sp.perfilTab == t;
         ImGui::PushFont(sel ? ui::boldFont() : ImGui::GetFont(), 0);
-        if (ImGui::Selectable((tabs[t] + "##pt" + std::to_string(t)).c_str(), sel, 0, ImGui::CalcTextSize(tabs[t].c_str()))) g_sp.perfilTab = t;
+        // DontClosePopups: un Selectable dentro de una ventana emergente la cierra al pulsarlo
+        if (ImGui::Selectable((tabs[t] + "##pt" + std::to_string(t)).c_str(), sel, ImGuiSelectableFlags_DontClosePopups, ImGui::CalcTextSize(tabs[t].c_str()))) g_sp.perfilTab = t;
+        ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+        g_sp.tabPos[t] = ImVec2((a.x + b.x) / 2, (a.y + b.y) / 2);   // para las pruebas (sp.pestana)
         ImGui::PopFont();
     }
     ImGui::Separator();
@@ -2334,6 +2323,50 @@ static void drawSourcePlayDialogs() {
         ImGui::SameLine();
         if (ImGui::Button("Cancelar", ImVec2(110, 0))) { wipeBuf(g_sp.fuenteClave, sizeof g_sp.fuenteClave); ImGui::CloseCurrentPopup(); }
         ImGui::EndPopup();
+    }
+}
+
+// Escuela: aprender con las plantillas. Cada una es un juego pequeno y completo con un comentario en cada evento;
+// "Abrir y aprender" abre una copia en la hoja de eventos para leerla, probarla y cambiarla
+static void drawTemplateLessons() {
+    static const struct { const char *name, *learn, *try_; } info[] = {
+        {"Plataformas", "Gravedad y salto, colisiones con el suelo, monedas y la cámara que sigue al jugador.",
+         "Prueba a cambiar la fuerza del salto o a poner más monedas."},
+        {"Aventura", "Moverse en 8 direcciones visto desde arriba, enemigos que te siguen y partículas.",
+         "Haz que los enemigos vayan más lentos o que suelten partículas al tocarte."},
+        {"Disparos", "Crear objetos (balas), vida y daño, y un temporizador que saca enemigos.",
+         "Cambia cada cuánto salen enemigos o cuánta vida tienes."},
+        {"Clics y arrastrar", "Ratón y pantalla táctil: pulsar, arrastrar objetos y soltarlos en su sitio.",
+         "Añade otra pieza para arrastrar o un sonido al soltarla."}};
+    ImGui::Dummy(ImVec2(0, 18));
+    sectionTitle("Aprende con las plantillas", 22);
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 760);
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kText2), "Juegos pequeños y completos: cada evento tiene un comentario que explica qué hace. "
+                       "Ábrelos, léelos, pruébalos (F5) y cámbialos: es tu copia, no se estropea nada.");
+    ImGui::PopTextWrapPos();
+    ImGui::Dummy(ImVec2(0, 6));
+    for (int i = 0; i < (int)exampleGames().size(); i++) {
+        const ExampleGame &g = exampleGames()[i];
+        if (!g.tpl || g.doc.empty()) continue;
+        const char *learn = "", *try_ = "";
+        for (auto &x : info) if (std::string(g.name) == x.name) { learn = x.learn; try_ = x.try_; }
+        ImGui::PushID(i);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ui::kPanel);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 14));
+        ImGui::BeginChild("##tpl", ImVec2(std::min(760.0f, ImGui::GetContentRegionAvail().x), 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
+        ImGui::PushFont(ui::boldFont(), 18); ImGui::TextUnformatted(g.name); ImGui::PopFont();
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 560);
+        ImGui::Text("Aprenderás: %s", learn);
+        ImGui::TextDisabled("Reto: %s", try_);
+        ImGui::PopTextWrapPos();
+        ImGui::SetCursorPos(ImVec2(ImGui::GetWindowWidth() - 190, 16));
+        if (homeButton("Abrir y aprender", true, 36)) openExampleCopy(i);
+        ImGui::EndChild();
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor();
+        ImGui::Dummy(ImVec2(0, 4));
+        ImGui::PopID();
     }
 }
 
@@ -3214,7 +3247,7 @@ static void drawStartPage() {
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.15f + 0.85f * fa);
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (1.0f - fa) * 10.0f);
     if (app.homeSection == 1) drawSourcePlaySection(); else if (app.homeSection == 2) drawTestsSection(true);
-    else if (app.homeSection == 3) { sectionTitle("Escuela", 30); school::drawSection(); }
+    else if (app.homeSection == 3) { sectionTitle("Escuela", 30); school::drawSection(); drawTemplateLessons(); }
     else if (app.homeSection == 5) drawNewsSection();
     else if (app.homeSection == 4) drawSpriteGallery();
     else if (app.homeSection == 6) drawSoundGallery();
@@ -3835,6 +3868,10 @@ static void drawToolbar() {
         app.collabTab = 0; app.showCollab = true;
     }
     school::anchor("toolbar.collab");
+    if (collab::chatSinLeer() > 0) {   // mensajes del chat sin leer: un punto en el boton
+        ImVec2 mx = ImGui::GetItemRectMax(), mn = ImGui::GetItemRectMin();
+        dl->AddCircleFilled(ImVec2(mx.x - 6, mn.y + 6), 4.5f, ui::kAccent);
+    }
     // quienes estan en la sesion: un circulo con la inicial y, al pasar el raton, que tienen abierto
     for (auto &p : collab::peers()) {
         ImGui::SameLine(0, 4);
@@ -3957,6 +3994,7 @@ static void wipeGuestProject() {
 }
 // cada fotograma: manda y recibe cambios y presencia, y pone el editor al dia con lo que llega
 static void collabTick();
+static bool g_chatVisible = false;   // el chat de la sesion se esta viendo (si no, los mensajes avisan arriba)
 /* Reposo: si nadie toca el editor, no hace falta dibujarlo 60 veces por segundo. Sin teclado ni raton durante 2 s baja a
    20 fps y tras 8 s a 8; en segundo plano (por ejemplo mientras pruebas el juego) a 8; minimizado a 4. Con cualquier tecla, clic,
    movimiento del raton o rueda vuelve a 60 en ese mismo fotograma. Se queda en 60 mientras suena musica, hay una
@@ -3985,6 +4023,8 @@ static void collabTick() {
     if (!app.scriptPresDoc.empty()) collab::setPresence(app.scriptPresDoc, app.scriptPresX, app.scriptPresY, true, {});
     collab::update(app.proj, ev);
     if (!ev.notice.empty()) notify(ev.notice, ev.noticeErr);
+    if (!ev.chat.empty() && !g_chatVisible) notify("Chat · " + ev.chat);   // con la ventana cerrada, el mensaje avisa arriba
+    g_chatVisible = false;   // drawSessionChat lo vuelve a poner si el chat se ve
     // invitado: mientras tiene el proyecto se recuerda si el anfitrion deja copias; al terminar, se borra si no
     static bool guestHad = false, guestCopies = false;
     if (collab::role() == collab::Role::Client && collab::connected()) { guestHad = true; guestCopies = collab::allowCopies(); guestMarkTemp(); }
@@ -4049,6 +4089,36 @@ static void collabModeHelp(int mode, bool hosting) {
         break;
     }
     ImGui::PopTextWrapPos();
+}
+
+// chat de la sesion (dentro de la ventana Trabajar juntos)
+static void drawSessionChat() {
+    static char buf[320];
+    g_chatVisible = true;
+    collab::chatLeido();
+    ImGui::SeparatorText("Chat");
+    ImGui::BeginChild("##chat", ImVec2(560, 170), ImGuiChildFlags_Borders);
+    const auto &msgs = collab::chat();
+    if (msgs.empty()) ImGui::TextDisabled("Escribe a las personas de la sesión. El chat no se guarda: se borra al terminar.");
+    ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
+    for (auto &m : msgs) {
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(m.color | IM_COL32_A_MASK), "%s:", m.name.c_str());
+        ImGui::SameLine();
+        ImGui::TextUnformatted(m.text.c_str());
+    }
+    ImGui::PopTextWrapPos();
+    static size_t lastN = 0;
+    if (msgs.size() != lastN) { ImGui::SetScrollHereY(1.0f); lastN = msgs.size(); }
+    ImGui::EndChild();
+    ImGui::SetNextItemWidth(460);
+    bool enter = ImGui::InputTextWithHint("##chatin", "Escribe un mensaje...", buf, sizeof buf, ImGuiInputTextFlags_EnterReturnsTrue);
+    ImGui::SameLine();
+    if ((ImGui::Button("Enviar", ImVec2(90, 0)) || enter) && buf[0]) {
+        collab::Events ev;
+        collab::sendChat(buf, ev);
+        buf[0] = 0;
+        ImGui::SetKeyboardFocusHere(-1);
+    }
 }
 
 static void drawCollabDialog() {
@@ -4167,6 +4237,8 @@ static void drawCollabDialog() {
         bool copies = collab::allowCopies();
         if (ImGui::Checkbox("Dejar que guarden una copia", &copies)) collab::setAllowCopies(copies);
         ImGui::SameLine(); ImGui::TextDisabled("(si no, al irse se les borra el proyecto)");
+        drawSessionChat();
+        ImGui::Dummy(ImVec2(0, 4));
         if (ImGui::Button("Dejar de compartir", ImVec2(170, 0))) { collab::stop(); notify("Ya no compartes el proyecto"); }
     } else {
         ImGui::Text("%s", collab::status().c_str());
@@ -4174,6 +4246,8 @@ static void drawCollabDialog() {
         ImGui::Dummy(ImVec2(0, 4));
         if (collab::allowCopies()) ImGui::TextDisabled("El anfitrión te deja guardar una copia: al salir, el proyecto sigue abierto sin guardar.");
         else ImGui::TextDisabled("Es el proyecto del anfitrión: no puedes guardarlo ni exportarlo, y al salir se cierra sin dejar copia.");
+        drawSessionChat();
+        ImGui::Dummy(ImVec2(0, 4));
         if (ImGui::Button("Salir de la sesión", ImVec2(170, 0))) { collab::stop(); notify("Saliste de la sesión"); }
     }
     if (!app.collabMsg.empty()) {
@@ -4615,6 +4689,24 @@ static void runScriptStep() {
             std::string seen;
             for (auto &p : collab::peers()) if (p.name == nm) seen = " (esta en '" + p.doc + "', " + p.extra.dump().substr(0, 80) + ")";
             waitFor(ok, 900, "no se ve a " + nm + " en " + doc + (what.empty() ? "" : " (" + what + ")") + seen);
+        } else if (cmd == "colab.chatsend") {   // colab.chatsend <texto>
+            std::string t; std::getline(in >> std::ws, t);
+            collab::Events ev;
+            collab::sendChat(t, ev);
+        } else if (cmd == "colab.chatwait") {   // colab.chatwait <texto>: espera a que llegue un mensaje con ese texto
+            std::string t; std::getline(in >> std::ws, t);
+            bool ok = false;
+            for (auto &m : collab::chat()) if (m.text == t) ok = true;
+            waitFor(ok, 900, "no llego el mensaje: " + t);
+        } else if (cmd == "colab.chatnohay") {   // colab.chatnohay <texto>: ese mensaje no llego (el freno del anfitrion)
+            std::string t; std::getline(in >> std::ws, t);
+            bool hay = false;
+            for (auto &m : collab::chat()) if (m.text == t) hay = true;
+            if (hay) app.fails++;
+            printf("S2DEDIT %s %s\n", hay ? "FAIL" : "OK", line.c_str());
+        } else if (cmd == "colab.chatflood") {   // colab.chatflood: 8 mensajes seguidos; el anfitrion deja pasar 5
+            collab::Events ev;
+            for (int i = 0; i < 8; i++) collab::sendChat("rafaga " + std::to_string(i), ev);
         } else if (cmd == "colab.stop") {
             collab::stop();
         } else if (cmd == "colab.trysave") {   // colab.trysave <ruta>: un invitado sin permiso no puede guardar
@@ -5108,6 +5200,17 @@ static void runScriptStep() {
         bool ok = !envio::denunciaFallo() && st.rfind("Denuncia enviada", 0) == 0;
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s -> %s\n", ok ? "OK" : "FAIL", line.c_str(), st.c_str());
+    }
+    else if (cmd == "sp.pestana") {   // sp.pestana <0|1|2>: como pulsar Juegos / Seguidores / Siguiendo; el perfil sigue abierto
+        int t = 0; in >> t;
+        t = std::clamp(t, 0, 2);
+        rlImGuiScriptX = g_sp.tabPos[t].x; rlImGuiScriptY = g_sp.tabPos[t].y;
+        rlImGuiScriptDown = true; app.mouseUpIn = 3; app.scriptWait = 8;
+    }
+    else if (cmd == "sp.perfilabierto") {
+        bool ok = ImGui::IsPopupOpen("Perfil");
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s\n", ok ? "OK" : "FAIL", line.c_str());
     }
     else if (cmd == "sp.registrados") {   // sp.registrados <cuantos>: cuentas en Source Play (estrellas)
         int n; in >> n;

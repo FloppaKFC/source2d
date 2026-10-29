@@ -44,6 +44,7 @@ struct Events {
     std::string notice;                 // mensaje para el usuario ("Ana se unio", "Se perdio la conexion"...)
     bool noticeErr = false;
     bool ended = false;                 // la sesion termino (el anfitrion la cerro o se perdio la conexion)
+    std::string chat;                   // llego un mensaje de otra persona ("Ana: hola"), para avisar si el chat esta cerrado
 };
 
 constexpr int kPort = 47610;            // TCP de las sesiones (y +1 para el aviso por UDP)
@@ -78,6 +79,14 @@ bool hotspotStop(std::string &out);
 // si el cortafuegos del sistema bloquea las sesiones, como abrirlo ('' si no hace falta)
 std::string firewallHint();
 uint32_t colorFor(int i);
+
+// chat de la sesion: solo entre quienes estan en ella, pasa por el anfitrion (que pone el nombre de quien escribe y frena a
+// quien manda mas de 5 mensajes en 5 s) y no se guarda en ningun sitio: al terminar la sesion desaparece
+struct ChatMsg { int id = 0; std::string name; uint32_t color = 0; std::string text; double t = 0; };
+void sendChat(const std::string &text, Events &ev);
+const std::vector<ChatMsg> &chat();
+int chatSinLeer();
+void chatLeido();
 
 // copias: lo decide el anfitrion (apagado al empezar). Si esta apagado, el invitado no puede guardar ni exportar y, al
 // terminar la sesion (se va el, se va el anfitrion o se corta), el editor cierra el proyecto y borra lo que quedo.

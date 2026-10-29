@@ -9,6 +9,11 @@ colab.wait /objects/1/name "DesdeBeto"
 scene Nivel 1
 colab.pres scene:sc_4ltgw3 300 380
 colab.waitpres Beto scene:sc_4ltgw3
+colab.chatsend Hola Beto
+colab.chatwait Hola Ana
+colab.chatwait rafaga 3
+wait 30
+colab.chatnohay rafaga 4
 wait 20
 shot CAPTURA_ANA
 jset /objects/2/name "Choque-Ana"

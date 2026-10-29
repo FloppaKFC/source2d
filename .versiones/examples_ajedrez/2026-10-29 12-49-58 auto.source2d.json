@@ -10105,44 +10105,6 @@
       "scene": "sc_menu"
     },
     {
-      "id": "o_menusub",
-      "name": "MenuSub",
-      "type": "text",
-      "hud": true,
-      "shader": "",
-      "hooks": {
-        "onCreate": "",
-        "onUpdate": ""
-      },
-      "behaviors": {
-        "gravity": false,
-        "solid": false,
-        "oneway": false,
-        "collide": false,
-        "movement": "none",
-        "speed": 150,
-        "jump": 620,
-        "friction": 0.85,
-        "airFriction": 0.99,
-        "bounce": 0,
-        "mass": 1,
-        "spin": 0
-      },
-      "vars": [],
-      "animations": [],
-      "flipOnMove": false,
-      "comportamientos": {},
-      "text": {
-        "content": "Un juego hecho solo con eventos en Source 2D",
-        "size": 16,
-        "color": "#9aa3b5",
-        "align": "center",
-        "font": "f_pixel16"
-      },
-      "scene": "sc_menu",
-      "capa": "base"
-    },
-    {
       "id": "o_menupie",
       "name": "MenuPie",
       "type": "text",
@@ -10177,8 +10139,7 @@
         "align": "center",
         "font": "f_pixel16"
       },
-      "scene": "sc_menu",
-      "capa": "base"
+      "scene": "sc_menu"
     },
     {
       "id": "o_btnpvp",
@@ -10621,7 +10582,7 @@
       "scene": "sc_partida"
     },
     {
-      "id": "o_kylx2s",
+      "id": "o_3oidra",
       "name": "Fondo",
       "type": "tile",
       "tilesetId": "ts_tablero",
@@ -10640,7 +10601,7 @@
       "comportamientos": {}
     },
     {
-      "id": "o_tzq0jj",
+      "id": "o_bg5pjq",
       "name": "Tablero",
       "type": "tile",
       "tilesetId": "ts_tablero",
@@ -10776,10 +10737,22 @@
           "z": 0
         },
         {
-          "id": "i_75pfdi",
-          "objectId": "o_kylx2s",
+          "id": "i_11",
+          "objectId": "o_menupie",
+          "x": 480,
+          "y": 512,
+          "angle": 0,
+          "scaleX": 1,
+          "scaleY": 1,
+          "opacity": 100,
+          "frame": 0,
+          "z": 0
+        },
+        {
+          "id": "i_lyrd9l",
+          "objectId": "o_3oidra",
           "x": 0.0,
-          "y": -0.0,
+          "y": -4.0,
           "angle": 0,
           "scaleX": 1,
           "scaleY": 1,
@@ -10925,8 +10898,7 @@
               5,
               4
             ]
-          },
-          "z": -1
+          }
         }
       ],
       "tilemaps": [],
@@ -12256,8 +12228,8 @@
           "z": 0
         },
         {
-          "id": "i_c4etn0",
-          "objectId": "o_tzq0jj",
+          "id": "i_p50u8n",
+          "objectId": "o_bg5pjq",
           "x": 4.0,
           "y": 4.0,
           "angle": 0,
@@ -44928,15 +44900,5 @@
     }
   ],
   "extensions": [],
-  "plugins": [],
-  "layers": [
-    {
-      "id": "base",
-      "name": "Principal",
-      "z": 0,
-      "parallax": 1,
-      "solid": true,
-      "hidden": false
-    }
-  ]
+  "plugins": []
 }

@@ -7,6 +7,11 @@ jset /objects/1/name "DesdeBeto"
 scene Nivel 1
 colab.pres scene:sc_4ltgw3 700 300
 colab.waitpres Ana scene:sc_4ltgw3
+colab.chatwait Hola Beto
+colab.chatsend Hola Ana
+colab.chatwait Hola Ana
+colab.chatflood
+colab.chatwait rafaga 3
 wait 20
 shot CAPTURA_BETO
 jset /objects/2/name "Choque-Beto"

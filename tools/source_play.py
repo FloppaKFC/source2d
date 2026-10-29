@@ -145,7 +145,7 @@ def mostrar(info):
     print()
 
 
-def descargar_envio(n):
+def descargar_envio(n, carpeta="envios", archivos=ARCHIVOS):
     """Baja los archivos del pull request N a una carpeta temporal. Devuelve (carpeta, autor)."""
     out = subprocess.run([gh(), "pr", "view", str(n), "-R", ENVIOS, "--json",
                           "author,headRefName,headRepositoryOwner,headRepository,files,state"], capture_output=True, text=True)
@@ -158,14 +158,14 @@ def descargar_envio(n):
     dueno, rama, nombre_repo = pr["headRepositoryOwner"]["login"], pr["headRefName"], pr["headRepository"]["name"]
     rutas = [f["path"] for f in pr["files"]]
     carpetas = {os.path.dirname(r) for r in rutas}
-    if len(carpetas) != 1 or not re.fullmatch(r"envios/[A-Za-z0-9-]+/[a-z0-9-]+", next(iter(carpetas))):
-        sys.exit("El envío toca archivos fuera de su carpeta envios/<usuario>/<juego>/: recházalo")
+    if len(carpetas) != 1 or not re.fullmatch(re.escape(carpeta) + r"/[A-Za-z0-9-]+/[a-z0-9-]+", next(iter(carpetas))):
+        sys.exit(f"El envío toca archivos fuera de su carpeta {carpeta}/<usuario>/<nombre>/: recházalo")
     if next(iter(carpetas)).split("/")[1].lower() != autor.lower():
         sys.exit("La carpeta del envío no es la de su autor: recházalo")
     tmp = tempfile.mkdtemp(prefix="source-play-")
     for r in rutas:
         nm = os.path.basename(r)
-        if nm not in ARCHIVOS:
+        if nm not in archivos:
             sys.exit(f"Archivo raro en el envío: {nm}")
         url = f"https://raw.githubusercontent.com/{dueno}/{nombre_repo}/{rama}/{r}"
         with urllib.request.urlopen(url, timeout=120) as f, open(os.path.join(tmp, nm), "wb") as o:
@@ -254,7 +254,7 @@ def main():
         out = subprocess.run([gh(), "pr", "list", "-R", ENVIOS, "--json", "number,title,author,createdAt"], capture_output=True, text=True)
         if out.returncode != 0:
             sys.exit(out.stderr.strip())
-        prs = json.loads(out.stdout)
+        prs = [p for p in json.loads(out.stdout) if p["title"].startswith("Envío:")]   # los de sprites y sonidos van aparte
         if not prs:
             print("No hay envíos esperando revisión.")
         for p in prs:

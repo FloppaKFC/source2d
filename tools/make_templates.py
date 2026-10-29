@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Plantillas para el apartado Plantillas de la pagina de inicio: juegos pequenos por genero, con un comentario en
 cada evento que explica que hace y por que (para aprender mirandolos por dentro). Usan el arte de
-examples_plataformas.source2d.json.
+test/proyecto_prueba.source2d.json.
 Genera examples_tpl_plataformas, examples_tpl_aventura, examples_tpl_disparos y examples_tpl_clics (.source2d.json).
 Uso: make_templates.py [carpeta]"""
 import copy
@@ -11,7 +11,7 @@ import sys
 
 RAIZ = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 OUT = sys.argv[1] if len(sys.argv) > 1 else RAIZ
-base = json.load(open(os.path.join(RAIZ, 'examples_plataformas.source2d.json')))
+base = json.load(open(os.path.join(RAIZ, 'test', 'proyecto_prueba.source2d.json')))
 OB = {o['name']: o for o in base['objects']}
 J, MON, ENE, TXT, BTN = (OB[n]['id'] for n in ('Jugador', 'Moneda', 'Enemigo', 'Puntuacion', 'BotonReiniciar'))
 _n = [0]

@@ -32,6 +32,9 @@ std::string errorCuenta();
 struct Paquete {
     std::string id, nombre;
     std::map<std::string, std::string> archivos;
+    // juegos: carpeta "envios" y titulo "Envío"; paquetes de Source Store: "sprites"/"Sprites" o "sonidos"/"Sonidos".
+    // El revisor (Source-Play.sh, Source-Sprite.sh, Source-Sound.sh) mira solo los envios con su titulo.
+    std::string carpeta = "envios", titulo = "Envío";
 };
 void enviar(const Paquete &p);
 bool enviando();

@@ -10,6 +10,10 @@ sp.mio rechazado
 # cuentas: registro (estrella), perfil con foto, seguir y dejar de seguir, listas
 sp.registrados 2
 sp.perfil amiga Amiga Prueba
+sp.pestana 2
+sp.perfilabierto
+sp.pestana 1
+sp.perfilabierto
 sp.seguir amiga 1 1
 sp.listas amiga 1 1
 sp.seguir amiga 0 0

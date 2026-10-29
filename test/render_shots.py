@@ -34,7 +34,7 @@ def escena_primero(doc, i):
 
 
 def variantes_efectos():
-    base = json.load(open(os.path.join(RAIZ, 'examples_plataformas.source2d.json')))
+    base = json.load(open(os.path.join(RAIZ, 'test', 'proyecto_prueba.source2d.json')))
     out = {}
     efectos = {
         'filtro': [dict(type='filter', amount=50, code='grayscale(0.6) sepia(0.3) hue-rotate(40deg) invert(0.1) '

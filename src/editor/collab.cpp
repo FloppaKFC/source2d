@@ -15,8 +15,9 @@
    proyecto en JSON comprimido con deflate). */
 namespace collab {
 namespace {
-enum : uint8_t { HELLO = 1, WELCOME, DENY, DOC, PATCH, PRES, PEERS, HASH, RESYNC, COPIES };
-constexpr int kVersion = 2;   // 2: los invitados no se quedan el proyecto (COPIES); un editor viejo si se lo quedaria
+enum : uint8_t { HELLO = 1, WELCOME, DENY, DOC, PATCH, PRES, PEERS, HASH, RESYNC, COPIES, CHAT };
+constexpr int kVersion = 3;   // 2: los invitados no se quedan el proyecto (COPIES); 3: chat de la sesion (CHAT)
+constexpr size_t kChatMax = 300;   // letras (bytes) por mensaje; se guardan los ultimos 200 y solo en memoria
 constexpr uint32_t kMaxFrame = 512u << 20;
 
 struct Conn {
@@ -25,6 +26,7 @@ struct Conn {
     size_t outOff = 0;
     int id = 0;
     bool ready = false, connecting = false, dead = false, closeAfterFlush = false;
+    std::vector<double> chatAt;   // anfitrion: cuando escribio esta persona (no mas de 5 mensajes cada 5 s)
 };
 
 Role g_role = Role::None;
@@ -35,7 +37,22 @@ std::vector<Peer> g_peers;
 Peer g_self;
 std::string g_code, g_status, g_hostName, g_joinCode;
 json g_shadow;                          // ultima version del proyecto ya enviada (con lo recibido aplicado)
-bool g_copies = false;                 // anfitrion: deja que los invitados guarden una copia; cliente: lo que dijo el anfitrion
+bool g_copies = false;
+double now();
+std::vector<ChatMsg> g_chat;
+int g_chatSinLeer = 0;
+// mensaje de la sesion: texto limpio (sin saltos raros ni mas de kChatMax bytes, cortado sin partir una letra)
+std::string limpiaChat(std::string t) {
+    for (auto &c : t) if (c == '\n' || c == '\r' || c == '\t') c = ' ';
+    if (t.size() > kChatMax) { t.resize(kChatMax); while (!t.empty() && (t.back() & 0xC0) == 0x80) t.pop_back(); if (!t.empty() && (t.back() & 0x80)) t.pop_back(); }
+    size_t a = t.find_first_not_of(' '), b = t.find_last_not_of(' ');
+    return a == std::string::npos ? "" : t.substr(a, b - a + 1);
+}
+void pushChat(int id, const std::string &name, uint32_t color, const std::string &text, Events &ev) {
+    g_chat.push_back({id, name, color, text, now()});
+    if (g_chat.size() > 200) g_chat.erase(g_chat.begin());
+    if (id != g_self.id) { g_chatSinLeer++; ev.chat = name + ": " + text; }
+}                 // anfitrion: deja que los invitados guarden una copia; cliente: lo que dijo el anfitrion
 bool g_haveShadow = false, g_connected = false, g_presDirty = true, g_discover = false;
 int g_nextId = 2, g_pending = 0;        // cliente: cambios propios que el anfitrion aun no devolvio
 uint64_t g_seq = 0, g_hashSeq = ~0ull;
@@ -241,6 +258,17 @@ void updateHost(Project &proj, Events &ev) {
                 if (Peer *p = peerById(c.id)) { readPres(*p, j); j["id"] = c.id; j["name"] = p->name; j["color"] = p->color; broadcast(PRES, j.dump(), c.id); }
             } else if (t == RESYNC) {
                 queue(c, DOC, packDoc(proj.doc));
+            } else if (t == CHAT) {
+                // el anfitrion pone el nombre (nadie puede escribir en nombre de otro) y frena a quien escribe de golpe
+                Peer *p = peerById(c.id);
+                std::string txt = limpiaChat(jstr(j, "text"));
+                double tn = now();
+                while (!c.chatAt.empty() && tn - c.chatAt.front() > 5) c.chatAt.erase(c.chatAt.begin());
+                if (!p || txt.empty() || c.chatAt.size() >= 5) continue;
+                c.chatAt.push_back(tn);
+                json m = {{"id", c.id}, {"name", p->name}, {"color", p->color}, {"text", txt}};
+                broadcast(CHAT, m.dump());
+                pushChat(c.id, p->name, p->color, txt, ev);
             }
         }
     }
@@ -307,6 +335,9 @@ void updateClient(Project &proj, Events &ev) {
         } else if (t == DENY) {
             finish(ev, jstr(j, "msg", "El anfitrión no te dejó entrar"), true);
             return;
+        } else if (t == CHAT) {
+            std::string txt = limpiaChat(jstr(j, "text"));
+            if (!txt.empty()) pushChat((int)jnum(j, "id", 0), jstr(j, "name", "?"), (uint32_t)jnum(j, "color", 0), txt, ev);
         } else if (t == COPIES) {
             g_copies = j.is_object() && j.value("on", false);
         } else if (t == PEERS) {
@@ -411,7 +442,23 @@ void setAllowCopies(bool on) {
 }
 bool allowCopies() { return g_copies; }
 
+void sendChat(const std::string &text, Events &ev) {
+    std::string txt = limpiaChat(text);
+    if (txt.empty() || g_role == Role::None) return;
+    if (g_role == Role::Host) {
+        json m = {{"id", g_self.id}, {"name", g_self.name}, {"color", g_self.color}, {"text", txt}};
+        broadcast(CHAT, m.dump());
+        pushChat(g_self.id, g_self.name, g_self.color, txt, ev);
+    } else if (!g_conns.empty() && g_connected) {
+        queueJson(g_conns[0], CHAT, {{"text", txt}});   // el anfitrion lo devuelve a todos, tambien a mi
+    }
+}
+const std::vector<ChatMsg> &chat() { return g_chat; }
+int chatSinLeer() { return g_chatSinLeer; }
+void chatLeido() { g_chatSinLeer = 0; }
+
 void stop() {
+    g_chat.clear(); g_chatSinLeer = 0;   // el chat no se guarda: se acaba con la sesion
     for (auto &c : g_conns) { flush(c); net::close(c.s); }
     g_conns.clear();
     net::close(g_listen); g_listen = net::kBad;

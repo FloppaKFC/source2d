@@ -1,37 +1,12 @@
-# apartado Prueba de la pagina de inicio: juegos completos y "Ver por dentro" (abre una copia editable)
+# apartado Plantillas de la pagina de inicio: "Ver por dentro" abre una copia editable de una plantilla
 wait 3
 home.section 2
 wait 3
 shot CAPTURA_PRUEBA
 wait 2
-home.remix 0
+home.remix 1
 wait 4
-bar.expectkind events
-jexpect /name "Ajedrez (mi versión)"
+jexpect /name "Plataformas (mi versión)"
 shot CAPTURA_DENTRO
-wait 2
-home.remix 2
-wait 5
-jexpect /name "Platform Test (mi versión)"
-jexpect /layers/5/shaderId "sh_viento"
-scene Nivel 1: La orilla
-wait 4
-shot CAPTURA_PLATAFORMAS
-wait 2
-home.remix 3
-wait 8
-jexpect /name "Project Ry-mik (mi versión)"
-jexpect /scenes/6/name "Juego"
-jexpect /files/1/name "02 Citadel.json"
-scene Juego
-wait 4
-shot CAPTURA_RYMIK
-wait 2
-home.remix 4
-wait 6
-jexpect /name "El Faro de Ámbar (mi versión)"
-scene Puerto Musgo
-wait 4
-shot CAPTURA_RPG
 wait 2
 quit

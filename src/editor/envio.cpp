@@ -197,8 +197,8 @@ void subirSiguiente() {
     std::string nm = g_env.pendientes.back();
     g_env.pendientes.pop_back();
     g_estado = "Subiendo " + nm + "...";
-    std::string ruta = "envios/" + g_user + "/" + g_env.p.id + "/" + nm;
-    json c = {{"message", "Envío: " + g_env.p.nombre + " (" + nm + ")"}, {"content", base64(g_env.p.archivos[nm])}, {"branch", g_env.rama}};
+    std::string ruta = g_env.p.carpeta + "/" + g_user + "/" + g_env.p.id + "/" + nm;
+    json c = {{"message", g_env.p.titulo + ": " + g_env.p.nombre + " (" + nm + ")"}, {"content", base64(g_env.p.archivos[nm])}, {"branch", g_env.rama}};
     pedir({"PUT", g_api + "/repos/" + g_user + "/" + kRepo + "/contents/" + ruta, c.dump(), false, true, [nm](int code, const json &b) {
         if (code == 201 || code == 200) subirSiguiente();
         else fallar("No se pudo subir " + nm + " (" + std::to_string(code) + (b.is_object() ? " " + b.value("message", "") : "") + ").");
@@ -225,8 +225,8 @@ void esperarCopia() {
 }
 void abrirPR() {
     g_estado = "Enviando a revisión...";
-    json c = {{"title", "Envío: " + g_env.p.nombre}, {"head", g_user + ":" + g_env.rama}, {"base", "main"},
-              {"body", "Juego enviado desde el editor de Source 2D por @" + g_user + ".\n\nCarpeta: `envios/" + g_user + "/" + g_env.p.id + "/`"},
+    json c = {{"title", g_env.p.titulo + ": " + g_env.p.nombre}, {"head", g_user + ":" + g_env.rama}, {"base", "main"},
+              {"body", "Enviado desde el editor de Source 2D por @" + g_user + ".\n\nCarpeta: `" + g_env.p.carpeta + "/" + g_user + "/" + g_env.p.id + "/`"},
               {"maintainer_can_modify", true}};
     pedir({"POST", g_api + "/repos/" + kDueno + "/" + kRepo + "/pulls", c.dump(), false, true, [](int code, const json &b) {
         if (code != 201 || !b.is_object()) { fallar("No se pudo enviar a revisión (" + std::to_string(code) + (b.is_object() ? " " + b.value("message", "") : "") + ")."); return; }
