@@ -1,6 +1,6 @@
 // Source 2D - trabajar juntos en el mismo proyecto, en tiempo real y sin servidores.
 // Una PC comparte (anfitrion) y las demas se conectan directo a ella por TCP. Da igual como se vean: la misma red
-// WiFi, una zona WiFi que crea una de las PCs, Tailscale o la red Bluetooth del sistema; todo es una direccion IP.
+// WiFi, una zona WiFi que crea una de las PCs, o Tailscale; todo es una direccion IP.
 // En la misma red las sesiones se encuentran solas (aviso por UDP). Para entrar hace falta el codigo de la sesion.
 //
 // Sincronizacion: cada pocas decimas se compara el proyecto con la ultima copia enviada (diff JSON, RFC 6902) y se
@@ -32,7 +32,7 @@ struct Peer {
 };
 // sesion vista en la red local (aviso del anfitrion)
 struct Found { std::string addr, host, project; int port = 0; double seen = 0; };
-// direccion de este equipo y por donde sale: "WiFi", "Zona WiFi", "Tailscale", "Bluetooth", "Cable" u "Otra"
+// direccion de este equipo y por donde sale: "WiFi", "Zona WiFi", "Tailscale", "Cable" u "Otra"
 struct NetAddr { std::string ip, iface, kind; };
 
 // lo que paso en update() y el editor tiene que atender
@@ -77,6 +77,11 @@ bool hotspotStop(std::string &out);
 
 // si el cortafuegos del sistema bloquea las sesiones, como abrirlo ('' si no hace falta)
 std::string firewallHint();
-uint32_t colorFor(int i);               // colores de las personas
+uint32_t colorFor(int i);
+
+// copias: lo decide el anfitrion (apagado al empezar). Si esta apagado, el invitado no puede guardar ni exportar y, al
+// terminar la sesion (se va el, se va el anfitrion o se corta), el editor cierra el proyecto y borra lo que quedo.
+void setAllowCopies(bool on);
+bool allowCopies();               // colores de las personas
 std::string defaultName();              // nombre del usuario del sistema
 }

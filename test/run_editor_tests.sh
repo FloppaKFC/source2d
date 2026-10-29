@@ -33,6 +33,32 @@ cp examples_plataformas.source2d.json "$T/snd.json"
 sed "s|PROYECTO|$T/snd.json|; s|SALIDA_WAV|$T/m.wav|; s|SALIDA_MP3|$T/m.mp3|; s|SALIDA_PROY|$T/snd_out.json|; s|CAPTURA_\([A-Z]*\)|$T/snd_\1.png|" test/editor_sound.txt > "$T/guion_snd.txt"
 if ! command -v lame >/dev/null && ! command -v ffmpeg >/dev/null; then sed -i '/SALIDA_MP3\|m.mp3/d' "$T/guion_snd.txt"; fi
 "$ED" --script "$T/guion_snd.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
+echo "== Noticias con encuesta y Source Play (clave de firma, repositorios y contador de prueba, sin internet)"
+make -s build/firma
+export S2D_FIRMA_DIR="$T/clave" S2D_FIRMA_CONTRASENA=contrasena-de-prueba
+PUB=$(python3 test/desktop/clave_prueba.py "$S2D_FIRMA_CONTRASENA")
+mkdir -p "$T/news" "$T/cont/get/source2d-floppa" "$T/cont/hit/source2d-floppa" "$T/spcfg" "$T/paq" "$T/juegos"
+S2D_VERSIONES_DIR="$T/news" python3 tools/anunciar.py "Encuesta" 'Elige. {encuesta: "¿Qué quieres?", "Luces", "Red", "Mapas", "3d"} Gracias' --sin-subir >/dev/null
+K1=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['noticias'][0]['encuesta']['clave'])" "$T/news/noticias.json")
+echo '{"value":5}' > "$T/cont/get/source2d-floppa/$K1-0"; echo '{"value":2}' > "$T/cont/get/source2d-floppa/$K1-1"
+echo '{"value":3}' > "$T/cont/hit/source2d-floppa/$K1-1"
+XDG_CONFIG_HOME="$T/spcfg" S2D_NOVEDADES_URL="file://$T/news/" S2D_FIRMA_PUBLICA="$PUB" S2D_CONTADOR_URL="file://$T/cont/" \
+    "$ED" --script test/editor_encuesta.txt | grep "S2DEDIT FAIL\|S2DEDIT FIN"
+cp examples_plataformas.source2d.json "$T/sp.json"
+sed "s|PROYECTO|$T/sp.json|; s|PAQ|$T/paq|g" test/editor_sourceplay.txt > "$T/guion_sp.txt"
+XDG_CONFIG_HOME="$T/spcfg" "$ED" --script "$T/guion_sp.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
+S2D_JUEGOS_DIR="$T/juegos" S2D_EDITOR="$ED" python3 tools/source_play.py anadir "$T/paq/abierto/"* --sin-subir | grep "Publicado\|OK"
+S2D_JUEGOS_DIR="$T/juegos" S2D_EDITOR="$ED" python3 tools/source_play.py anadir "$T/paq/cerrado/"* --autor Otro --sin-subir | grep "Publicado\|OK"
+sed "s|CAPTURA|$T/sourceplay.png|" test/editor_sourceplay2.txt > "$T/guion_sp2.txt"
+XDG_CONFIG_HOME="$T/spcfg" S2D_TIENDA_URL="file://$T/juegos/" S2D_FIRMA_PUBLICA="$PUB" "$ED" --script "$T/guion_sp2.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
+echo "== Publicar en Source Play con un GitHub de mentira (entrar con codigo, envio y revision)"
+python3 test/desktop/github_falso.py 47790 "$T/ghsub" 2>/dev/null & GHP=$!
+mkdir -p "$T/ghsub" "$T/ghcfg"; sleep 0.5
+sed "s|PROYECTO|$T/sp.json|" test/editor_envio.txt > "$T/guion_envio.txt"
+XDG_CONFIG_HOME="$T/ghcfg" S2D_GITHUB_API=http://127.0.0.1:47790 S2D_GITHUB_WEB=http://127.0.0.1:47790 S2D_GITHUB_CLIENT_ID=cliente-de-prueba \
+    "$ED" --script "$T/guion_envio.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
+kill $GHP 2>/dev/null || true
+unset S2D_FIRMA_DIR S2D_FIRMA_CONTRASENA
 echo "== extension Steam (se anade y aparecen sus condiciones y acciones; sin Steam el juego sigue)"
 sed "s|PROYECTO|$T/proj.json|" test/editor_steam.txt > "$T/guion_steam.txt"
 "$ED" --script "$T/guion_steam.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
@@ -59,7 +85,7 @@ timeout 60 "$ED" --script "$T/guion_ajeno.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN
 echo "== trabajar juntos (dos editores por 127.0.0.1: cambios en los dos sentidos, cursores, edicion a la vez, codigo incorrecto)"
 cp examples_plataformas.source2d.json "$T/colab.json"
 sed "s|PROYECTO|$T/colab.json|; s|CAPTURA_ANA|$T/colab_ana.png|" test/editor_colab_host.txt > "$T/colab_h.txt"
-sed "s|CODIGO|482913|; s|CAPTURA_BETO|$T/colab_beto.png|" test/editor_colab_guest.txt > "$T/colab_g.txt"
+sed "s|CODIGO|482913|; s|CAPTURA_BETO|$T/colab_beto.png|; s|GUARDAR_BETO|$T/beto_copia.json|" test/editor_colab_guest.txt > "$T/colab_g.txt"
 S2D_COLAB_CODE=482913 timeout 120 "$ED" --script "$T/colab_h.txt" > "$T/colab_h.log" 2>&1 &
 timeout 120 "$ED" --script "$T/colab_g.txt" > "$T/colab_g.log" 2>&1
 wait
@@ -141,6 +167,10 @@ timeout 60 "$PL" --fixed-step "$T/steam.json" | grep S2DTEST
 echo "== runtime: colisiones con forma (caja de agachado, circulos exactos, rampa de tiles)"
 python3 test/desktop/make_collision_project.py "$T/colisiones.json"
 timeout 30 "$PL" --fixed-step "$T/colisiones.json" | grep S2DTEST
+echo "== runtime: juego de Source Play (--tienda): no escribe en Documentos y sus partidas van aparte"
+python3 test/desktop/make_sandbox_project.py "$T/sandbox.json"
+mkdir -p "$T/sbhome/Documents"
+HOME="$T/sbhome" XDG_DATA_HOME="$T/sbhome/.local/share" timeout 15 "$PL" --tienda mi-juego --stdin < "$T/sandbox.json" 2>/dev/null | grep S2DTEST
 echo "== runtime: objetos y eventos por escena"
 python3 test/desktop/make_scenes_project.py "$T/escenas.json"
 timeout 15 "$PL" "$T/escenas.json" | grep S2DTEST

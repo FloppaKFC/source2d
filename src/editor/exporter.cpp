@@ -246,13 +246,14 @@ static void expandBlobs(json &j, const std::string &bin) {
     size_t p1 = s.find(':', 6), p2 = p1 == std::string::npos ? p1 : s.find(':', p1 + 1);
     if (p2 == std::string::npos) return;
     off = strtoull(s.c_str() + 6, nullptr, 10); len = strtoull(s.c_str() + p1 + 1, nullptr, 10);
-    if (off + len > bin.size()) return;
+    if (off > bin.size() || len > bin.size() - off) return;
     j = s.substr(p2 + 1) + base64Encode((const unsigned char *)bin.data() + off, (size_t)len);
 }
 bool sourceUnpack(const std::string &b, json &doc, std::string &err) {
+    if (b.size() < 40 || !isSourcePack(b)) { err = "El archivo .source2d está dañado"; return false; }
     const unsigned char *p = (const unsigned char *)b.data();
     unsigned long long jl = get64(p + 8), sl = get64(p + 16), hl = get64(p + 24), zl = get64(p + 32);
-    if (40 + zl + hl != b.size() || jl + sl > (1ULL << 33)) { err = "El archivo .source2d está dañado"; return false; }
+    if (zl > b.size() || hl > b.size() || 40 + zl + hl != b.size() || jl > (1ULL << 30) || sl > (1ULL << 30)) { err = "El archivo .source2d está dañado"; return false; }
     std::string plain(jl + sl, '\0');
     if (lz_decode((uint8_t *)plain.data(), plain.size(), p + 40, zl, kProjProps) != 0) { err = "El archivo .source2d está dañado"; return false; }
     doc = json::parse(plain.substr(0, jl), nullptr, false);

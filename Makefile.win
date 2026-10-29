@@ -119,7 +119,7 @@ $(OUT)/gen/players_portable.o: build/gen/players_portable.c | $(OUT)/gen
 
 editor: $(OUT)/Source2D.exe
 $(OUT)/Source2D.exe: $(EDITOR_OBJ) $(IMGUI_OBJ) $(OUT)/gen/players_portable.o $(RAYLIB_OBJ) $(QJS_OBJ) $(RES)
-	$(CXX) $^ -o $@ $(LDWIN) $(WINLIBS) -lws2_32 -liphlpapi
+	$(CXX) $^ -o $@ -s -Wl,--gc-sections $(LDWIN) $(WINLIBS) -lws2_32 -liphlpapi -lbcrypt
 
 clean:
 	rm -rf $(OUT)

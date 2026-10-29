@@ -19,7 +19,7 @@ for f in "$LNX" "$WIN"; do
     [ "$f" -nt "$VH" ] || { echo "$f es anterior a la Beta 0.3: ejecuta tools/release.sh."; exit 1; }
 done
 
-NOTAS="{lista:Los tiles ahora son objetos (se colocan y editan como cualquier otro), Autotiles, Luces y oscuridad por capa con la nueva ventana Capas, Source Sound para hacer sonidos y música (con la canción Test de ejemplo), Colisiones por animación y en los tiles (rampas y escalones), Escuela nueva con Floppa: Conoce el editor y Monedas y puntos con el botón Hazlo por mí, Archivos .source2d mucho más pequeños, Exportar a una carpeta (motor + datos), Encuestas en Noticias} Versión de prueba: puede tener fallos."
+NOTAS="{lista:Los tiles ahora son objetos (se colocan y editan como cualquier otro), Autotiles, Luces y oscuridad por capa con la nueva ventana Capas, Source Sound para hacer sonidos y música (con la canción Test de ejemplo), Colisiones por animación y en los tiles (rampas y escalones), Escuela nueva con Floppa: Conoce el editor y Monedas y puntos con el botón Hazlo por mí, Archivos .source2d mucho más pequeños, Exportar a una carpeta (motor + datos), Encuestas en Noticias, Source Play: la tienda de juegos gratis (descarga, juega y publica el tuyo con GitHub; juegos cerrados con clave), Trabajar juntos más seguro (el invitado no se queda el proyecto), Los juegos con funciones de eventos van mucho más rápido, El editor gasta menos cuando no lo usas} Versión de prueba: puede tener fallos."
 
 EXTRA=()
 [ "${S2D_SIN_SUBIR:-}" = "1" ] && EXTRA+=(--sin-subir)

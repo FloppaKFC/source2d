@@ -1,0 +1,8 @@
+# Source Play: paquetes abierto y cerrado ("Guardar en una carpeta"). El catalogo lo firma el guion de pruebas.
+open PROYECTO
+wait 10
+sp.paquete PAQ/abierto 1
+sp.espera
+sp.paquete PAQ/cerrado 0 clave-secreta-123
+sp.espera
+quit

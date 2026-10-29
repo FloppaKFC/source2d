@@ -466,6 +466,7 @@ static Music g_music{};
 static std::vector<unsigned char> g_musicBuf;
 static std::string g_musicId;
 
+bool musicPreviewing() { return !g_musicId.empty() && IsMusicStreamPlaying(g_music); }
 void musicPreview(Project &proj, const std::string &id) {
     if (g_musicId.size()) { StopMusicStream(g_music); UnloadMusicStream(g_music); g_musicId.clear(); }
     if (id.empty()) return;

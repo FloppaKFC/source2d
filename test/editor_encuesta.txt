@@ -1,0 +1,9 @@
+# encuestas en Noticias (contador de prueba file://): sin votar, votar, y el voto que vuelve del contador
+home.section 5
+wait 30
+noticias.espera
+wait 30
+encuesta.expect 1 -1 5,2,0
+encuesta.votar 1 1
+encuesta.expect 1 1 5,3,0
+quit

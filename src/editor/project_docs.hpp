@@ -31,6 +31,7 @@ std::vector<unsigned char> base64Decode(const std::string &s);
 std::string importMusic(Project &proj, const std::string &file, std::string &err);   // devuelve el id
 bool addInitialFile(Project &proj, const std::string &file, std::string &err);        // a project.files
 void musicPreview(Project &proj, const std::string &id);    // '' detiene
+bool musicPreviewing();                                     // suena la musica de un documento
 std::string musicPlaying();
 void musicUpdate();
 void musicShutdown();

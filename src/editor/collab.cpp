@@ -15,8 +15,8 @@
    proyecto en JSON comprimido con deflate). */
 namespace collab {
 namespace {
-enum : uint8_t { HELLO = 1, WELCOME, DENY, DOC, PATCH, PRES, PEERS, HASH, RESYNC };
-constexpr int kVersion = 1;
+enum : uint8_t { HELLO = 1, WELCOME, DENY, DOC, PATCH, PRES, PEERS, HASH, RESYNC, COPIES };
+constexpr int kVersion = 2;   // 2: los invitados no se quedan el proyecto (COPIES); un editor viejo si se lo quedaria
 constexpr uint32_t kMaxFrame = 512u << 20;
 
 struct Conn {
@@ -35,6 +35,7 @@ std::vector<Peer> g_peers;
 Peer g_self;
 std::string g_code, g_status, g_hostName, g_joinCode;
 json g_shadow;                          // ultima version del proyecto ya enviada (con lo recibido aplicado)
+bool g_copies = false;                 // anfitrion: deja que los invitados guarden una copia; cliente: lo que dijo el anfitrion
 bool g_haveShadow = false, g_connected = false, g_presDirty = true, g_discover = false;
 int g_nextId = 2, g_pending = 0;        // cliente: cambios propios que el anfitrion aun no devolvio
 uint64_t g_seq = 0, g_hashSeq = ~0ull;
@@ -223,7 +224,7 @@ void updateHost(Project &proj, Events &ev) {
                 c.id = g_nextId++; c.ready = true;
                 Peer p; p.id = c.id; p.name = jstr(j, "name", "Invitado"); p.color = (uint32_t)jnum(j, "color", colorFor(c.id));
                 g_peers.push_back(p);
-                queueJson(c, WELCOME, {{"id", c.id}, {"host", g_self.name}, {"peers", peersJson()}});
+                queueJson(c, WELCOME, {{"id", c.id}, {"host", g_self.name}, {"peers", peersJson()}, {"copias", g_copies}});
                 queue(c, DOC, packDoc(proj.doc));
                 broadcast(PEERS, peersJson().dump(), c.id);
                 for (auto &o : g_peers) if (o.id != c.id) queueJson(c, PRES, presJson(o));
@@ -301,10 +302,13 @@ void updateClient(Project &proj, Events &ev) {
         if (t == WELCOME) {
             g_self.id = (int)jnum(j, "id", 0);
             g_hostName = jstr(j, "host", "el anfitrión");
+            g_copies = j.is_object() && j.value("copias", false);
             g_status = "Recibiendo el proyecto...";
         } else if (t == DENY) {
             finish(ev, jstr(j, "msg", "El anfitrión no te dejó entrar"), true);
             return;
+        } else if (t == COPIES) {
+            g_copies = j.is_object() && j.value("on", false);
         } else if (t == PEERS) {
             std::vector<Peer> np;
             for (auto &e : j) {
@@ -375,7 +379,7 @@ bool host(Project &proj, const std::string &name, uint32_t color, std::string &e
     g_self = Peer{}; g_self.id = 1; g_self.name = name; g_self.color = color;
     g_peers.clear(); g_nextId = 2; g_seq = 0; g_hashSeq = ~0ull;
     g_shadow = proj.doc; g_haveShadow = true;
-    g_role = Role::Host; g_presDirty = true;
+    g_role = Role::Host; g_copies = false; g_presDirty = true;
     return true;
 }
 
@@ -394,11 +398,18 @@ bool join(const std::string &addr, const std::string &code, const std::string &n
     g_conns.push_back(std::move(cn));
     g_self = Peer{}; g_self.name = name; g_self.color = color;
     g_joinCode = code; g_hostName = h;
-    g_peers.clear(); g_connected = false; g_haveShadow = false; g_pending = 0;
+    g_peers.clear(); g_connected = false; g_haveShadow = false; g_pending = 0; g_copies = false;
     g_role = Role::Client; g_presDirty = true;
     g_status = "Conectando con " + h + "...";
     return true;
 }
+
+void setAllowCopies(bool on) {
+    if (g_role == Role::Client || on == g_copies) return;
+    g_copies = on;
+    if (g_role == Role::Host) broadcast(COPIES, json{{"on", on}}.dump());
+}
+bool allowCopies() { return g_copies; }
 
 void stop() {
     for (auto &c : g_conns) { flush(c); net::close(c.s); }
@@ -462,7 +473,6 @@ std::vector<NetAddr> localAddrs() {
         std::sscanf(i.ip.c_str(), "%u.%u", &a, &b);
         std::string kind = "Otra";
         if ((a == 100 && b >= 64 && b < 128) || low.find("tailscale") != std::string::npos) kind = "Tailscale";
-        else if (low.rfind("bnep", 0) == 0 || low.find("bluetooth") != std::string::npos || low.rfind("pan", 0) == 0) kind = "Bluetooth";
         else if (i.ip.rfind("10.42.0.", 0) == 0 || i.ip.rfind("192.168.137.", 0) == 0 || low.rfind("ap", 0) == 0) kind = "Zona WiFi";
         else if (low.rfind("wl", 0) == 0 || low.find("wi-fi") != std::string::npos || low.find("wlan") != std::string::npos || low.find("inal") != std::string::npos) kind = "WiFi";
         else if (low.rfind("en", 0) == 0 || low.rfind("eth", 0) == 0 || low.find("ethernet") != std::string::npos) kind = "Cable";

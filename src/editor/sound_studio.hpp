@@ -10,6 +10,7 @@
 #include "assets.hpp"
 
 namespace sound {
+bool anyPlaying();                        // algun editor de Source Sound esta sonando (el editor no baja los fps)
 json newSong(const std::string &name, bool sfx = false);
 std::vector<int16_t> render(const json &song, int rate);            // la cancion o el efecto entero
 std::string wavBytes(const std::vector<int16_t> &pcm, int rate);     // archivo .wav (16 bits, mono)

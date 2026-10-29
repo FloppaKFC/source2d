@@ -252,6 +252,7 @@ void stopAll() {
 }
 
 static Editor *g_playing = nullptr;
+bool anyPlaying() { return g_playing != nullptr; }
 // reproductor de la galeria (Inicio > Source Sound): uno a la vez, como las notas de voz
 static std::string g_clipKey;
 static double g_clipStart = 0, g_clipLen = 0;

@@ -90,6 +90,8 @@ static unsigned char *lzss_unpack(const unsigned char *in, size_t inlen, size_t 
 /* ruta de este ejecutable: /proc/self/exe en Linux, GetModuleFileName en Windows */
 #ifdef _WIN32
 #include <windows.h>
+#include <io.h>
+#include <fcntl.h>
 static const char *self_path(void) {
     static char p[MAX_PATH * 4];
     DWORD n = GetModuleFileNameA(NULL, p, sizeof p);
@@ -337,6 +339,10 @@ static JSValue n_musicPlaying(JSContext *c, JSValueConst t, int argc, JSValueCon
 #include <sys/stat.h>
 #define s2d_mkdir(p) mkdir(p, 0755)
 #endif
+/* --tienda <id> (juegos de Source Play, de otras personas): su carpeta de datos y sus partidas van aparte
+   (<datos>/tienda/<id>), y solo puede escribir y borrar ahi; leer, esa carpeta y Documentos */
+static int sandbox_tienda = 0;
+static char tienda_id[64];
 static const char *store_path(int create_dir) {
     static char path[2048];
     const char *env = getenv("S2D_STORE");
@@ -356,6 +362,19 @@ static const char *store_path(int create_dir) {
     snprintf(dir, sizeof dir, "%s/source2d", share);
 #endif
     if (create_dir) s2d_mkdir(dir);
+    if (sandbox_tienda) {   /* partidas de un juego de Source Play: aparte de las de los demas */
+        size_t l = strlen(dir);
+#ifdef _WIN32
+        snprintf(dir + l, sizeof dir - l, "\\tienda");
+        if (create_dir) s2d_mkdir(dir);
+        l = strlen(dir); snprintf(dir + l, sizeof dir - l, "\\%s", tienda_id);
+#else
+        snprintf(dir + l, sizeof dir - l, "/tienda");
+        if (create_dir) s2d_mkdir(dir);
+        l = strlen(dir); snprintf(dir + l, sizeof dir - l, "/%s", tienda_id);
+#endif
+        if (create_dir) s2d_mkdir(dir);
+    }
     snprintf(path, sizeof path, "%s%sdatos.json", dir,
 #ifdef _WIN32
              "\\"
@@ -407,6 +426,7 @@ static JSValue n_storeWrite(JSContext *c, JSValueConst t, int argc, JSValueConst
    (.ssh, .bashrc, .config, .mozilla...) y AppData, donde estan las claves y los perfiles del navegador. Asi un proyecto
    ajeno no puede leer secretos ni borrar o cambiar archivos fuera de sus carpetas. */
 static void user_dirs(char home[2048], char data[2100], char docs[2100]);
+
 /* ruta absoluta, con "/", sin "." ni ".." (y en Linux con los enlaces resueltos), para comparar */
 static void norm_path(const char *p, char *out, size_t n) {
     char abs[8192], tmp[8192];
@@ -460,6 +480,11 @@ static int file_allowed(const char *p, int write) {
     char home[2048] = "", data[2100] = "", docs[2100] = "", np[8192], nh[8192], nd[8192], nc[8192];
     user_dirs(home, data, docs);
     norm_path(p, np, sizeof np); norm_path(home, nh, sizeof nh); norm_path(data, nd, sizeof nd); norm_path(docs, nc, sizeof nc);
+    if (sandbox_tienda) {
+        if (under(np, nd) || (!write && under(np, nc))) return 1;
+        fprintf(stderr, "Source 2D: un juego de Source Play solo puede %s %s\n", write ? "escribir en su carpeta de datos, no en" : "leer su carpeta de datos y Documentos, no", p);
+        return 0;
+    }
     if (under(np, nd) || under(np, nc)) return 1;
     (void)nh;
     if (!write) {
@@ -616,11 +641,13 @@ static void user_dirs(char home[2048], char data[2100], char docs[2100]) {
     const char *h = getenv("USERPROFILE"), *ad = getenv("APPDATA");
     snprintf(home, 2048, "%s", h ? h : ".");
     snprintf(data, 2100, "%s\\Source2D", ad ? ad : home);
+    if (sandbox_tienda) { size_t l = strlen(data); snprintf(data + l, 2100 - l, "\\tienda\\%s", tienda_id); }
     snprintf(docs, 2100, "%s\\Documents", home);
 #else
     const char *h = getenv("HOME"), *xdg = getenv("XDG_DATA_HOME");
     snprintf(home, 2048, "%s", h ? h : ".");
     if (xdg && *xdg) snprintf(data, 2100, "%s/source2d", xdg); else snprintf(data, 2100, "%s/.local/share/source2d", home);
+    if (sandbox_tienda) { size_t l = strlen(data); snprintf(data + l, 2100 - l, "/tienda/%s", tienda_id); }
     struct stat st;
     snprintf(docs, 2100, "%s/Documentos", home);
     if (stat(docs, &st) != 0) snprintf(docs, 2100, "%s/Documents", home);
@@ -1040,10 +1067,43 @@ static void dispatch(const char *type, const char *key, int rep, int x, int y, i
     call_global("__dispatch", 6, argv);
 }
 
+#ifdef PLAYER
+/* --stdin: el proyecto llega por la entrada estandar (Source Play: el editor lo descifra en memoria y no toca el disco) */
+static char *read_stdin_all(size_t *len) {
+#ifdef _WIN32
+    _setmode(_fileno(stdin), _O_BINARY);
+#endif
+    size_t cap = 1 << 20, n = 0;
+    char *b = malloc(cap + 1);
+    if (!b) return NULL;
+    for (;;) {
+        if (n == cap) {
+            char *nb = cap < ((size_t)1 << 30) ? realloc(b, cap * 2 + 1) : NULL;
+            if (!nb) { free(b); return NULL; }
+            b = nb; cap *= 2;
+        }
+        size_t r = fread(b + n, 1, cap - n, stdin);
+        if (!r) break;
+        n += r;
+    }
+    b[n] = 0;
+    *len = n;
+    return n ? b : (free(b), NULL);
+}
+#endif
 int main(int argc, char **argv) {
     const char *project_path = NULL;
+    int from_stdin = 0;
     for (int ai = 1; ai < argc; ai++) {
         if (strcmp(argv[ai], "--fps") == 0) show_fps = 1;
+        else if (strcmp(argv[ai], "--stdin") == 0) from_stdin = 1;
+        else if (strcmp(argv[ai], "--tienda") == 0 && ai + 1 < argc) {
+            const char *id = argv[++ai];
+            size_t k = 0;
+            for (; id[k] && k < sizeof tienda_id - 1; k++) tienda_id[k] = (isalnum((unsigned char)id[k]) || id[k] == '-' || id[k] == '_') ? id[k] : '_';
+            tienda_id[k] = 0;
+            sandbox_tienda = tienda_id[0] != 0;
+        }
         else if (strcmp(argv[ai], "--fixed-step") == 0) fixed_step = 1;
         else if (strcmp(argv[ai], "--profile") == 0) profile = 1;
         else if (strcmp(argv[ai], "--debug") == 0) debug_mode = 1;
@@ -1080,6 +1140,10 @@ int main(int argc, char **argv) {
         proj_len = plen; payload = NULL;
         project_title(proj, NULL, title, sizeof title);
     }
+    if (!payload && !proj && from_stdin) {
+        proj = read_stdin_all(&proj_len);
+        if (proj) project_title(proj, NULL, title, sizeof title);
+    }
     /* exportado a carpeta: el motor solo, con el juego en datos/juego.source2d.json a su lado */
     static char beside[4096];
     if (!payload && !proj && !project_path && self_path()) {
@@ -1106,7 +1170,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 #else
-    (void)project_path;
+    (void)project_path; (void)from_stdin;
     if (!payload) {
         fprintf(stderr, "Source 2D engine: este ejecutable no contiene un juego.\n");
         return 1;

@@ -11,6 +11,7 @@
 #include <ctime>
 #include <functional>
 #include <future>
+#include <thread>
 #include <map>
 #include <set>
 #include <memory>
@@ -30,6 +31,9 @@
 #include "layers_autotiles.hpp"
 #include "sound_studio.hpp"
 #include "tiles_obj.hpp"
+#include "tienda.hpp"
+#include "envio.hpp"
+#include "cerrado.hpp"
 #include "fonts.hpp"
 #include "project_docs.hpp"
 #include "assets.hpp"
@@ -197,7 +201,13 @@ static bool projectHasCode(const json &doc) {
 
 static std::string newProjectPath(const std::string &name);
 static void refreshProjectList();
+static void askLockedProject(const std::string &file);
 static void openProject(std::string file, bool trusted = false) {
+    {   // proyecto cerrado de Source Play (original.s2dcerrado): pide la clave de su creador
+        std::ifstream in(fs::u8path(file), std::ios::binary);
+        char head[8] = {0};
+        if (in.read(head, 8) && cerrado::isLocked(std::string(head, 8))) { askLockedProject(file); return; }
+    }
     Project p;
     std::string err;
     if (!p.load(file, err)) { notify(err, true); return; }
@@ -250,7 +260,15 @@ static void closeProject() {
 
 static void saveVersion(const std::string &kind);
 static void clearRecovery();
+// invitado en una sesion sin permiso de copias: el proyecto es del anfitrion, no se guarda ni se exporta aqui
+static bool guestLocked() { return collab::role() == collab::Role::Client && !collab::allowCopies(); }
+static bool guestBlocked() {
+    if (!guestLocked()) return false;
+    notify("Es el proyecto de otra persona: solo puede guardarlo o exportarlo el anfitrión", true);
+    return true;
+}
 static bool saveProject(const std::string &file) {
+    if (guestBlocked()) return false;
     syncEditors();
     app.proj.doc["engine"] = S2D_VERSION;
     app.proj.doc["engineNum"] = S2D_VERSION_NUM;
@@ -267,6 +285,7 @@ static bool saveProject(const std::string &file) {
 static std::string projectsDir();
 
 static void saveAs() {
+    if (guestBlocked()) return;
     std::string start = app.proj.path.empty() ? projectsDir() : fs::path(app.proj.path).parent_path().string();
     std::string sug = app.proj.path.empty() ? app.proj.name() + ".source2d.json" : fs::path(app.proj.path).filename().string();
     for (char &c : sug) if (c == ' ') c = '_';
@@ -276,13 +295,14 @@ static void save() { if (app.proj.path.empty()) saveAs(); else saveProject(app.p
 
 static void openDialog() {
     std::string start = app.hasProject && !app.proj.path.empty() ? fs::path(app.proj.path).parent_path().string() : ui::homeDir();
-    app.fileDlg.show(ui::FileDialog::Open, "Abrir proyecto", ".json|.source2d", start, "", [](const std::string &f) { openProject(f); });
+    app.fileDlg.show(ui::FileDialog::Open, "Abrir proyecto", ".json|.source2d|.s2dcerrado", start, "", [](const std::string &f) { openProject(f); });
 }
 // Exportar > Solo para Source 2D: el proyecto entero en un .source2d (el mismo JSON) para pasarlo a otro Source 2D
 // (comprimido como la exportacion ligera; en segundo plano, que un proyecto grande tarda unos segundos)
 static std::future<std::string> g_sourceExport;   // "" si salio bien, si no el error
 static std::string g_sourceExportFile;
 static void exportSourceGame(const std::string &f) {
+    if (guestBlocked()) return;
     if (g_sourceExport.valid()) { notify("Ya se está exportando un .source2d", true); return; }
     syncEditors();
     json d = app.proj.doc;
@@ -362,22 +382,18 @@ static std::string writeTempProject(const std::string &firstScene = "") {
     return f;
 }
 
-static void spawnPlayer(const std::string &pl, const std::string &f) {
-    sys::Proc pr;
-    std::vector<std::string> args = {pl};
-    if (app.vulkan) args.push_back("--vulkan");
-    args.push_back(f);
-    if (sys::spawn(args, &pr)) { app.children.push_back(pr); notify("Ejecutando el juego..."); }
-    else notify("No se pudo ejecutar el jugador", true);
-}
-
-// prueba un proyecto que no esta abierto (los juegos de ejemplo del apartado Prueba)
-static void playDoc(const json &doc) {
+// juega un proyecto que no esta abierto (ejemplos, Source Play): le llega al jugador por la entrada estandar, sin
+// escribirlo en el disco (los juegos cerrados de Source Play se descifran solo en memoria)
+static void playDoc(const json &doc, const std::string &tienda = "") {   // tienda: id de un juego de Source Play (jugador estricto)
     std::string pl = playerPath();
     if (pl.empty()) { notify("No se pudo preparar la prueba", true); return; }
-    std::string f = app.tmpDir + "/ejemplo.source2d.json";
-    std::ofstream(f) << doc.dump();
-    spawnPlayer(pl, f);
+    std::vector<std::string> args = {pl};
+    if (app.vulkan) args.push_back("--vulkan");
+    if (!tienda.empty()) { args.push_back("--tienda"); args.push_back(tienda); }
+    args.push_back("--stdin");
+    sys::Proc pr;
+    if (sys::spawnFeed(args, doc.dump(), &pr)) { app.children.push_back(pr); notify("Ejecutando el juego..."); }
+    else notify("No se pudo ejecutar el jugador", true);
 }
 
 // antes de jugar: condiciones y acciones que usan objetos borrados (el juego las ignoraria sin decir nada)
@@ -409,6 +425,22 @@ static void checkProjectProblems() {
 static void playProject(const std::string &firstScene = "") {
     checkProjectProblems();
     school::note("preview");
+    if (guestLocked()) {   // proyecto de otra persona: llega al jugador por memoria, sin copia en el disco
+        syncEditors();
+        json doc = app.proj.doc;
+        if (!firstScene.empty() && doc.contains("scenes")) {
+            json &scs = doc["scenes"];
+            for (size_t i = 0; i < scs.size(); i++) if (jstr(scs[i], "id") == firstScene) { json sc = scs[i]; scs.erase(scs.begin() + i); scs.insert(scs.begin(), sc); break; }
+        }
+        std::string pl = playerPath();
+        sys::Proc pr;
+        std::vector<std::string> args = {pl, "--debug"};
+        if (app.vulkan) args.push_back("--vulkan");
+        args.push_back("--stdin");
+        if (!pl.empty() && sys::spawnFeed(args, doc.dump(), &pr)) { app.children.push_back(pr); notify("Ejecutando el juego (F3: depurador)"); }
+        else notify("No se pudo ejecutar el jugador", true);
+        return;
+    }
     std::string pl = playerPath(), f = writeTempProject(firstScene);
     if (pl.empty() || f.empty()) { notify("No se pudo preparar la prueba", true); return; }
     // vista previa con el depurador: F3 panel, F6 pausa, F7 un fotograma
@@ -427,6 +459,7 @@ static std::vector<ExportJob> g_exports;
 static json optimizedDoc(json doc);
 static void exportGame(const std::string &out, const std::string &os, bool lite, bool optimize = false, bool folder = false) {
     if (!app.hasProject) { notify("Abre un proyecto para exportarlo", true); return; }
+    if (guestBlocked()) return;
     syncEditors();
     notify("Exportando " + fs::path(out).filename().string() + "...");
     school::note("export");
@@ -1164,7 +1197,7 @@ static void createProject(const std::string &name, int w = 960, int h = 540) {
 
 // cambiar de proyecto con cambios sin guardar pide confirmacion
 static void guardSwitch(std::function<void()> f) {
-    if (app.hasProject && app.proj.dirty) { app.pendingSwitch = std::move(f); app.askSwitch = true; }
+    if (app.hasProject && app.proj.dirty && !guestLocked()) { app.pendingSwitch = std::move(f); app.askSwitch = true; }
     else f();
 }
 
@@ -1323,7 +1356,7 @@ static std::string recoveryDir() { return ui::configDir() + "/recuperacion"; }
 static std::string recoveryFile() { return recoveryDir() + "/" + (jstr(app.proj.doc, "id").empty() ? "sin-id" : jstr(app.proj.doc, "id")) + ".json"; }
 static void clearRecovery() { std::error_code ec; if (app.hasProject) fs::remove(recoveryFile(), ec); }
 static void recoveryTick() {
-    if (!prefs().safeSave || !app.hasProject || !app.proj.dirty || !app.script.empty()) return;
+    if (!prefs().safeSave || !app.hasProject || !app.proj.dirty || !app.script.empty() || guestLocked()) return;
     double now = GetTime();
     if (now - app.lastRecovery < 5) return;
     app.lastRecovery = now;
@@ -1492,6 +1525,456 @@ static void drawTestsSection(bool templates) {
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 640);
         ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kText2), "Todavía no hay juegos aquí.");
         ImGui::PopTextWrapPos();
+    }
+}
+
+static std::string fechaBonita(const std::string &f);
+/* ---------------- Source Play: la tienda de juegos (tienda.hpp, envio.hpp, cerrado.hpp) ----------------
+   Descargar, jugar y ver por dentro los juegos aprobados; publicar el propio (con GitHub) y seguir los envios. */
+static const Texture2D *newsImage(const std::string &path);
+static const char *const kCategorias[] = {"Plataformas", "Aventura", "Acción", "Puzles", "Ritmo", "Carreras", "Deportes", "Arcade", "Terror", "Otros"};
+constexpr int kNumCategorias = sizeof kCategorias / sizeof kCategorias[0];
+struct SourcePlayUI {
+    char buscar[96] = "";
+    int categoria = 0;                                    // 0 = todas; si no, indice + 1 de categorias()
+    // Publicar en Source Play
+    bool showPublish = false, abierto = true, normas = false, aCarpeta = false;
+    char nombre[80] = "", descripcion[600] = "", clave[128] = "", clave2[128] = "";
+    int cat = 0;
+    std::future<std::string> armando;                     // el paquete se arma en segundo plano ("" = bien)
+    envio::Paquete paquete;
+    std::string carpeta, msg;
+    bool msgErr = false;
+    // Ver por dentro de un juego cerrado
+    bool showFuente = false;
+    std::string fuenteId, fuenteNombre, fuenteErr, fuenteArchivo;   // fuenteArchivo: un .s2dcerrado abierto desde el disco
+    char fuenteClave[128] = "";
+    std::future<std::string> abriendo;
+    json fuenteDoc;
+};
+static SourcePlayUI g_sp;
+
+static std::string slugOf(const std::string &s) {
+    std::string o;
+    for (size_t i = 0; i < s.size(); i++) {
+        unsigned char c = s[i];
+        if (c < 0x80) {
+            if (isalnum(c)) o += (char)tolower(c);
+            else if (!o.empty() && o.back() != '-') o += '-';
+            continue;
+        }
+        // vocales con tilde, ñ y ü (UTF-8 de 2 bytes) -> sin tilde
+        if (i + 1 < s.size()) {
+            static const char *from[] = {"á", "é", "í", "ó", "ú", "ñ", "ü", "Á", "É", "Í", "Ó", "Ú", "Ñ", "Ü"}, *to = "aeiounuaeiounu";
+            for (int k = 0; k < 14; k++) if (s.compare(i, 2, from[k]) == 0) { o += to[k]; break; }
+            i++;
+        }
+    }
+    while (!o.empty() && o.back() == '-') o.pop_back();
+    if (o.size() > 40) o.resize(40);
+    while (!o.empty() && o.back() == '-') o.pop_back();
+    return o.empty() ? "juego" : o;
+}
+static void wipeBuf(char *b, size_t n) { volatile char *p = b; for (size_t i = 0; i < n; i++) p[i] = 0; }
+
+// abre una copia de un proyecto (ver por dentro) y la guarda en los proyectos de esta persona
+static void openDocCopy(json doc, const std::string &name) {
+    guardSwitch([doc, name] {
+        newProject(name);
+        app.proj.doc = doc;
+        migrateSceneTilemaps(app.proj.doc);
+        app.proj.doc["id"] = makeUid("p");
+        app.proj.doc["name"] = name + " (mi versión)";
+        app.proj.rev++;
+        loadPaletteFrom(app.proj.doc);
+        std::string f = newProjectPath(jstr(app.proj.doc, "name"));
+        std::error_code ec;
+        fs::create_directories(fs::path(f).parent_path(), ec);
+        saveProject(f);
+        refreshProjectList();
+        notify("Copia de " + name + " guardada en tus proyectos");
+    });
+}
+static void playInstalled(const std::string &id) {
+    json doc; std::string err;
+    if (!tienda::leer(id, doc, err)) { notify(err, true); return; }
+    playDoc(doc, id);   // por la entrada estandar (el juego descifrado no toca el disco) y con el jugador estricto
+}
+
+// tarjeta de un juego de la tienda
+static void sourcePlayCard(const tienda::Juego &j, float w) {
+    ImGui::PushID(j.id.c_str());
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ui::kPanel);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16, 14));
+    ImGui::BeginChild("##sp", ImVec2(w, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
+    float iw = w - 32, ih = iw * 9 / 16;
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    if (const Texture2D *t = newsImage(j.portadaLocal)) ImGui::Image((ImTextureID)(intptr_t)t->id, ImVec2(iw, ih));
+    else {
+        dl->AddRectFilled(p, ImVec2(p.x + iw, p.y + ih), ui::kPanel2, 8);
+        ui::drawIcon(dl, ui::Icon::Gamepad, ImVec2(p.x + iw / 2, p.y + ih / 2), 40, ui::kDim);
+        ImGui::Dummy(ImVec2(iw, ih));
+    }
+    ImGui::PushFont(ui::boldFont(), 19);
+    ImGui::TextUnformatted(j.nombre.c_str());
+    ImGui::PopFont();
+    ImGui::TextDisabled("por %s · %s%s", j.autor.c_str(), j.categoria.c_str(), j.abierto ? "" : " · Cerrado");
+    long long d = tienda::descargas(j.id), g = tienda::meGusta(j.id);
+    std::string cifras = (d >= 0 ? std::to_string(d) : "-") + " descargas   " + (g >= 0 ? std::to_string(g) : "-") + " me gusta   · versión " + std::to_string(j.version);
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kText2), "%s", cifras.c_str());
+    if (!j.descripcion.empty()) {
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + iw);
+        ImGui::TextUnformatted(j.descripcion.c_str());
+        ImGui::PopTextWrapPos();
+    }
+    ImGui::Dummy(ImVec2(0, 2));
+    tienda::Estado st = tienda::estadoDe(j);
+    if (st == tienda::Estado::Descargando) {
+        float pr = std::max(0.0f, tienda::progreso(j.id));
+        ImGui::ProgressBar(pr, ImVec2(iw, 0), (std::to_string((int)(pr * 100)) + " %").c_str());
+    } else {
+        if (st == tienda::Estado::NoInstalado) { if (homeButton("Descargar", true, 32)) tienda::descargar(j); }
+        else {
+            if (homeButton("Jugar", true, 32)) playInstalled(j.id);
+            if (st == tienda::Estado::Actualizable) { ImGui::SameLine(); if (homeButton("Actualizar", false, 32)) tienda::descargar(j); }
+        }
+        ImGui::SameLine();
+        bool gusta = tienda::leGusta(j.id);
+        if (homeButton(gusta ? "Te gusta" : "Me gusta", false, 32) && !gusta) tienda::darMeGusta(j);
+        ImGui::SameLine();
+        if (homeButton("...", false, 32)) ImGui::OpenPopup("##mas");
+        if (ImGui::BeginPopup("##mas")) {
+            bool inst = st != tienda::Estado::NoInstalado;
+            if (j.abierto) {
+                if (ImGui::MenuItem("Ver por dentro", nullptr, false, inst)) {
+                    json doc; std::string err;
+                    if (tienda::leer(j.id, doc, err)) openDocCopy(doc, j.nombre); else notify(err, true);
+                }
+                if (!inst && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("Descárgalo primero");
+            } else if (ImGui::MenuItem("Ver por dentro (con la clave del creador)")) {
+                g_sp.showFuente = true; g_sp.fuenteId = j.id; g_sp.fuenteNombre = j.nombre; g_sp.fuenteErr.clear(); g_sp.fuenteArchivo.clear();
+                tienda::pedirFuente(j);
+            }
+            if (ImGui::MenuItem("Borrar de este equipo", nullptr, false, inst)) { tienda::borrar(j.id); notify(j.nombre + " borrado"); }
+            if (ImGui::MenuItem("Denunciar...")) app.pendingLink = tienda::urlDenuncia(j);
+            ImGui::EndPopup();
+        }
+    }
+    std::string err = tienda::error(j.id);
+    if (!err.empty()) ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.5f, 1.0f), "%s", err.c_str());
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+    ImGui::PopID();
+}
+
+static bool containsNoCase(const std::string &hay, const std::string &needle) {
+    if (needle.empty()) return true;
+    std::string a = hay, b = needle;
+    for (auto &c : a) c = (char)tolower((unsigned char)c);
+    for (auto &c : b) c = (char)tolower((unsigned char)c);
+    return a.find(b) != std::string::npos;
+}
+
+static void drawSourcePlaySection() {
+    sectionTitle("Source Play", 30);
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kText2), "Juegos hechos con Source 2D, gratis: búscalos, descárgalos y juega.");
+    ImGui::Dummy(ImVec2(0, 6));
+    tienda::mirarContadores();
+    ImGui::SetNextItemWidth(320);
+    ImGui::InputTextWithHint("##buscar", "Buscar juegos o autores", g_sp.buscar, sizeof g_sp.buscar);
+    ImGui::SameLine();
+    std::vector<std::string> cats = tienda::categorias();
+    if (g_sp.categoria > (int)cats.size()) g_sp.categoria = 0;
+    ImGui::SetNextItemWidth(180);
+    if (ImGui::BeginCombo("##cat", g_sp.categoria ? cats[g_sp.categoria - 1].c_str() : "Todas las categorías")) {
+        if (ImGui::Selectable("Todas las categorías", g_sp.categoria == 0)) g_sp.categoria = 0;
+        for (int i = 0; i < (int)cats.size(); i++) if (ImGui::Selectable(cats[i].c_str(), g_sp.categoria == i + 1)) g_sp.categoria = i + 1;
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    if (homeButton("Publicar mi juego", true, ImGui::GetFrameHeight())) {
+        if (!app.hasProject) notify("Abre el proyecto de tu juego para publicarlo", true);
+        else if (guestBlocked()) {}
+        else {
+            g_sp.showPublish = true; g_sp.msg.clear();
+            snprintf(g_sp.nombre, sizeof g_sp.nombre, "%s", app.proj.name().c_str());
+        }
+    }
+    std::string st = tienda::estado();
+    if (!st.empty()) ImGui::TextDisabled("%s", st.c_str());
+    ImGui::Dummy(ImVec2(0, 8));
+
+    float avail = ImGui::GetContentRegionAvail().x, gap = 20;
+    int cols = std::max(1, std::min(3, (int)((avail + gap) / (360 + gap))));
+    float w = std::min(460.0f, (avail - gap * (cols - 1)) / cols);
+    int k = 0;
+    for (auto &j : tienda::juegos()) {
+        if (g_sp.categoria && j.categoria != cats[g_sp.categoria - 1]) continue;
+        if (!containsNoCase(j.nombre, g_sp.buscar) && !containsNoCase(j.autor, g_sp.buscar) && !containsNoCase(j.descripcion, g_sp.buscar)) continue;
+        if (k++ % cols) ImGui::SameLine(0, gap);
+        ImGui::BeginGroup();
+        sourcePlayCard(j, w);
+        ImGui::EndGroup();
+    }
+    if (!k && !tienda::juegos().empty()) ImGui::TextDisabled("Ningún juego coincide con la búsqueda.");
+    // descargados que ya no estan en el catalogo
+    auto viejos = tienda::instaladosSinCatalogo();
+    if (!viejos.empty()) {
+        ImGui::Dummy(ImVec2(0, 10));
+        sectionTitle("Ya no están en Source Play", 20);
+        for (auto &id : viejos) {
+            ImGui::PushID(id.c_str());
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(tienda::nombreInstalado(id).c_str());
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Jugar")) playInstalled(id);
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Borrar")) tienda::borrar(id);
+            ImGui::PopID();
+        }
+    }
+    // mis envios
+    envio::mirarMios();
+    if (envio::conectado() && !envio::mios().empty()) {
+        ImGui::Dummy(ImVec2(0, 10));
+        sectionTitle("Mis envíos", 20);
+        for (auto &m : envio::mios()) {
+            ImVec4 col = m.estado == "aprobado" ? ImVec4(0.5f, 0.9f, 0.6f, 1) : m.estado == "rechazado" ? ImVec4(1, 0.55f, 0.5f, 1) : ImVec4(0.8f, 0.8f, 0.85f, 1);
+            ImGui::TextColored(col, "%s", m.estado == "aprobado" ? "Aprobado" : m.estado == "rechazado" ? "Rechazado" : "En revisión");
+            ImGui::SameLine();
+            ImGui::Text("%s  ·  %s", m.nombre.c_str(), fechaBonita(m.fecha).c_str());
+            if (!m.motivo.empty()) { ImGui::SameLine(); ImGui::TextDisabled("(%s)", m.motivo.c_str()); }
+        }
+    }
+    // los juegos de ejemplo que trae el editor
+    int ej = 0;
+    for (auto &g : exampleGames()) if (!g.doc.empty() && !g.tpl) ej++;
+    if (ej) {
+        ImGui::Dummy(ImVec2(0, 14));
+        sectionTitle("Juegos de ejemplo", 20);
+        float w2 = std::min(620.0f, (avail - gap) / (avail > 1100 ? 2 : 1));
+        int c2 = avail > 1100 ? 2 : 1, n = 0;
+        for (int i = 0; i < (int)exampleGames().size(); i++) {
+            if (exampleGames()[i].doc.empty() || exampleGames()[i].tpl) continue;
+            if (n++ % c2) ImGui::SameLine(0, gap);
+            ImGui::BeginGroup();
+            exampleCard(i, w2);
+            ImGui::EndGroup();
+        }
+    }
+}
+
+// arma el paquete del envio: info.json, portada.png y el juego (abierto: .source2d; cerrado: copia para jugar +
+// proyecto original con la clave). Lo pesado (LZMA, Argon2) va en segundo plano.
+static void startPackage(bool toFolder) {
+    std::string err;
+    std::string nombre = g_sp.nombre;
+    while (!nombre.empty() && nombre.back() == ' ') nombre.pop_back();
+    if (nombre.empty()) { g_sp.msg = "Ponle un nombre al juego"; g_sp.msgErr = true; return; }
+    if (!g_sp.normas) { g_sp.msg = "Marca que tu juego cumple las normas de Source Play"; g_sp.msgErr = true; return; }
+    std::string clave = g_sp.clave;
+    if (!g_sp.abierto) {
+        if (!cerrado::claveValida(clave, err)) { g_sp.msg = err; g_sp.msgErr = true; return; }
+        if (clave != g_sp.clave2) { g_sp.msg = "Las dos claves no coinciden"; g_sp.msgErr = true; return; }
+    }
+    syncEditors();
+    json doc = app.proj.doc;
+    doc["engine"] = S2D_VERSION; doc["engineNum"] = S2D_VERSION_NUM;
+    std::string autor = envio::conectado() ? envio::usuario() : prefs().name.empty() ? "anónimo" : prefs().name;
+    std::string id = slugOf(autor + "-" + nombre);
+    // portada: la primera pantalla del juego
+    std::vector<Px> px;
+    renderProjectThumb(doc, kThumbW * 2, kThumbH * 2, px);
+    Image im = {px.data(), kThumbW * 2, kThumbH * 2, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8};
+    int pngN = 0;
+    unsigned char *png = ExportImageToMemory(im, ".png", &pngN);
+    std::string portada(png ? (const char *)png : "", png ? (size_t)pngN : 0);
+    if (png) MemFree(png);
+    char fecha[16]; time_t t = time(nullptr); tm lt; sys::localTime(t, lt); strftime(fecha, sizeof fecha, "%Y-%m-%d", &lt);
+    json info = {{"formato", "source2d-envio"}, {"id", id}, {"nombre", nombre}, {"descripcion", std::string(g_sp.descripcion)},
+                 {"categoria", kCategorias[std::clamp(g_sp.cat, 0, kNumCategorias - 1)]}, {"autor", autor}, {"abierto", g_sp.abierto},
+                 {"motor", S2D_VERSION}, {"fecha", fecha}};
+    bool abierto = g_sp.abierto;
+    wipeBuf(g_sp.clave, sizeof g_sp.clave); wipeBuf(g_sp.clave2, sizeof g_sp.clave2);
+    g_sp.aCarpeta = toFolder;
+    g_sp.paquete = envio::Paquete{};
+    g_sp.paquete.id = id; g_sp.paquete.nombre = nombre;
+    g_sp.msg = abierto ? "Preparando el juego..." : "Cifrando el juego (unos segundos)...";
+    g_sp.msgErr = false;
+    g_sp.armando = std::async(std::launch::async, [doc, info, portada, abierto, clave]() mutable -> std::string {
+        auto &files = g_sp.paquete.archivos;
+        if (abierto) files["juego.source2d"] = exporter::sourcePack(doc);
+        else {
+            std::string llave;
+            files["juego.s2dplay"] = cerrado::lockPlay(exporter::sourcePack(cerrado::playCopy(doc)), llave);
+            files["original.s2dcerrado"] = cerrado::lockSource(exporter::sourcePack(doc), clave);
+            std::fill(clave.begin(), clave.end(), '\0');
+            if (llave.empty() || files["juego.s2dplay"].empty() || files["original.s2dcerrado"].empty()) return "No se pudo cifrar el juego";
+            info["llave"] = llave;
+        }
+        for (auto &kv : files) if (kv.second.empty()) return "No se pudo preparar " + kv.first;
+        if (!portada.empty()) files["portada.png"] = portada;
+        files["info.json"] = info.dump(1);
+        return "";
+    });
+}
+
+static void askLockedProject(const std::string &file) {
+    g_sp.showFuente = true; g_sp.fuenteId.clear(); g_sp.fuenteArchivo = file; g_sp.fuenteErr.clear();
+    fs::path fp = fs::u8path(file);
+    g_sp.fuenteNombre = fp.stem().u8string() == "original" && fp.has_parent_path() ? fp.parent_path().filename().u8string() : fp.stem().u8string();
+}
+static void drawSourcePlayDialogs() {
+    // el paquete termino de armarse: se guarda en la carpeta o se envia
+    if (g_sp.armando.valid() && g_sp.armando.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+        std::string err = g_sp.armando.get();
+        if (!err.empty()) { g_sp.msg = err; g_sp.msgErr = true; }
+        else if (g_sp.aCarpeta) {
+            std::string d = g_sp.carpeta + "/" + g_sp.paquete.id;
+            std::error_code ec;
+            fs::create_directories(fs::u8path(d), ec);
+            bool ok = !ec;
+            for (auto &kv : g_sp.paquete.archivos) { std::ofstream o(fs::u8path(d + "/" + kv.first), std::ios::binary); ok = ok && (o << kv.second); }
+            g_sp.msg = ok ? "Guardado en " + d : "No se pudo escribir en " + d;
+            g_sp.msgErr = !ok;
+        } else envio::enviar(g_sp.paquete);
+    }
+    if (g_sp.showPublish) { ImGui::OpenPopup("Publicar en Source Play"); g_sp.showPublish = false; }
+    ImGui::SetNextWindowSize(ImVec2(620, 0), ImGuiCond_Appearing);
+    if (ui::beginModal("Publicar en Source Play", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        bool busy = g_sp.armando.valid() || envio::enviando();
+        // cuenta de GitHub
+        if (envio::conectado()) {
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Cuenta de GitHub: %s", envio::usuario().c_str());
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Salir")) envio::salir();
+        } else if (envio::entrando() && !envio::codigo().empty()) {
+            ImGui::TextUnformatted("Escribe este código en GitHub y pulsa Authorize:");
+            ImGui::PushFont(ui::boldFont(), 30);
+            ImGui::TextUnformatted(envio::codigo().c_str());
+            ImGui::PopFont();
+            if (ImGui::Button("Abrir GitHub")) OpenURL(envio::urlCodigo().c_str());
+            ImGui::SameLine();
+            if (ImGui::Button("Copiar el código")) ImGui::SetClipboardText(envio::codigo().c_str());
+            ImGui::SameLine();
+            ImGui::TextDisabled("Esperando...");
+        } else {
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 570);
+            ImGui::TextUnformatted("Para enviar tu juego entra con tu cuenta de GitHub (gratis). Source 2D nunca ve tu contraseña.");
+            ImGui::PopTextWrapPos();
+            if (ImGui::Button(envio::entrando() ? "Conectando..." : "Entrar con GitHub") && !envio::entrando()) envio::entrar();
+        }
+        std::string ec = envio::errorCuenta();
+        if (!ec.empty()) ImGui::TextColored(ImVec4(1, 0.55f, 0.5f, 1), "%s", ec.c_str());
+        ImGui::Separator();
+        ImGui::BeginDisabled(busy);
+        ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Nombre"); ImGui::SameLine(110);
+        ImGui::SetNextItemWidth(300); ImGui::InputText("##spnom", g_sp.nombre, sizeof g_sp.nombre);
+        ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Categoría"); ImGui::SameLine(110);
+        ImGui::SetNextItemWidth(200); ImGui::Combo("##spcat", &g_sp.cat, kCategorias, kNumCategorias);
+        ImGui::TextUnformatted("Descripción");
+        ImGui::InputTextMultiline("##spdesc", g_sp.descripcion, sizeof g_sp.descripcion, ImVec2(570, 80));
+        if (ui::PixTexture *th = docThumb("sourceplay", app.proj.doc, app.proj.rev, false)) {
+            ImGui::Image((ImTextureID)(intptr_t)th->tex.id, ImVec2(192, 108));
+            ImGui::SameLine();
+            ImGui::TextDisabled("Portada: la primera pantalla\ndel juego.");
+        }
+        ImGui::Checkbox("Dejar ver por dentro (otros pueden abrirlo en el editor y aprender de él)", &g_sp.abierto);
+        if (!g_sp.abierto) {
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 570);
+            ImGui::TextColored(ImVec4(1, 0.78f, 0.35f, 1), "Juego cerrado: se cifra con una clave (mínimo 10 caracteres). Solo quien la sepa podrá abrirlo "
+                                                           "en el editor; los demás solo pueden jugarlo. Si la olvidas no se puede recuperar (ni Source Play puede): "
+                                                           "guarda tu proyecto en tu PC.");
+            ImGui::PopTextWrapPos();
+            ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Clave"); ImGui::SameLine(110);
+            ImGui::SetNextItemWidth(260); ImGui::InputText("##spk1", g_sp.clave, sizeof g_sp.clave, ImGuiInputTextFlags_Password);
+            ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Repítela"); ImGui::SameLine(110);
+            ImGui::SetNextItemWidth(260); ImGui::InputText("##spk2", g_sp.clave2, sizeof g_sp.clave2, ImGuiInputTextFlags_Password);
+            size_t n = 0; for (unsigned char c : std::string(g_sp.clave)) if ((c & 0xC0) != 0x80) n++;
+            if (n && n < cerrado::kMinClave) { ImGui::SameLine(); ImGui::TextDisabled("%zu/10", n); }
+        }
+        ImGui::Checkbox("Mi juego cumple las normas de Source Play", &g_sp.normas);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Leer las normas")) app.pendingLink = "https://github.com/FloppaKFC/source2d-envios/blob/main/NORMAS.md";
+        ImGui::EndDisabled();
+        ImGui::Dummy(ImVec2(0, 4));
+        ImGui::BeginDisabled(busy || !envio::conectado());
+        if (ui::primaryButton("Enviar a revisión", ImVec2(170, 0))) startPackage(false);
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::BeginDisabled(busy);
+        if (ImGui::Button("Guardar en una carpeta...", ImVec2(200, 0))) {
+            app.fileDlg.show(ui::FileDialog::Folder, "Carpeta para el paquete de Source Play", "", projectsDir(), "", [](const std::string &d) {
+                g_sp.carpeta = d;
+                startPackage(true);
+            });
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Cerrar", ImVec2(100, 0))) { wipeBuf(g_sp.clave, sizeof g_sp.clave); wipeBuf(g_sp.clave2, sizeof g_sp.clave2); ImGui::CloseCurrentPopup(); }
+        std::string m = envio::enviando() || (!envio::estadoEnvio().empty() && g_sp.msg.empty()) ? envio::estadoEnvio() : g_sp.msg;
+        bool merr = envio::enviando() ? false : (g_sp.msg.empty() ? envio::envioFallo() : g_sp.msgErr);
+        if (!g_sp.armando.valid() && !envio::estadoEnvio().empty() && !g_sp.aCarpeta && !g_sp.msgErr) { m = envio::estadoEnvio(); merr = envio::envioFallo(); }
+        if (!m.empty()) {
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 570);
+            ImGui::TextColored(merr ? ImVec4(1, 0.55f, 0.5f, 1) : ImVec4(0.6f, 0.9f, 0.7f, 1), "%s", m.c_str());
+            ImGui::PopTextWrapPos();
+        }
+        ImGui::EndPopup();
+    }
+
+    // ver por dentro un juego cerrado: clave del creador
+    if (g_sp.abriendo.valid() && g_sp.abriendo.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+        std::string err = g_sp.abriendo.get();
+        if (err.empty()) {
+            std::string nm = jstr(g_sp.fuenteDoc, "name");
+            openDocCopy(g_sp.fuenteDoc, nm.empty() ? g_sp.fuenteNombre : nm);
+            g_sp.fuenteDoc = json();
+        }
+        else { g_sp.fuenteErr = err; g_sp.showFuente = true; }
+    }
+    if (g_sp.showFuente) { ImGui::OpenPopup("Ver por dentro"); g_sp.showFuente = false; }
+    ImGui::SetNextWindowSize(ImVec2(460, 0), ImGuiCond_Appearing);
+    if (ui::beginModal("Ver por dentro", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 420);
+        ImGui::Text("\"%s\" es un juego cerrado. Escribe la clave que puso su creador para abrirlo en el editor.", g_sp.fuenteNombre.c_str());
+        ImGui::PopTextWrapPos();
+        bool lista = !g_sp.fuenteArchivo.empty() || tienda::fuenteLista(g_sp.fuenteId), busy = g_sp.abriendo.valid();
+        ImGui::SetNextItemWidth(300);
+        bool enter = ImGui::InputText("##fclave", g_sp.fuenteClave, sizeof g_sp.fuenteClave, ImGuiInputTextFlags_Password | ImGuiInputTextFlags_EnterReturnsTrue);
+        if (!lista) ImGui::TextDisabled("Descargando el proyecto...");
+        if (!g_sp.fuenteErr.empty()) ImGui::TextColored(ImVec4(1, 0.55f, 0.5f, 1), "%s", g_sp.fuenteErr.c_str());
+        ImGui::BeginDisabled(!lista || busy);
+        if ((ui::primaryButton(busy ? "Abriendo..." : "Abrir", ImVec2(120, 0)) || enter) && lista && !busy) {
+            std::string id = g_sp.fuenteId, clave = g_sp.fuenteClave, archivo = g_sp.fuenteArchivo;
+            wipeBuf(g_sp.fuenteClave, sizeof g_sp.fuenteClave);
+            g_sp.fuenteErr.clear();
+            g_sp.abriendo = std::async(std::launch::async, [id, clave, archivo]() mutable {
+                std::string err;
+                json doc;
+                bool ok;
+                if (archivo.empty()) ok = tienda::abrirFuente(id, clave, doc, err);
+                else {
+                    std::ifstream in(fs::u8path(archivo), std::ios::binary);
+                    std::string data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()), plain;
+                    ok = cerrado::unlockSource(data, clave, plain);
+                    if (!ok) err = "La clave no es correcta";
+                    else { ok = exporter::sourceUnpack(plain, doc, err); std::fill(plain.begin(), plain.end(), '\0'); }
+                }
+                std::fill(clave.begin(), clave.end(), '\0');
+                if (ok) g_sp.fuenteDoc = std::move(doc);
+                return ok ? std::string() : err;
+            });
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Cancelar", ImVec2(110, 0))) { wipeBuf(g_sp.fuenteClave, sizeof g_sp.fuenteClave); ImGui::CloseCurrentPopup(); }
+        ImGui::EndPopup();
     }
 }
 
@@ -2287,7 +2770,7 @@ static void drawStartPage() {
     } else ImGui::Dummy(ImVec2(0, 12));
     // id: el apartado (4 abre Source Sprite); Noticias solo si este editor busca noticias
     struct Item { const char *label; ui::Icon icon; int id; };
-    std::vector<Item> items = {{"Crear", ui::Icon::Create, 0}, {"Juegos", ui::Icon::Gamepad, 1}, {"Plantillas", ui::Icon::Book, 2}, {"Escuela", ui::Icon::People, 3}};
+    std::vector<Item> items = {{"Crear", ui::Icon::Create, 0}, {"Source Play", ui::Icon::Gamepad, 1}, {"Plantillas", ui::Icon::Book, 2}, {"Escuela", ui::Icon::People, 3}};
     if (novedades::activo()) items.push_back({"Noticias", ui::Icon::Bell, 5});
     items.push_back({"Source Sprite", ui::Icon::Image, 4});
     items.push_back({"Source Sound", ui::Icon::Bell, 6});
@@ -2371,7 +2854,7 @@ static void drawStartPage() {
     float fa = ui::animTo(fid, 1.0f, 10.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.15f + 0.85f * fa);
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (1.0f - fa) * 10.0f);
-    if (app.homeSection == 1) drawTestsSection(false); else if (app.homeSection == 2) drawTestsSection(true);
+    if (app.homeSection == 1) drawSourcePlaySection(); else if (app.homeSection == 2) drawTestsSection(true);
     else if (app.homeSection == 3) { sectionTitle("Escuela", 30); school::drawSection(); }
     else if (app.homeSection == 5) drawNewsSection();
     else if (app.homeSection == 4) drawSpriteGallery();
@@ -2523,6 +3006,7 @@ static void drawStartDialogs() {
         if (ImGui::Button("Cancelar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
+    if (app.showExport && guestBlocked()) app.showExport = false;
     if (app.showExport) { ImGui::OpenPopup("Exportar"); app.showExport = false; if (app.exportDir.empty()) app.exportDir = projectsDir(); }
     ImGui::SetNextWindowSize(ImVec2(620, 0));
     if (ui::beginModal("Exportar", nullptr, ImGuiWindowFlags_NoResize)) {
@@ -2743,6 +3227,7 @@ static json optimizedDoc(json doc) {
     return doc;
 }
 static void exportDialog(const std::string &os) {
+    if (guestBlocked()) return;
     std::string nm = app.proj.name(); for (char &c : nm) if (c == ' ') c = '_';
     bool win = os == "windows", web = os == "html";
     app.fileDlg.show(ui::FileDialog::Save, web ? "Exportar para la web" : win ? "Exportar para Windows" : "Exportar para Linux", "", projectsDir(),
@@ -3064,13 +3549,79 @@ static void buildLayout(ImGuiID dock) {
 }
 
 /* ---------------- trabajar juntos (collab.hpp) ---------------- */
+// La carpeta temporal de un invitado (ahi se escribe el proyecto para probarlo) lleva invitado.pid: si el editor se
+// cerro de golpe en plena sesion, al abrir otro se borra (salvo que ese editor siga vivo).
+static void guestMarkTemp() {
+    if (app.tmpDir.empty() || !guestLocked()) return;
+    std::string m = app.tmpDir + "/invitado.pid";
+    std::error_code ec;
+    if (!fs::exists(m, ec)) std::ofstream(m) << sys::processId();
+}
+static void cleanGuestLeftovers() {
+    std::error_code ec;
+    for (auto &e : fs::directory_iterator(fs::temp_directory_path(ec), ec)) {
+        std::string nm = e.path().filename().string();
+        if (nm.rfind("source2d-", 0) != 0 || !e.is_directory(ec)) continue;
+        std::ifstream in(e.path() / "invitado.pid");
+        long long pid = 0;
+        if (!(in >> pid)) continue;
+        in.close();
+        if (pid != sys::processId() && !sys::processAlive(pid)) fs::remove_all(e.path(), ec);
+    }
+}
+// se acabo la sesion de un invitado sin permiso de copias: el proyecto se cierra sin preguntar y no queda nada
+static void wipeGuestProject() {
+    school::projectClosed();
+    musicPreview(app.proj, "");
+    app.sprites.clear(); app.objects.clear(); app.scenes.clear(); app.sheets.clear(); app.tilesets.clear(); app.fonts.clear(); app.sounds.clear();
+    app.settings.reset(); app.shaders.reset(); app.extensions.reset(); app.layersDoc.reset(); app.autotiles.reset();
+    std::error_code ec;
+    if (app.hasProject) fs::remove(recoveryFile(), ec);
+    app.proj = Project{};
+    app.hasProject = false; app.showTree = false; app.activeTab = "Inicio"; app.homeSection = 0;
+    if (!app.tmpDir.empty()) { fs::remove_all(app.tmpDir, ec); app.tmpDir.clear(); }   // la copia para probar
+    refreshProjectList();
+}
 // cada fotograma: manda y recibe cambios y presencia, y pone el editor al dia con lo que llega
+static void collabTick();
+/* Reposo: si nadie toca el editor, no hace falta dibujarlo 60 veces por segundo. Sin teclado ni raton durante 2 s baja a
+   20 fps y tras 8 s a 8; en segundo plano (por ejemplo mientras pruebas el juego) a 8; minimizado a 4. Con cualquier tecla, clic,
+   movimiento del raton o rueda vuelve a 60 en ese mismo fotograma. Se queda en 60 mientras suena musica, hay una
+   sesion compartida (cursores de los demas) o se esta arrastrando algo. Las pruebas automaticas van siempre a 60. */
+static void idleFrameRate() {
+    static double lastInput = 0;
+    static int fps = 60;
+    ImGuiContext &g = *GImGui;
+    ImGuiIO &io = ImGui::GetIO();
+    double now = GetTime();
+    bool input = g.InputEventsTrail.Size > 0 || io.MouseDelta.x != 0 || io.MouseDelta.y != 0 || ImGui::IsAnyItemActive() ||
+                 ImGui::IsMouseDown(0) || ImGui::IsMouseDown(1) || ImGui::IsMouseDown(2) || IsWindowResized() || IsFileDropped();
+    if (input) lastInput = now;
+    bool busy = !app.script.empty() || collab::role() != collab::Role::None || sound::anyPlaying() || musicPreviewing();
+    int want = 60;
+    if (!busy) {
+        if (IsWindowMinimized()) want = 4;
+        else if (!IsWindowFocused() || now - lastInput > 8.0) want = 8;
+        else if (now - lastInput > 2.0) want = 20;
+    }
+    if (want != fps) { fps = want; SetTargetFPS(fps); }
+}
 static void collabTick() {
     collab::Events ev;
     if (app.hasProject) syncEditors();
     if (!app.scriptPresDoc.empty()) collab::setPresence(app.scriptPresDoc, app.scriptPresX, app.scriptPresY, true, {});
     collab::update(app.proj, ev);
     if (!ev.notice.empty()) notify(ev.notice, ev.noticeErr);
+    // invitado: mientras tiene el proyecto se recuerda si el anfitrion deja copias; al terminar, se borra si no
+    static bool guestHad = false, guestCopies = false;
+    if (collab::role() == collab::Role::Client && collab::connected()) { guestHad = true; guestCopies = collab::allowCopies(); guestMarkTemp(); }
+    else if (collab::role() == collab::Role::None && guestHad) {
+        guestHad = false;
+        if (!guestCopies && app.hasProject && app.proj.path.empty()) {
+            wipeGuestProject();
+            notify("Terminó la sesión: el proyecto era de otra persona y se cerró sin dejar copia");
+        }
+    }
     static bool adopted = false;                         // cliente: el proyecto de la sesion ya se abrio en el editor
     if (collab::role() != collab::Role::Client) adopted = false;
     if (ev.docReplaced) {
@@ -3097,8 +3648,9 @@ static void collabTick() {
     collab::defaultPresence(app.hasProject ? app.activeTab : "");
 }
 
-static const char *const kCollabModes[] = { "Misma red WiFi", "Zona WiFi", "Tailscale", "Bluetooth" };
-static const char *const kCollabKinds[] = { "WiFi", "Zona WiFi", "Tailscale", "Bluetooth" };
+static const char *const kCollabModes[] = { "Misma red WiFi", "Zona WiFi", "Tailscale" };
+static const char *const kCollabKinds[] = { "WiFi", "Zona WiFi", "Tailscale" };
+constexpr int kCollabModeCount = 3;
 static void collabModeHelp(int mode, bool hosting) {
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 560);
     switch (mode) {
@@ -3106,7 +3658,7 @@ static void collabModeHelp(int mode, bool hosting) {
         ImGui::TextUnformatted("Las PCs conectadas al mismo router (o por cable a la misma red). La sesión aparece sola en la otra PC, en \"Unirse\".");
         break;
     case 1:
-        ImGui::TextUnformatted("Una PC crea su propia red WiFi y las demás se conectan a ella: no hace falta router ni internet y es mucho más rápido que Bluetooth. "
+        ImGui::TextUnformatted("Una PC crea su propia red WiFi y las demás se conectan a ella: no hace falta router ni internet y es rápida. "
                                "Mientras la zona está encendida, esa PC puede quedarse sin su WiFi de siempre.");
         if (hosting) {
 #ifdef _WIN32
@@ -3122,11 +3674,6 @@ static void collabModeHelp(int mode, bool hosting) {
         ImGui::TextUnformatted("Para trabajar a distancia, cada uno en su casa. Instala Tailscale (gratis para uso personal) en las PCs y entra con la misma cuenta "
                                "(o comparte el equipo con la otra persona). Después únete con la dirección 100.x.x.x o el nombre del anfitrión en Tailscale.");
         break;
-    case 3:
-        ImGui::TextUnformatted("Empareja las PCs y activa la red por Bluetooth del sistema: en Windows, Configuración > Bluetooth > Dispositivos > "
-                               "\"Unirse a una red de área personal\"; en Linux, la opción Red/Acceso a la red del dispositivo. Después funciona como la WiFi. "
-                               "Es lento (1-2 Mbps): un proyecto grande tarda en llegar.");
-        break;
     }
     ImGui::PopTextWrapPos();
 }
@@ -3136,6 +3683,7 @@ static void drawCollabDialog() {
     ImGui::SetNextWindowSize(ImVec2(620, 0), ImGuiCond_Appearing);
     if (!ui::beginModal("Trabajar juntos", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) { collab::discover(false); return; }
     collab::Role role = collab::role();
+    if (app.collabMode < 0 || app.collabMode >= kCollabModeCount) app.collabMode = 0;
     auto peerList = [] {
         for (auto &p : collab::peers()) {
             ImVec2 c = ImGui::GetCursorScreenPos();
@@ -3169,7 +3717,7 @@ static void drawCollabDialog() {
                 else {
                     ImGui::TextWrapped("Las demás personas verán y editarán \"%s\" contigo en tiempo real, con sus cursores y lo que seleccionan.", app.proj.name().c_str());
                     ImGui::Dummy(ImVec2(0, 4));
-                    for (int m = 0; m < 4; m++) { if (m) ImGui::SameLine(); ImGui::RadioButton(kCollabModes[m], &app.collabMode, m); }
+                    for (int m = 0; m < kCollabModeCount; m++) { if (m) ImGui::SameLine(); ImGui::RadioButton(kCollabModes[m], &app.collabMode, m); }
                     collabModeHelp(app.collabMode, true);
                     ImGui::Dummy(ImVec2(0, 6));
                     if (ui::primaryButton("Empezar a compartir", ImVec2(190, 0))) {
@@ -3182,11 +3730,11 @@ static void drawCollabDialog() {
             }
             if (ImGui::BeginTabItem("Unirse a una sesión", nullptr, app.collabTab == 1 && ImGui::IsWindowAppearing() ? ImGuiTabItemFlags_SetSelected : 0)) {
                 collab::discover(true);
-                for (int m = 0; m < 4; m++) { if (m) ImGui::SameLine(); ImGui::RadioButton(kCollabModes[m], &app.collabMode, m); }
+                for (int m = 0; m < kCollabModeCount; m++) { if (m) ImGui::SameLine(); ImGui::RadioButton(kCollabModes[m], &app.collabMode, m); }
                 collabModeHelp(app.collabMode, false);
                 ImGui::Dummy(ImVec2(0, 6));
                 auto f = collab::found();
-                if (f.empty()) ImGui::TextDisabled(app.collabMode >= 2 ? "Con Tailscale o Bluetooth escribe la dirección del anfitrión abajo." : "Buscando sesiones en esta red...");
+                if (f.empty()) ImGui::TextDisabled(app.collabMode >= 2 ? "Con Tailscale escribe la dirección del anfitrión abajo." : "Buscando sesiones en esta red...");
                 for (auto &e : f) {
                     ImGui::PushID(e.addr.c_str());
                     ImGui::AlignTextToFramePadding();
@@ -3224,13 +3772,13 @@ static void drawCollabDialog() {
         ImGui::Dummy(ImVec2(0, 4));
         ImGui::TextUnformatted("Direcciones de esta PC:");
         auto addrs = collab::localAddrs();
-        if (addrs.empty()) ImGui::TextDisabled("  (sin red: conecta esta PC a una WiFi, una zona WiFi, Tailscale o Bluetooth)");
+        if (addrs.empty()) ImGui::TextDisabled("  (sin red: conecta esta PC a una WiFi, una zona WiFi o Tailscale)");
         for (auto &a : addrs) {
             bool match = a.kind == kCollabKinds[app.collabMode] || (app.collabMode == 0 && a.kind == "Cable");
             ImGui::TextColored(match ? ImVec4(1, 1, 1, 1) : ImVec4(0.6f, 0.6f, 0.68f, 1), "  %s   %s (%s)", a.ip.c_str(), a.kind.c_str(), a.iface.c_str());
         }
         ImGui::Dummy(ImVec2(0, 4));
-        for (int m = 0; m < 4; m++) { if (m) ImGui::SameLine(); ImGui::RadioButton(kCollabModes[m], &app.collabMode, m); }
+        for (int m = 0; m < kCollabModeCount; m++) { if (m) ImGui::SameLine(); ImGui::RadioButton(kCollabModes[m], &app.collabMode, m); }
         collabModeHelp(app.collabMode, true);
         static std::string fw = collab::firewallHint();
         if (!fw.empty()) {
@@ -3243,12 +3791,16 @@ static void drawCollabDialog() {
         ImGui::Text("%s", collab::status().c_str());
         peerList();
         ImGui::Dummy(ImVec2(0, 4));
+        bool copies = collab::allowCopies();
+        if (ImGui::Checkbox("Dejar que guarden una copia", &copies)) collab::setAllowCopies(copies);
+        ImGui::SameLine(); ImGui::TextDisabled("(si no, al irse se les borra el proyecto)");
         if (ImGui::Button("Dejar de compartir", ImVec2(170, 0))) { collab::stop(); notify("Ya no compartes el proyecto"); }
     } else {
         ImGui::Text("%s", collab::status().c_str());
         peerList();
         ImGui::Dummy(ImVec2(0, 4));
-        ImGui::TextDisabled("Al salir, el proyecto sigue abierto como una copia sin guardar.");
+        if (collab::allowCopies()) ImGui::TextDisabled("El anfitrión te deja guardar una copia: al salir, el proyecto sigue abierto sin guardar.");
+        else ImGui::TextDisabled("Es el proyecto del anfitrión: no puedes guardarlo ni exportarlo, y al salir se cierra sin dejar copia.");
         if (ImGui::Button("Salir de la sesión", ImVec2(170, 0))) { collab::stop(); notify("Saliste de la sesión"); }
     }
     if (!app.collabMsg.empty()) {
@@ -3264,6 +3816,7 @@ static void drawCollabDialog() {
 
 static void drawModals() {
     drawCollabDialog();
+    drawSourcePlayDialogs();
     if (app.showNewSprite) { ImGui::OpenPopup("Nuevo sprite"); app.showNewSprite = false; }
     if (ui::beginModal("Nuevo sprite", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::InputText("Nombre", app.nsName, sizeof app.nsName);
@@ -3688,6 +4241,19 @@ static void runScriptStep() {
             waitFor(ok, 900, "no se ve a " + nm + " en " + doc + (what.empty() ? "" : " (" + what + ")") + seen);
         } else if (cmd == "colab.stop") {
             collab::stop();
+        } else if (cmd == "colab.trysave") {   // colab.trysave <ruta>: un invitado sin permiso no puede guardar
+            std::string f; in >> f;
+            saveProject(f);
+            bool ok = !fs::exists(f);
+            if (!ok) app.fails++;
+            printf("S2DEDIT %s %s\n", ok ? "OK" : "FAIL", line.c_str());
+        } else if (cmd == "colab.expectwiped") {   // tras la sesion: ni proyecto abierto ni copia para probar
+            std::string tmp = app.tmpDir;
+            bool ok = !app.hasProject && app.tmpDir.empty();
+            if (!ok && app.scriptRetry++ < 300) { app.scriptPos--; return; }
+            app.scriptRetry = 0;
+            if (!ok) app.fails++;
+            printf("S2DEDIT %s %s (proyecto=%d tmp=%s)\n", ok ? "OK" : "FAIL", line.c_str(), (int)app.hasProject, tmp.c_str());
         } else if (cmd == "colab.expectended") {
             waitFor(collab::role() == collab::Role::None, 900, collab::status());
         } else { printf("S2DEDIT FAIL comando desconocido: %s\n", line.c_str()); app.fails++; }
@@ -4075,6 +4641,91 @@ static void runScriptStep() {
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s -> noticias=%d versiones=%d importante=%d estado=[%s]\n", ok ? "OK" : "FAIL", line.c_str(), gn, gv, gi, novedades::estado().c_str());
     }
+    // Source Play (con S2D_TIENDA_URL=file://... y la clave de prueba)
+    else if (cmd == "sp.paquete") {   // sp.paquete <carpeta> <abierto 0|1> [clave]: "Guardar en una carpeta"
+        std::string d, clave; int ab = 1; in >> d >> ab >> clave;
+        snprintf(g_sp.nombre, sizeof g_sp.nombre, "%s", app.proj.name().c_str());
+        snprintf(g_sp.descripcion, sizeof g_sp.descripcion, "Juego de prueba");
+        g_sp.abierto = ab != 0; g_sp.normas = true; g_sp.cat = 0;
+        snprintf(g_sp.clave, sizeof g_sp.clave, "%s", clave.c_str()); snprintf(g_sp.clave2, sizeof g_sp.clave2, "%s", clave.c_str());
+        g_sp.carpeta = d;
+        startPackage(true);
+    }
+    else if (cmd == "sp.espera") {   // sp.espera: hasta que el paquete este en la carpeta
+        if (g_sp.armando.valid()) app.scriptPos--;
+        else { bool ok = !g_sp.msgErr; if (!ok) app.fails++; printf("S2DEDIT %s %s -> %s\n", ok ? "OK" : "FAIL", line.c_str(), g_sp.msg.c_str()); }
+    }
+    else if (cmd == "sp.entrar") envio::entrar();   // con S2D_GITHUB_API/WEB de test/desktop/github_falso.py
+    else if (cmd == "sp.conectado") {
+        if (!envio::conectado() && envio::errorCuenta().empty() && app.scriptRetry++ < 900) { app.scriptPos--; return; }
+        app.scriptRetry = 0;
+        bool ok = envio::conectado();
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s -> %s %s\n", ok ? "OK" : "FAIL", line.c_str(), envio::usuario().c_str(), envio::errorCuenta().c_str());
+    }
+    else if (cmd == "sp.enviar") {   // sp.enviar: "Enviar a revision" del proyecto abierto (abierto)
+        snprintf(g_sp.nombre, sizeof g_sp.nombre, "%s", app.proj.name().c_str());
+        g_sp.abierto = true; g_sp.normas = true; g_sp.msg.clear(); g_sp.msgErr = false;
+        startPackage(false);
+    }
+    else if (cmd == "sp.enviado") {
+        if ((g_sp.armando.valid() || envio::enviando()) && app.scriptRetry++ < 1800) { app.scriptPos--; return; }
+        app.scriptRetry = 0;
+        bool ok = !envio::envioFallo() && !envio::enviando() && !envio::mios().empty();
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s -> %s\n", ok ? "OK" : "FAIL", line.c_str(), envio::estadoEnvio().c_str());
+    }
+    else if (cmd == "sp.mio") {   // sp.mio <estado>: el envio llega a ese estado (lo dice el comentario del revisor)
+        std::string want; in >> want;
+        envio::mirarMios();
+        std::string got = envio::mios().empty() ? "" : envio::mios().back().estado;
+        if (got != want && app.scriptRetry++ < 900) { app.scriptPos--; return; }
+        app.scriptRetry = 0;
+        bool ok = got == want;
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s -> %s (%s)\n", ok ? "OK" : "FAIL", line.c_str(), got.c_str(), envio::mios().empty() ? "" : envio::mios().back().motivo.c_str());
+    }
+    else if (cmd == "tienda.espera") { if (tienda::estado() == "Buscando juegos...") app.scriptPos--; }
+    else if (cmd == "tienda.expect") {   // tienda.expect <juegos>
+        int n; in >> n;
+        bool ok = (int)tienda::juegos().size() == n;
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s -> juegos=%zu estado=[%s]\n", ok ? "OK" : "FAIL", line.c_str(), tienda::juegos().size(), tienda::estado().c_str());
+    }
+    else if (cmd == "tienda.descargar") { for (auto &j : tienda::juegos()) tienda::descargar(j); }
+    else if (cmd == "tienda.instalados") {   // espera las descargas y abre cada juego en memoria (como Jugar)
+        bool busy = false;
+        for (auto &j : tienda::juegos()) if (tienda::estadoDe(j) == tienda::Estado::Descargando) busy = true;
+        if (busy) app.scriptPos--;
+        else for (auto &j : tienda::juegos()) {
+            json doc; std::string err;
+            bool ok = tienda::estadoDe(j) == tienda::Estado::Instalado && tienda::leer(j.id, doc, err) && doc.contains("scenes");
+            if (!ok) app.fails++;
+            printf("S2DEDIT %s tienda.instalado %s (%s) -> %s %s\n", ok ? "OK" : "FAIL", j.id.c_str(), j.abierto ? "abierto" : "cerrado", err.c_str(), tienda::error(j.id).c_str());
+        }
+    }
+    else if (cmd == "tienda.fuente") {   // tienda.fuente <clave> <espera 0|1>: ver por dentro los cerrados
+        std::string clave; int want = 1; in >> clave >> want;
+        bool busy = false;
+        for (auto &j : tienda::juegos()) if (!j.abierto) { tienda::pedirFuente(j); if (!tienda::fuenteLista(j.id)) busy = true; }
+        if (busy && app.scriptRetry++ < 600) { app.scriptPos--; return; }
+        app.scriptRetry = 0;
+        for (auto &j : tienda::juegos()) if (!j.abierto) {
+            json doc; std::string err;
+            bool got = tienda::abrirFuente(j.id, clave, doc, err) && doc.contains("scenes");
+            bool ok = got == (want != 0);
+            if (!ok) app.fails++;
+            printf("S2DEDIT %s %s -> %s %s\n", ok ? "OK" : "FAIL", line.c_str(), got ? "abierto" : "no", err.c_str());
+        }
+    }
+    else if (cmd == "tienda.portadas") {   // las portadas descargadas y comprobadas
+        bool busy = false;
+        for (auto &j : tienda::juegos()) if (j.portadaLocal.empty()) busy = true;
+        if (busy && app.scriptRetry++ < 600) { app.scriptPos--; return; }
+        app.scriptRetry = 0;
+        if (busy) app.fails++;
+        printf("S2DEDIT %s %s\n", busy ? "FAIL" : "OK", line.c_str());
+    }
     else if (cmd == "encuesta.votar") {   // encuesta.votar <id> <opcion>
         int id, op; in >> id >> op;
         for (auto &x : novedades::noticias()) if (x.id == id) novedades::votar(x, op);
@@ -4144,8 +4795,43 @@ static void runScriptStep() {
 }
 
 /* ---------------- principal ---------------- */
+// Controladores/Source-Play.sh: source2d --jugar|--comprobar <juego.source2d|juego.s2dplay> [--llave HEX]
+// comprobar: que se abre y es un proyecto (sale 0 y dice nombre y escenas); jugar: ademas lo abre en el jugador y espera
+static int sourcePlayCli(const std::string &mode, const std::string &file, const std::string &llave) {
+    std::ifstream in(fs::u8path(file), std::ios::binary);
+    std::string data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()), plain, err;
+    if (data.empty()) { fprintf(stderr, "No se pudo leer %s\n", file.c_str()); return 1; }
+    if (cerrado::isPlay(data)) {
+        if (!cerrado::unlockPlay(data, llave, plain)) { fprintf(stderr, "No se pudo descifrar: falta la llave o no es la correcta\n"); return 1; }
+        data.swap(plain);
+    }
+    json doc;
+    if (exporter::isSourcePack(data)) { if (!exporter::sourceUnpack(data, doc, err)) { fprintf(stderr, "%s\n", err.c_str()); return 1; } }
+    else doc = json::parse(data, nullptr, false);
+    if (!doc.is_object() || !doc.contains("scenes") || !doc["scenes"].is_array() || doc["scenes"].empty()) { fprintf(stderr, "No es un proyecto de Source 2D\n"); return 1; }
+    printf("OK %s: %zu escena(s), %zu objeto(s), motor %s\n", jstr(doc, "name").c_str(), doc["scenes"].size(),
+           doc.contains("objects") && doc["objects"].is_array() ? doc["objects"].size() : (size_t)0, jstr(doc, "engine", "?").c_str());
+    if (mode == "--comprobar") return 0;
+    std::string pl = playerPath();
+    if (pl.empty()) { fprintf(stderr, "Este editor no lleva el jugador\n"); return 1; }
+    sys::Proc pr;
+    int code = 1;
+    if (sys::spawnFeed({pl, "--tienda", "revision", "--stdin"}, doc.dump(), &pr)) while (!sys::finished(pr, &code)) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::error_code ec;
+    if (!app.tmpDir.empty()) fs::remove_all(app.tmpDir, ec);
+    return code;
+}
+
 int main(int argc, char **argv) {
     std::string openPath, scriptPath;
+    for (int i = 1; i + 1 < argc; i++) {
+        std::string a = argv[i];
+        if (a == "--jugar" || a == "--comprobar") {
+            std::string llave;
+            for (int k = i + 2; k + 1 < argc; k++) if (std::string(argv[k]) == "--llave") llave = argv[k + 1];
+            return sourcePlayCli(a, argv[i + 1], llave);
+        }
+    }
     for (int i = 1; i < argc; i++) {
         std::string a = argv[i];
         if (a == "--script" && i + 1 < argc) { scriptPath = argv[++i]; rlImGuiScriptMouse = true; }
@@ -4186,6 +4872,9 @@ int main(int argc, char **argv) {
     };
     if (!prefs().lang.empty()) ui::setLanguage(prefs().lang);
     novedades::iniciar(prefs().news, versionsDir(), !app.script.empty());
+    tienda::iniciar(prefs().news, !app.script.empty());
+    envio::iniciar(!app.script.empty());
+    cleanGuestLeftovers();
     if (app.script.empty()) {
         installThisVersion();
         std::error_code ec;                              // lo que quedo de un cierre de golpe (luz, apagado)
@@ -4222,6 +4911,8 @@ int main(int argc, char **argv) {
         }
         if (!app.script.empty()) runScriptStep();
         novedades::tick();
+        tienda::tick();
+        envio::tick();
         dropFilesTick();
         globalShortcuts();
         drawMenuAndToolbar();
@@ -4314,6 +5005,7 @@ int main(int argc, char **argv) {
         std::string title = app.hasProject ? "Source 2D " + vname + " - " + app.proj.name() + (app.proj.dirty ? " *" : "") : "Source 2D " + vname;
         static std::string lastTitle;
         if (title != lastTitle) { SetWindowTitle(title.c_str()); lastTitle = title; }
+        idleFrameRate();
         EndDrawing();
     }
     for (auto &kv : app.thumbs) kv.second.release();

@@ -1,0 +1,10 @@
+# Publicar en Source Play contra test/desktop/github_falso.py: entrar con codigo, copia, rama, archivos, pull request y
+# el "Rechazado: motivo" del revisor
+open PROYECTO
+wait 10
+sp.entrar
+sp.conectado
+sp.enviar
+sp.enviado
+sp.mio rechazado
+quit

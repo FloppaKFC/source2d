@@ -61,24 +61,27 @@ E([X('Fn.Att($KS[1 - $side], $side) == 0')], [A('setVar', variable='n', op='add'
 E([], [A('callFunction', name='Unmake', args='$m')], level=2)
 E([], [A('arrayResize', variable='MS', size='$st'), A('returnValue', value='$n')], level=1)
 
-acts = [A('jsCode', code='$.vars.R = {}; $.vars.W = {}; $.vars.T = {};')]
+# cada calculo va en su propio fotograma: el motor corta un fotograma que pase de 3 s (bucles sin fin)
+pasos = [[A('jsCode', code='$.vars.R = {}; $.vars.W = {}; $.vars.T = {};')]]
 for name, (fen, want) in FENS.items():
-    acts.append(A('jsCode', code=SET_FEN % json.dumps(fen)))
     for d, w in enumerate(want, 1):
-        acts.append(A('jsCode', code='$.vars.__t = Date.now();'))
-        acts.append(A('callFunction', name='Perft', args=str(d), result='r'))
-        acts.append(A('jsCode', code='$.vars.R["%s%d"] = $.vars.r; $.vars.W["%s%d"] = %d; $.vars.T["%s%d"] = Date.now() - $.vars.__t;' % (name, d, name, d, w, name, d)))
+        pasos.append([A('jsCode', code=SET_FEN % json.dumps(fen)), A('jsCode', code='$.vars.__t = Date.now();'),
+                      A('callFunction', name='Perft', args=str(d), result='r'),
+                      A('jsCode', code='$.vars.R["%s%d"] = $.vars.r; $.vars.W["%s%d"] = %d; $.vars.T["%s%d"] = Date.now() - $.vars.__t;' % (name, d, name, d, w, name, d))])
 # tiempo del bot: posicion inicial y una de medio juego, en los tres niveles
 BOT = {'inicio': FENS['inicio'][0], 'medio': 'r1bq1rk1/pp2bppp/2n1pn2/2pp4/3P4/2PBPN2/PP1N1PPP/R1BQ1RK1 w - -'}
 for name, fen in BOT.items():
     for lv in (1, 2, 3):
-        acts += [A('jsCode', code=SET_FEN % json.dumps(fen)), A('setVar', variable='nivel', op='set', value=str(lv)),
-                 A('jsCode', code='$.vars.__t = Date.now();'), A('callFunction', name='Think'),
-                 A('jsCode', code='$.vars.T["bot_%s_%d"] = Date.now() - $.vars.__t; $.vars.T["nodos_%s_%d"] = $.vars.nodes; $.vars.T["bm_%s_%d"] = $.vars.bm & 16383;' % (name, lv, name, lv, name, lv))]
+        pasos.append([A('jsCode', code=SET_FEN % json.dumps(fen)), A('setVar', variable='nivel', op='set', value=str(lv)),
+                      A('jsCode', code='$.vars.__t = Date.now();'), A('callFunction', name='Think'),
+                      A('jsCode', code='$.vars.T["bot_%s_%d"] = Date.now() - $.vars.__t; $.vars.T["nodos_%s_%d"] = $.vars.nodes; $.vars.T["bm_%s_%d"] = $.vars.bm & 16383;' % (name, lv, name, lv, name, lv))])
+acts = []
 acts.append(A('jsCode', code=r'''var g = $.vars, fails = Object.keys(g.W).filter(function (k) { return g.R[k] !== g.W[k]; });
 console.log('S2DTEST ' + JSON.stringify({ ok: !fails.length, fails: fails, got: g.R, ms: g.T }));'''))
 acts.append(A('quitGame'))
-E([C('jsCode', code='return $.state.frame >= 2;'), C('triggerOnce')], acts)
+pasos[-1] += acts
+for k, paso in enumerate(pasos):
+    E([C('jsCode', code='return $.state.frame === %d;' % (2 + k))], paso)
 
 p['events'] = p['events'] + evs
 json.dump(p, open(out, 'w'))

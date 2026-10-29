@@ -3,8 +3,8 @@
 # dar una noticia (importante, titular o normal, con imagen, texto de debajo y notificacion), editarla, borrarla o verlas.
 # Cada opcion explica en pantalla lo que hace antes de preguntar nada.
 # Usa tools/anunciar.py y tools/publicar_version.py, que firman con tu clave (piden la contrasena) y suben con git.
-#   tools/noticias.sh            (desde cualquier carpeta)
-#   S2D_SIN_SUBIR=1 tools/noticias.sh   firma pero no sube (para probar)
+#   Controladores/Noticias.sh            (desde cualquier carpeta)
+#   S2D_SIN_SUBIR=1 Controladores/Noticias.sh   firma pero no sube (para probar)
 set -u
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PY=python3

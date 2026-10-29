@@ -2994,7 +2994,7 @@
       function condJS(c) {
         var p = c.params || {}, js;
         if (c.sub) throw 0;
-        if (c.type === 'exprTrue') js = 'T' + ex(p.value);
+        if (c.type === 'exprTrue') js = 'TV' + ex(p.value);
         else if (c.type === 'cmpNum') {
           var ops = { eq: '===', ne: '!==', lt: '<', le: '<=', gt: '>', ge: '>=' };
           js = '(N' + ex(p.a) + ' ' + (ops[p.op] || '===') + ' N' + ex(p.b) + ')';
@@ -3070,7 +3070,8 @@
         return null;
       }
       try {
-        return new Function('G', 'FN', 'N', 'T', 'O', 'C', 'D', 'RZ', 'FILL', 'SORT', 'APP', FN_NAMES.join(','), src)
+        // TV (verdadero o no) no puede llamarse T: T("clave") es la traduccion de las expresiones (FN_NAMES)
+        return new Function('G', 'FN', 'N', 'TV', 'O', 'C', 'D', 'RZ', 'FILL', 'SORT', 'APP', FN_NAMES.join(','), src)
           .apply(null, [state.globals, FN, numOf, function (v) { return !!v && v !== '0'; }, exprObj, cursorValue, jsDepth, rtResize, rtFill, rtSort, rtAppend].concat(FN_VALS));
       } catch (e2) {
         console.warn('Source 2D: no se pudo compilar la funcion ' + node.es.ref.name + ': ' + e2.message);

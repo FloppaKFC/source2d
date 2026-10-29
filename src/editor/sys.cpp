@@ -2,13 +2,19 @@
 #include <cstdio>
 #include <filesystem>
 #include <random>
+#include <thread>
+#include <algorithm>
 #include <sys/stat.h>
 #ifdef _WIN32
 #include <windows.h>
+#include <bcrypt.h>
 #include <process.h>
 #include <io.h>
 #else
 #include <spawn.h>
+#include <sys/random.h>
+#include <cerrno>
+#include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -46,6 +52,38 @@ bool spawn(const std::vector<std::string> &args, Proc *out, bool hidden) {
     if (out) out->h = (long long)(intptr_t)pi.hProcess; else CloseHandle(pi.hProcess);
     return true;
 }
+bool spawnFeed(const std::vector<std::string> &args, const std::string &input, Proc *out) {
+    SECURITY_ATTRIBUTES sa{sizeof sa, nullptr, TRUE};
+    HANDLE rd, wr;
+    if (!CreatePipe(&rd, &wr, &sa, 0)) return false;
+    SetHandleInformation(wr, HANDLE_FLAG_INHERIT, 0);
+    STARTUPINFOW si{};
+    si.cb = sizeof si;
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdInput = rd;
+    si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+    si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+    std::wstring cl = cmdLine(args);
+    PROCESS_INFORMATION pi{};
+    bool ok = CreateProcessW(nullptr, cl.data(), nullptr, nullptr, TRUE, 0, nullptr, nullptr, &si, &pi) != 0;
+    CloseHandle(rd);
+    if (!ok) { CloseHandle(wr); return false; }
+    CloseHandle(pi.hThread);
+    if (out) out->h = (long long)(intptr_t)pi.hProcess; else CloseHandle(pi.hProcess);
+    std::thread([wr, input] {
+        size_t pos = 0;
+        while (pos < input.size()) {
+            DWORD n = 0, want = (DWORD)std::min<size_t>(input.size() - pos, 1 << 20);
+            if (!WriteFile(wr, input.data() + pos, want, &n, nullptr) || !n) break;
+            pos += n;
+        }
+        CloseHandle(wr);
+    }).detach();
+    return true;
+}
+bool randomBytes(uint8_t *b, size_t n) {
+    return BCryptGenRandom(nullptr, b, (ULONG)n, BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0;
+}
 int run(const std::vector<std::string> &args) {
     PROCESS_INFORMATION pi{};
     if (!create(args, pi)) return -1;
@@ -66,6 +104,13 @@ bool finished(Proc &p, int *code) {
 void setExecutable(const std::string &) {}
 void localTime(time_t t, tm &out) { localtime_s(&out, &t); }
 int processId() { return (int)GetCurrentProcessId(); }
+bool processAlive(long long pid) {
+    HANDLE h = OpenProcess(SYNCHRONIZE, FALSE, (DWORD)pid);
+    if (!h) return GetLastError() == ERROR_ACCESS_DENIED;
+    bool alive = WaitForSingleObject(h, 0) == WAIT_TIMEOUT;
+    CloseHandle(h);
+    return alive;
+}
 bool writeDurable(const std::string &path, const std::string &data) {
     std::string tmp = path + ".tmp";
     FILE *f = _wfopen(std::filesystem::u8path(tmp).wstring().c_str(), L"wb");
@@ -91,6 +136,42 @@ bool spawn(const std::vector<std::string> &args, Proc *out, bool) {
     if (out) out->h = pid;
     return true;
 }
+bool spawnFeed(const std::vector<std::string> &args, const std::string &input, Proc *out) {
+    static bool sigOnce = (signal(SIGPIPE, SIG_IGN), true);   // si el juego se cierra antes de leerlo todo
+    (void)sigOnce;
+    int fd[2];
+    if (pipe2(fd, O_CLOEXEC) != 0) return false;
+    posix_spawn_file_actions_t fa;
+    posix_spawn_file_actions_init(&fa);
+    posix_spawn_file_actions_adddup2(&fa, fd[0], 0);
+    pid_t pid;
+    auto v = argvOf(args);
+    int r = posix_spawnp(&pid, v[0], &fa, nullptr, v.data(), environ);
+    posix_spawn_file_actions_destroy(&fa);
+    close(fd[0]);
+    if (r != 0) { close(fd[1]); return false; }
+    if (out) out->h = pid;
+    int w = fd[1];
+    std::thread([w, input] {
+        size_t pos = 0;
+        while (pos < input.size()) {
+            ssize_t n = write(w, input.data() + pos, input.size() - pos);
+            if (n <= 0) { if (n < 0 && errno == EINTR) continue; break; }
+            pos += (size_t)n;
+        }
+        close(w);
+    }).detach();
+    return true;
+}
+bool randomBytes(uint8_t *b, size_t n) {
+    size_t got = 0;
+    while (got < n) {
+        ssize_t r = getrandom(b + got, n - got, 0);
+        if (r < 0) { if (errno == EINTR) continue; return false; }
+        got += (size_t)r;
+    }
+    return true;
+}
 int run(const std::vector<std::string> &args) {
     pid_t pid;
     auto v = argvOf(args);
@@ -108,6 +189,7 @@ bool finished(Proc &p, int *code) {
 void setExecutable(const std::string &path) { chmod(path.c_str(), 0755); }
 void localTime(time_t t, tm &out) { localtime_r(&t, &out); }
 int processId() { return (int)getpid(); }
+bool processAlive(long long pid) { return pid > 0 && (kill((pid_t)pid, 0) == 0 || errno == EPERM); }
 bool writeDurable(const std::string &path, const std::string &data) {
     std::string tmp = path + ".tmp";
     FILE *f = fopen(tmp.c_str(), "wb");

@@ -12,6 +12,8 @@ shot CAPTURA_BETO
 jset /objects/2/name "Choque-Beto"
 wait 90
 colab.print /objects/2/name
+play Nivel 1
+colab.trysave GUARDAR_BETO
 colab.stop
-wait 5
+colab.expectwiped
 quit
