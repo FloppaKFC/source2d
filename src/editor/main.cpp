@@ -34,6 +34,7 @@
 #include "tienda.hpp"
 #include "envio.hpp"
 #include "cerrado.hpp"
+#include "store.hpp"
 #include "fonts.hpp"
 #include "project_docs.hpp"
 #include "assets.hpp"
@@ -1546,7 +1547,7 @@ struct SourcePlayUI {
     char buscarGente[64] = "";
     // denunciar un juego o una cuenta
     bool showDenuncia = false, denunciaCuenta = false;
-    std::string denunciaId, denunciaNombre;
+    std::string denunciaId, denunciaNombre, denunciaTipo = "juego";   // juego, sprites o sonidos
     int denunciaMotivo = 0;
     char denunciaTexto[800] = "";
 };
@@ -1725,7 +1726,7 @@ static void sourcePlayCard(const tienda::Juego &j, float w) {
             if (ImGui::MenuItem("Favorito", nullptr, tienda::favorito(j.id))) tienda::setFavorito(j.id, !tienda::favorito(j.id));
             if (ImGui::MenuItem("Borrar de este equipo", nullptr, false, inst)) { tienda::borrar(j.id); notify(j.nombre + " borrado"); }
             if (ImGui::MenuItem("Denunciar...")) {
-                g_sp.showDenuncia = true; g_sp.denunciaCuenta = false; g_sp.denunciaId = j.id; g_sp.denunciaNombre = j.nombre;
+                g_sp.showDenuncia = true; g_sp.denunciaCuenta = false; g_sp.denunciaId = j.id; g_sp.denunciaNombre = j.nombre; g_sp.denunciaTipo = "juego";
                 g_sp.denunciaMotivo = 0; g_sp.denunciaTexto[0] = 0;
             }
             ImGui::EndPopup();
@@ -2116,12 +2117,15 @@ static void drawDenuncia() {
                                                "No funciona o engaña", "Otro motivo"};
     static const char *const motivosCuenta[] = {"Se hace pasar por otra persona", "Acoso o insultos", "Spam o publicidad",
                                                 "Contenido inapropiado", "Otro motivo"};
+    static const char *const motivosPaquete[] = {"Copia el trabajo de otra persona", "Contenido inapropiado", "La licencia no es verdad",
+                                                 "No funciona o está vacío", "Otro motivo"};
+    bool paquete = !g_sp.denunciaCuenta && g_sp.denunciaTipo != "juego";
     if (g_sp.showDenuncia) { ImGui::OpenPopup("Denunciar"); g_sp.showDenuncia = false; envio::limpiarDenuncia(); }
     ImGui::SetNextWindowSize(ImVec2(560, 0), ImGuiCond_Appearing);
     if (!ui::beginModal("Denunciar", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
-    const char *const *motivos = g_sp.denunciaCuenta ? motivosCuenta : motivosJuego;
+    const char *const *motivos = g_sp.denunciaCuenta ? motivosCuenta : paquete ? motivosPaquete : motivosJuego;
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 520);
-    ImGui::Text("Denunciar %s %s", g_sp.denunciaCuenta ? "la cuenta" : "el juego", g_sp.denunciaNombre.c_str());
+    ImGui::Text("Denunciar %s %s", g_sp.denunciaCuenta ? "la cuenta" : paquete ? "el paquete" : "el juego", g_sp.denunciaNombre.c_str());
     ImGui::TextDisabled("La denuncia le llega al equipo de Source 2D, que la revisa. La otra persona no ve quién la hizo desde el editor.");
     ImGui::PopTextWrapPos();
     if (!envio::conectado()) {
@@ -2134,7 +2138,9 @@ static void drawDenuncia() {
         bool busy = envio::estadoDenuncia() == "Enviando la denuncia...";
         ImGui::BeginDisabled(busy);
         if (ui::primaryButton("Enviar denuncia", ImVec2(160, 0))) {
-            std::string titulo = g_sp.denunciaCuenta ? "Denuncia: cuenta @" + g_sp.denunciaId : "Denuncia: juego " + g_sp.denunciaNombre + " (" + g_sp.denunciaId + ")";
+            std::string titulo = g_sp.denunciaCuenta ? "Denuncia: cuenta @" + g_sp.denunciaId :
+                                 paquete ? "Denuncia: paquete " + g_sp.denunciaNombre + " (" + g_sp.denunciaTipo + ", " + g_sp.denunciaId + ")" :
+                                           "Denuncia: juego " + g_sp.denunciaNombre + " (" + g_sp.denunciaId + ")";
             std::string cuerpo = std::string("**Motivo:** ") + motivos[std::clamp(g_sp.denunciaMotivo, 0, 4)] + "\n\n" + g_sp.denunciaTexto;
             envio::denunciar(titulo, cuerpo);
         }
@@ -2737,9 +2743,341 @@ static void openSpriteFile(const std::string &f) {
     if (studioLoad(f)) g_studio.on = true;
 }
 
+/* ---------------- Source Store (store.hpp): paquetes de sprites y de sonidos ----------------
+   Una pestana en Source Sprite y en Source Sound: el catalogo, descargar, anadir al proyecto, guardar en tus creaciones y
+   "Crear paquete" (de tu proyecto o de tus creaciones) para enviarlo a revision con GitHub o guardarlo en una carpeta. */
+static const char *const kCatSprites[] = {"Personaje", "Sprites sueltos", "Tiles", "Autotiles", "Mixto"};
+static const char *const kCatSonidos[] = {"Música", "Efectos", "Mixto"};
+static const char *const kLicencias[] = {"Libre", "Libre dando crédito", "Solo juegos no comerciales"};
+struct StoreItem { std::string label, kind, ref; bool on = false; };   // kind: sprite, tileset, autotile, sonido; ref: id o archivo
+struct StoreUI {
+    int tab[2] = {0, 0};                           // 0 tus creaciones, 1 Source Store
+    char buscar[2][64] = {"", ""};
+    bool pedido[2] = {false, false};
+    // Crear paquete
+    bool showCrear = false, aCarpeta = false, msgErr = false;
+    int tipo = 0, cat = 0, lic = 1;
+    char nombre[80] = "", desc[600] = "";
+    std::vector<StoreItem> items;
+    std::string portada, carpeta, msg;
+    std::future<std::string> armando;
+    envio::Paquete paquete;
+    // escuchar un paquete de sonidos
+    bool showEscuchar = false;
+    std::string escucharId;
+};
+static StoreUI g_st;
+
+// lo que trae un paquete, en palabras ("3 sprites · 1 autotile")
+static std::string storeContenido(const store::Paquete &p) {
+    std::string r;
+    auto add = [&](int n, const char *uno, const char *varios) { if (n) r += (r.empty() ? "" : " · ") + std::to_string(n) + " " + (n == 1 ? uno : varios); };
+    add(p.nSprites, "sprite", "sprites"); add(p.nTiles, "conjunto de tiles", "conjuntos de tiles"); add(p.nAutotiles, "autotile", "autotiles");
+    add(p.nSonidos, "sonido", "sonidos");
+    return r;
+}
+// guarda lo del paquete en Source Sprite / Source Sound (tus creaciones)
+static int storeToCreations(store::Tipo t, const json &pk) {
+    int n = 0;
+    std::error_code ec;
+    fs::create_directories(creationsDir(t == store::Sprites ? "Sprites" : "Sonidos"), ec);
+    if (t == store::Sprites && pk.contains("sprites"))
+        for (auto x : pk["sprites"]) { x["format"] = "source2d-sprite"; std::ofstream(creationsDir("Sprites") + "/" + safeFileName(jstr(x, "name")) + ".s2dsprite") << x.dump(); n++; }
+    if (t == store::Sonidos && pk.contains("sonidos"))
+        for (auto &x : pk["sonidos"]) { std::ofstream(creationsDir("Sonidos") + "/" + safeFileName(jstr(x, "name")) + ".s2dsound") << x.dump(1); n++; }
+    g_creationsGen++;
+    refreshCreations();
+    return n;
+}
+static void storeAddToProject(store::Tipo t, const std::string &id) {
+    json pk; std::string err;
+    if (!app.hasProject) { notify("Abre un proyecto para añadirlo", true); return; }
+    if (guestBlocked()) return;
+    if (!store::leer(t, id, pk, err)) { notify(err, true); return; }
+    int n = store::anadirAlProyecto(app.proj, pk);
+    if (t == store::Sprites) app.proj.rev++;
+    notify(std::to_string(n) + (n == 1 ? " cosa añadida a " : " cosas añadidas a ") + app.proj.name());
+}
+
+static void storeCard(store::Tipo t, const store::Paquete &p, float w) {
+    ImGui::PushID(p.id.c_str());
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ui::kPanel);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14, 12));
+    ImGui::BeginChild("##pk", ImVec2(w, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
+    float iw = w - 28, ih = iw * 9 / 16;
+    ImVec2 q = ImGui::GetCursorScreenPos();
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    if (const Texture2D *tx = newsImage(p.portadaLocal)) ImGui::Image((ImTextureID)(intptr_t)tx->id, ImVec2(iw, ih));
+    else {
+        dl->AddRectFilled(q, ImVec2(q.x + iw, q.y + ih), ui::kPanel2, 8);
+        ui::drawIcon(dl, t == store::Sprites ? ui::Icon::Image : ui::Icon::Bell, ImVec2(q.x + iw / 2, q.y + ih / 2), 36, ui::kDim);
+        ImGui::Dummy(ImVec2(iw, ih));
+    }
+    if (p.destacado) {
+        ImVec2 ts = ImGui::CalcTextSize("Destacado");
+        dl->AddRectFilled(ImVec2(q.x + 8, q.y + 8), ImVec2(q.x + 22 + ts.x, q.y + 12 + ts.y), IM_COL32(0xF2, 0xB1, 0x2D, 235), 6);
+        dl->AddText(ImVec2(q.x + 15, q.y + 10), IM_COL32(30, 22, 0, 255), "Destacado");
+    }
+    ImGui::PushFont(ui::boldFont(), 18); ImGui::TextUnformatted(p.nombre.c_str()); ImGui::PopFont();
+    ImGui::TextDisabled("por"); ImGui::SameLine(0, 4); authorLink(p.autor); ImGui::SameLine(0, 4);
+    ImGui::TextDisabled("· %s", p.categoria.c_str());
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kText2), "%s", storeContenido(p).c_str());
+    ImGui::TextDisabled("Licencia: %s", p.licencia.c_str());
+    long long d = store::descargas(t, p.id), g = store::meGusta(t, p.id);
+    ImGui::TextDisabled("%s descargas · %s me gusta", d >= 0 ? std::to_string(d).c_str() : "-", g >= 0 ? std::to_string(g).c_str() : "-");
+    if (!p.descripcion.empty()) { ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + iw); ImGui::TextUnformatted(p.descripcion.c_str()); ImGui::PopTextWrapPos(); }
+    if (store::descargando(t, p.id)) ImGui::TextDisabled("Descargando...");
+    else if (!store::instalado(t, p.id)) { if (homeButton("Descargar", true, 30)) store::descargar(t, p); }
+    else {
+        if (homeButton("Añadir al proyecto", true, 30)) storeAddToProject(t, p.id);
+        if (ImGui::IsItemHovered() && !app.hasProject) ImGui::SetTooltip("Abre un proyecto primero");
+        if (t == store::Sonidos) { ImGui::SameLine(); if (homeButton("Escuchar", false, 30)) { g_st.showEscuchar = true; g_st.escucharId = p.id; } }
+    }
+    ImGui::SameLine();
+    bool gusta = store::leGusta(t, p.id);
+    if (homeButton(gusta ? "Te gusta" : "Me gusta", false, 30) && !gusta) store::darMeGusta(t, p);
+    ImGui::SameLine();
+    if (homeButton("...", false, 30)) ImGui::OpenPopup("##pkmas");
+    if (ImGui::BeginPopup("##pkmas")) {
+        bool inst = store::instalado(t, p.id);
+        if (ImGui::MenuItem("Guardar en mis creaciones", nullptr, false, inst)) {
+            json pk; std::string err;
+            if (store::leer(t, p.id, pk, err)) notify(std::to_string(storeToCreations(t, pk)) + " guardado(s) en " + (t == store::Sprites ? "Source Sprite" : "Source Sound"));
+            else notify(err, true);
+        }
+        if (ImGui::MenuItem("Borrar de este equipo", nullptr, false, inst)) store::borrar(t, p.id);
+        if (ImGui::MenuItem("Denunciar...")) {
+            g_sp.showDenuncia = true; g_sp.denunciaCuenta = false; g_sp.denunciaId = p.id;
+            g_sp.denunciaNombre = p.nombre; g_sp.denunciaTipo = t == store::Sprites ? "sprites" : "sonidos";
+            g_sp.denunciaMotivo = 0; g_sp.denunciaTexto[0] = 0;
+        }
+        ImGui::EndPopup();
+    }
+    std::string err = store::error(t, p.id);
+    if (!err.empty()) ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.5f, 1.0f), "%s", err.c_str());
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
+    ImGui::PopID();
+}
+
+// pestanas "Tus sprites | Source Store" (o sonidos); devuelve true si toca dibujar la tienda
+static bool storeTabs(store::Tipo t) {
+    const char *mine = t == store::Sprites ? "Tus sprites" : "Tus sonidos";
+    for (int i = 0; i < 2; i++) {
+        if (i) ImGui::SameLine(0, 18);
+        bool sel = g_st.tab[t] == i;
+        ImGui::PushFont(sel ? ui::boldFont() : ImGui::GetFont(), 18);
+        if (ImGui::Selectable(i ? "Source Store" : mine, sel, 0, ImGui::CalcTextSize(i ? "Source Store" : mine))) g_st.tab[t] = i;
+        ImGui::PopFont();
+    }
+    ImGui::Separator();
+    ImGui::Dummy(ImVec2(0, 4));
+    return g_st.tab[t] == 1;
+}
+
+static void openCrearPaquete(store::Tipo t);
+static void drawStoreSection(store::Tipo t) {
+    if (!g_st.pedido[t]) { g_st.pedido[t] = true; store::buscarAhora(t); }
+    store::mirarContadores(t);
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kText2), t == store::Sprites ?
+        "Sprites, tiles y autotiles de la comunidad para usar en tus juegos. Mira la licencia de cada paquete." :
+        "Música y efectos hechos en Source Sound por la comunidad. Mira la licencia de cada paquete.");
+    ImGui::SetNextItemWidth(300);
+    ImGui::InputTextWithHint("##stbuscar", "Buscar paquetes o autores", g_st.buscar[t], sizeof g_st.buscar[t]);
+    ImGui::SameLine();
+    if (homeButton("Crear paquete", true, ImGui::GetFrameHeight())) openCrearPaquete(t);
+    std::string st = store::estado(t);
+    if (!st.empty()) ImGui::TextDisabled("%s", st.c_str());
+    ImGui::Dummy(ImVec2(0, 6));
+    float avail = ImGui::GetContentRegionAvail().x, gap = 18;
+    int cols = std::max(1, std::min(4, (int)((avail + gap) / (300 + gap))));
+    float w = std::min(380.0f, (avail - gap * (cols - 1)) / cols);
+    std::vector<const store::Paquete *> vis, dest;
+    for (auto &p : store::paquetes(t)) {
+        if (!containsNoCase(p.nombre, g_st.buscar[t]) && !containsNoCase(p.autor, g_st.buscar[t]) && !containsNoCase(p.descripcion, g_st.buscar[t])) continue;
+        vis.push_back(&p);
+        if (p.destacado) dest.push_back(&p);
+    }
+    int fila = 0;
+    auto grid = [&](const std::vector<const store::Paquete *> &l) {
+        ImGui::PushID(fila++);
+        int k = 0;
+        for (auto *p : l) { if (k++ % cols) ImGui::SameLine(0, gap); ImGui::BeginGroup(); storeCard(t, *p, w); ImGui::EndGroup(); }
+        ImGui::PopID();
+        ImGui::Dummy(ImVec2(0, 8));
+    };
+    if (!dest.empty()) { sectionTitle("Destacados", 20); grid(dest); }
+    if (!vis.empty()) { sectionTitle("Todos", 20); grid(vis); }
+    else if (!store::paquetes(t).empty()) ImGui::TextDisabled("Ningún paquete coincide con la búsqueda.");
+}
+
+static void openCrearPaquete(store::Tipo t) {
+    if (guestBlocked()) return;
+    g_st.tipo = t; g_st.showCrear = true; g_st.msg.clear(); g_st.items.clear();
+    if (t == store::Sprites) {
+        if (app.hasProject) {
+            syncEditors();
+            for (auto &x : app.proj.doc["sprites"]) g_st.items.push_back({"Sprite del proyecto: " + jstr(x, "name"), "sprite", jstr(x, "id")});
+            if (app.proj.doc.contains("tilesets")) for (auto &x : app.proj.doc["tilesets"]) g_st.items.push_back({"Tiles del proyecto: " + jstr(x, "name"), "tileset", jstr(x, "id")});
+            if (app.proj.doc.contains("autotiles")) for (auto &x : app.proj.doc["autotiles"]) g_st.items.push_back({"Autotile del proyecto: " + jstr(x, "name"), "autotile", jstr(x, "id")});
+        }
+        for (auto &c : creations("Sprites", true)) g_st.items.push_back({"De Source Sprite: " + c.name, "sprite-archivo", c.path});
+    } else {
+        if (app.hasProject && app.proj.doc.contains("music"))
+            for (auto &x : app.proj.doc["music"]) if (x.contains("song")) g_st.items.push_back({"Del proyecto: " + jstr(x, "name"), "sonido", jstr(x, "id")});
+        for (auto &c : creations("Sonidos", false)) g_st.items.push_back({"De Source Sound: " + c.name, "sonido-archivo", c.path});
+    }
+}
+// arma el paquete con lo marcado (y, en un autotile, su conjunto de tiles); "" si salio bien
+static std::string buildStorePackage(json &pk) {
+    store::Tipo t = (store::Tipo)g_st.tipo;
+    pk = {{"formato", "source2d-paquete"}, {"tipo", t == store::Sprites ? "sprites" : "sonidos"}};
+    std::set<std::string> tsIds;
+    for (auto &it : g_st.items) {
+        if (!it.on) continue;
+        if (it.kind == "sprite") { if (json *x = app.proj.spriteById(it.ref)) pk["sprites"].push_back(*x); }
+        else if (it.kind == "tileset") tsIds.insert(it.ref);
+        else if (it.kind == "autotile") {
+            if (json *x = findById(app.proj.doc["autotiles"], it.ref)) { pk["autotiles"].push_back(*x); if (!jstr(*x, "tilesetId").empty()) tsIds.insert(jstr(*x, "tilesetId")); }
+        } else if (it.kind == "sonido") { if (json *x = findById(app.proj.doc["music"], it.ref)) pk["sonidos"].push_back((*x)["song"]); }
+        else {   // archivo de tus creaciones
+            std::ifstream in(it.ref);
+            json j = json::parse(in, nullptr, false);
+            if (!j.is_object()) return "No se pudo leer " + it.ref;
+            if (it.kind == "sprite-archivo") { j.erase("format"); j.erase("palette"); pk["sprites"].push_back(j); }
+            else pk["sonidos"].push_back(j);
+        }
+    }
+    for (auto &id : tsIds) if (json *x = findById(app.proj.doc["tilesets"], id)) pk["tilesets"].push_back(*x);
+    std::string err;
+    if (!store::valido(pk, t, err)) return err == "El paquete está vacío" ? "Marca al menos una cosa para el paquete" : err;
+    return "";
+}
+static void startStorePackage(bool toFolder) {
+    std::string nombre = g_st.nombre;
+    while (!nombre.empty() && nombre.back() == ' ') nombre.pop_back();
+    if (nombre.empty()) { g_st.msg = "Ponle un nombre al paquete"; g_st.msgErr = true; return; }
+    json pk;
+    std::string err = buildStorePackage(pk);
+    if (!err.empty()) { g_st.msg = err; g_st.msgErr = true; return; }
+    store::Tipo t = (store::Tipo)g_st.tipo;
+    std::string autor = envio::conectado() ? envio::usuario() : prefs().name.empty() ? "anónimo" : prefs().name;
+    char fecha[16]; time_t now = time(nullptr); tm lt; sys::localTime(now, lt); strftime(fecha, sizeof fecha, "%Y-%m-%d", &lt);
+    json info = {{"formato", "source2d-envio-paquete"}, {"tipo", t == store::Sprites ? "sprites" : "sonidos"}, {"id", slugOf(autor + "-" + nombre)},
+                 {"nombre", nombre}, {"descripcion", std::string(g_st.desc)}, {"autor", autor}, {"motor", S2D_VERSION}, {"fecha", fecha},
+                 {"categoria", t == store::Sprites ? kCatSprites[std::clamp(g_st.cat, 0, 4)] : kCatSonidos[std::clamp(g_st.cat, 0, 2)]},
+                 {"licencia", kLicencias[std::clamp(g_st.lic, 0, 2)]}};
+    g_st.aCarpeta = toFolder;
+    g_st.paquete = envio::Paquete{};
+    g_st.paquete.id = jstr(info, "id"); g_st.paquete.nombre = nombre;
+    g_st.paquete.carpeta = t == store::Sprites ? "sprites" : "sonidos";
+    g_st.paquete.titulo = t == store::Sprites ? "Sprites" : "Sonidos";
+    g_st.msg = "Preparando el paquete..."; g_st.msgErr = false;
+    std::string portada = g_st.portada;
+    g_st.armando = std::async(std::launch::async, [pk, info, portada]() -> std::string {
+        auto &f = g_st.paquete.archivos;
+        f["paquete.s2dpaquete"] = store::pack(pk);
+        if (f["paquete.s2dpaquete"].empty()) return "No se pudo comprimir el paquete";
+        if (!portada.empty()) f["portada.png"] = portada;
+        f["info.json"] = info.dump(1);
+        return "";
+    });
+}
+static void drawStoreDialogs() {
+    if (g_st.armando.valid() && g_st.armando.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+        std::string err = g_st.armando.get();
+        if (!err.empty()) { g_st.msg = err; g_st.msgErr = true; }
+        else if (g_st.aCarpeta) {
+            std::string d = g_st.carpeta + "/" + g_st.paquete.id;
+            std::error_code ec;
+            fs::create_directories(fs::u8path(d), ec);
+            bool ok = !ec;
+            for (auto &kv : g_st.paquete.archivos) { std::ofstream o(fs::u8path(d + "/" + kv.first), std::ios::binary); ok = ok && (o << kv.second); }
+            g_st.msg = ok ? "Guardado en " + d : "No se pudo escribir en " + d;
+            g_st.msgErr = !ok;
+        } else { envio::enviar(g_st.paquete); g_st.msg.clear(); }
+    }
+    if (g_st.showCrear) { ImGui::OpenPopup("Crear paquete"); g_st.showCrear = false; }
+    ImGui::SetNextWindowSize(ImVec2(640, 0), ImGuiCond_Appearing);
+    if (ui::beginModal("Crear paquete", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        store::Tipo t = (store::Tipo)g_st.tipo;
+        bool busy = g_st.armando.valid() || envio::enviando();
+        drawGithubLogin("Para enviarlo a Source Store entra con tu cuenta de GitHub (gratis). También puedes guardarlo en una carpeta.");
+        ImGui::Separator();
+        ImGui::BeginDisabled(busy);
+        ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Nombre"); ImGui::SameLine(110);
+        ImGui::SetNextItemWidth(300); ImGui::InputText("##pkn", g_st.nombre, sizeof g_st.nombre);
+        ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Tipo"); ImGui::SameLine(110);
+        ImGui::SetNextItemWidth(200);
+        if (t == store::Sprites) ImGui::Combo("##pkc", &g_st.cat, kCatSprites, 5); else ImGui::Combo("##pkc", &g_st.cat, kCatSonidos, 3);
+        ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Licencia"); ImGui::SameLine(110);
+        ImGui::SetNextItemWidth(260); ImGui::Combo("##pkl", &g_st.lic, kLicencias, 3);
+        ImGui::SameLine(); ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Libre: cualquiera lo usa como quiera.\nDando crédito: hay que poner tu nombre en el juego.\nNo comercial: no se puede usar en juegos que se vendan.");
+        ImGui::TextUnformatted("Descripción");
+        ImGui::InputTextMultiline("##pkd", g_st.desc, sizeof g_st.desc, ImVec2(600, 60));
+        ImGui::TextUnformatted(t == store::Sprites ? "Qué lleva (de tu proyecto abierto o de Source Sprite):" : "Qué lleva (solo sonidos hechos en Source Sound):");
+        ImGui::BeginChild("##pkitems", ImVec2(600, 160), ImGuiChildFlags_Borders);
+        if (g_st.items.empty()) ImGui::TextDisabled(t == store::Sprites ? "No hay sprites: abre un proyecto o guarda alguno en Source Sprite." :
+                                                                          "No hay sonidos: crea alguno en Source Sound o añádelo a tu proyecto.");
+        for (size_t i = 0; i < g_st.items.size(); i++) { ImGui::PushID((int)i); ImGui::Checkbox(g_st.items[i].label.c_str(), &g_st.items[i].on); ImGui::PopID(); }
+        ImGui::EndChild();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(g_st.portada.empty() ? "Miniatura: ninguna" : "Miniatura: tu imagen (16:9)");
+        ImGui::SameLine();
+        if (ImGui::Button("Elegir imagen...")) {
+            ImGui::CloseCurrentPopup();
+            app.fileDlg.show(ui::FileDialog::Open, "Miniatura del paquete", ".png|.jpg|.jpeg|.bmp", ui::homeDir(), "", [](const std::string &f) {
+                std::string keep = g_sp.portada, keepF = g_sp.portadaArchivo, err;   // loadPortada deja la imagen en g_sp
+                if (loadPortada(f, err)) g_st.portada = g_sp.portada; else { g_st.msg = err; g_st.msgErr = true; }
+                g_sp.portada = keep; g_sp.portadaArchivo = keepF;
+                g_st.showCrear = true;
+            });
+        }
+        ImGui::EndDisabled();
+        ImGui::Dummy(ImVec2(0, 4));
+        ImGui::BeginDisabled(busy || !envio::conectado());
+        if (ui::primaryButton("Enviar a revisión", ImVec2(170, 0))) startStorePackage(false);
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::BeginDisabled(busy);
+        if (ImGui::Button("Guardar en una carpeta...", ImVec2(200, 0)))
+            app.fileDlg.show(ui::FileDialog::Folder, "Carpeta para el paquete", "", projectsDir(), "", [](const std::string &d) { g_st.carpeta = d; startStorePackage(true); });
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Cerrar", ImVec2(100, 0))) ImGui::CloseCurrentPopup();
+        std::string m = !g_st.msg.empty() ? g_st.msg : envio::estadoEnvio();
+        bool merr = !g_st.msg.empty() ? g_st.msgErr : envio::envioFallo();
+        if (!m.empty()) { ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 600); ImGui::TextColored(merr ? ImVec4(1, 0.55f, 0.5f, 1) : ImVec4(0.6f, 0.9f, 0.7f, 1), "%s", m.c_str()); ImGui::PopTextWrapPos(); }
+        ImGui::EndPopup();
+    }
+    // escuchar un paquete de sonidos (descargado)
+    if (g_st.showEscuchar) { ImGui::OpenPopup("Escuchar paquete"); g_st.showEscuchar = false; }
+    ImGui::SetNextWindowSize(ImVec2(460, 0), ImGuiCond_Appearing);
+    if (ui::beginModal("Escuchar paquete", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        json pk; std::string err;
+        if (!store::leer(store::Sonidos, g_st.escucharId, pk, err)) ImGui::TextColored(ImVec4(1, 0.55f, 0.5f, 1), "%s", err.c_str());
+        else for (size_t i = 0; i < pk["sonidos"].size(); i++) {
+            const json &s = pk["sonidos"][i];
+            std::string key = "store:" + g_st.escucharId + ":" + std::to_string(i);
+            ImGui::PushID((int)i);
+            bool suena = sound::clipKey() == key;
+            if (ImGui::Button(suena ? "Parar" : "Escuchar", ImVec2(90, 0))) { if (suena) sound::clipStop(); else sound::clipPlay(key, s); }
+            ImGui::SameLine(); ImGui::AlignTextToFramePadding();
+            ImGui::Text("%s  %s", jstr(s, "name", "Sonido").c_str(), jstr(s, "mode", "music") == "sfx" ? "(efecto)" : "(música)");
+            ImGui::PopID();
+        }
+        if (ImGui::Button("Cerrar", ImVec2(100, 0))) { sound::clipStop(); ImGui::CloseCurrentPopup(); }
+        ImGui::EndPopup();
+    }
+}
+
 static void drawSpriteGallery() {
     double since = sectionShownAt(4);
     sectionTitle("Source Sprite", 30);
+    if (storeTabs(store::Sprites)) { drawStoreSection(store::Sprites); return; }
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kText2), "Tus sprites. Dibuja, anima y exporta a PNG, GIF, hojas de sprites o .s2sprite.");
     ImGui::Dummy(ImVec2(0, 6));
     if (homeButton("+ Nuevo sprite", true)) { openStudio(); g_studio.askNew = true; }
@@ -2839,6 +3177,7 @@ static std::string fmtSecs(double s) {   // 0,4 s para los efectos cortos; 1:05 
 static void drawSoundGallery() {
     double since = sectionShownAt(6);
     sectionTitle("Source Sound", 30);
+    if (storeTabs(store::Sonidos)) { drawStoreSection(store::Sonidos); return; }
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kText2), "Tu música y tus efectos. Escúchalos aquí o ábrelos para seguir editándolos.");
     ImGui::Dummy(ImVec2(0, 6));
     auto fresh = [](bool sfx) {
@@ -4264,6 +4603,7 @@ static void drawCollabDialog() {
 static void drawModals() {
     drawCollabDialog();
     drawSourcePlayDialogs();
+    drawStoreDialogs();
     drawPerfil();
     drawCuentaYComunidad();
     drawDenuncia();
@@ -5242,6 +5582,68 @@ static void runScriptStep() {
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s -> %d\n", ok ? "OK" : "FAIL", line.c_str(), tienda::insignia(l));
     }
+    // Source Store (con S2D_STORE_SPRITES_URL / S2D_STORE_SONIDOS_URL=file://... y la clave de prueba)
+    else if (cmd == "store.tab") { std::string tp; in >> tp; g_st.tab[tp == "sonidos" ? 1 : 0] = 1; }   // la pestana Source Store
+    else if (cmd == "store.cancion") addFloppaSong();   // la canción Test en el proyecto (para el paquete de sonidos)
+    else if (cmd == "store.paquete") {   // store.paquete <sprites|sonidos> <carpeta>: todo lo que haya, "Guardar en una carpeta"
+        std::string tp, d; in >> tp >> d;
+        openCrearPaquete(tp == "sonidos" ? store::Sonidos : store::Sprites);
+        for (auto &it : g_st.items) it.on = true;
+        snprintf(g_st.nombre, sizeof g_st.nombre, "Paquete de prueba"); g_st.cat = 0; g_st.lic = 1;
+        g_st.carpeta = d;
+        startStorePackage(true);
+    }
+    else if (cmd == "store.espera") {
+        if (g_st.armando.valid()) app.scriptPos--;
+        else { bool ok = !g_st.msgErr; if (!ok) app.fails++; printf("S2DEDIT %s %s -> %s\n", ok ? "OK" : "FAIL", line.c_str(), g_st.msg.c_str()); }
+    }
+    else if (cmd == "store.expect") {   // store.expect <tipo> <paquetes>: espera al catalogo
+        std::string tp; int n = 0; in >> tp >> n;
+        store::Tipo t = tp == "sonidos" ? store::Sonidos : store::Sprites;
+        if (app.scriptRetry == 0) store::buscarAhora(t);
+        bool ok = (int)store::paquetes(t).size() == n;
+        if (!ok && app.scriptRetry++ < 600) { app.scriptPos--; return; }
+        app.scriptRetry = 0;
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s -> %zu [%s]\n", ok ? "OK" : "FAIL", line.c_str(), store::paquetes(t).size(), store::estado(t).c_str());
+    }
+    else if (cmd == "store.descargar") {
+        std::string tp; in >> tp;
+        store::Tipo t = tp == "sonidos" ? store::Sonidos : store::Sprites;
+        for (auto &p : store::paquetes(t)) store::descargar(t, p);
+    }
+    else if (cmd == "store.instalados") {   // espera las descargas y abre cada paquete (comprobado)
+        std::string tp; in >> tp;
+        store::Tipo t = tp == "sonidos" ? store::Sonidos : store::Sprites;
+        bool busy = false;
+        for (auto &p : store::paquetes(t)) if (store::descargando(t, p.id)) busy = true;
+        if (busy) { app.scriptPos--; return; }
+        for (auto &p : store::paquetes(t)) {
+            json pk; std::string err;
+            bool ok = store::leer(t, p.id, pk, err);
+            if (!ok) app.fails++;
+            printf("S2DEDIT %s store.instalado %s (%s) -> %s %s\n", ok ? "OK" : "FAIL", p.id.c_str(), storeContenido(p).c_str(), err.c_str(), store::error(t, p.id).c_str());
+        }
+    }
+    else if (cmd == "store.anadir") {   // store.anadir <tipo>: todos los paquetes al proyecto abierto (crece lo que toca)
+        std::string tp; in >> tp;
+        store::Tipo t = tp == "sonidos" ? store::Sonidos : store::Sprites;
+        auto cuenta = [&] { int n = 0; for (const char *k : {"sprites", "tilesets", "autotiles", "music"}) n += app.proj.doc.contains(k) ? (int)app.proj.doc[k].size() : 0; return n; };
+        int antes = cuenta();
+        for (auto &p : store::paquetes(t)) storeAddToProject(t, p.id);
+        bool ok = cuenta() > antes;
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s -> %d a %d\n", ok ? "OK" : "FAIL", line.c_str(), antes, cuenta());
+    }
+    else if (cmd == "store.creaciones") {   // store.creaciones <tipo>: guarda los paquetes en tus creaciones
+        std::string tp; in >> tp;
+        store::Tipo t = tp == "sonidos" ? store::Sonidos : store::Sprites;
+        int n = 0;
+        for (auto &p : store::paquetes(t)) { json pk; std::string err; if (store::leer(t, p.id, pk, err)) n += storeToCreations(t, pk); }
+        bool ok = n > 0 && !creations(t == store::Sprites ? "Sprites" : "Sonidos", t == store::Sprites).empty();
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s -> %d\n", ok ? "OK" : "FAIL", line.c_str(), n);
+    }
     else if (cmd == "tienda.espera") { if (tienda::estado() == "Buscando juegos...") app.scriptPos--; }
     else if (cmd == "tienda.expect") {   // tienda.expect <juegos>
         int n; in >> n;
@@ -5379,10 +5781,47 @@ static int sourcePlayCli(const std::string &mode, const std::string &file, const
     return code;
 }
 
+// Controladores/Source-Sprite.sh y Source-Sound.sh: source2d --paquete <paquete.s2dpaquete> <sprites|sonidos> [carpeta]
+// comprueba el paquete (que solo traiga lo que toca) y dice lo que lleva; con carpeta, saca cada sprite (.s2dsprite) o
+// sonido (.s2dsound) para abrirlo y revisarlo
+static int paqueteCli(const std::string &file, const std::string &tipo, const std::string &out) {
+    std::ifstream in(fs::u8path(file), std::ios::binary);
+    std::string data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()), err;
+    json pk;
+    store::Tipo t = tipo == "sonidos" ? store::Sonidos : store::Sprites;
+    if (tipo != "sprites" && tipo != "sonidos") { fprintf(stderr, "El tipo tiene que ser sprites o sonidos\n"); return 1; }
+    if (!store::unpack(data, pk, err) || !store::valido(pk, t, err)) { fprintf(stderr, "%s\n", err.c_str()); return 1; }
+    json n = json::object();
+    for (const char *k : {"sprites", "tilesets", "autotiles", "sonidos"}) n[k] = pk.contains(k) && pk[k].is_array() ? pk[k].size() : 0;
+    printf("OK paquete de %s\n", tipo.c_str());
+    for (const char *k : {"sprites", "tilesets", "autotiles", "sonidos"})
+        if (pk.contains(k)) for (auto &x : pk[k]) printf("  %-10s %s\n", k, jstr(x, "name").c_str());
+    printf("CONTENIDO %s\n", n.dump().c_str());
+    if (out.empty()) return 0;
+    std::error_code ec;
+    fs::create_directories(fs::u8path(out), ec);
+    auto nombre = [](std::string s) { for (char &c : s) if (strchr("/\\:*?\"<>|", c)) c = '_'; return s.empty() ? std::string("sin nombre") : s; };
+    if (pk.contains("sprites")) for (auto x : pk["sprites"]) { x["format"] = "source2d-sprite"; std::ofstream(fs::u8path(out + "/" + nombre(jstr(x, "name")) + ".s2dsprite")) << x.dump(); }
+    if (pk.contains("sonidos")) for (auto &x : pk["sonidos"]) std::ofstream(fs::u8path(out + "/" + nombre(jstr(x, "name")) + ".s2dsound")) << x.dump(1);
+    if (pk.contains("tilesets") || pk.contains("autotiles")) {   // tiles y autotiles: en un proyecto pequeno para abrirlo en el editor
+        json doc = {{"id", "p_revision"}, {"name", "Revisión de paquete"}, {"version", 3}, {"settings", {{"width", 960}, {"height", 540}}},
+                    {"globals", json::array()}, {"sprites", json::array()}, {"tilesets", json::array()}, {"objects", json::array()},
+                    {"scenes", json::array({{{"id", "sc_r"}, {"name", "Escena"}, {"width", 960}, {"height", 540}, {"instances", json::array()}}})},
+                    {"events", json::array()}};
+        Project pr; pr.doc = doc;
+        json solo = pk; solo.erase("sprites");
+        store::anadirAlProyecto(pr, solo);
+        std::ofstream(fs::u8path(out + "/tiles y autotiles.source2d.json")) << pr.doc.dump(1);
+    }
+    printf("Sacado a %s\n", out.c_str());
+    return 0;
+}
+
 int main(int argc, char **argv) {
     std::string openPath, scriptPath;
     for (int i = 1; i + 1 < argc; i++) {
         std::string a = argv[i];
+        if (a == "--paquete" && i + 2 < argc) return paqueteCli(argv[i + 1], argv[i + 2], i + 3 < argc ? argv[i + 3] : "");
         if (a == "--jugar" || a == "--comprobar") {
             std::string llave;
             for (int k = i + 2; k + 1 < argc; k++) if (std::string(argv[k]) == "--llave") llave = argv[k + 1];
@@ -5430,6 +5869,7 @@ int main(int argc, char **argv) {
     if (!prefs().lang.empty()) ui::setLanguage(prefs().lang);
     novedades::iniciar(prefs().news, versionsDir(), !app.script.empty());
     tienda::iniciar(prefs().news, !app.script.empty());
+    store::iniciar(prefs().news, !app.script.empty());
     envio::iniciar(!app.script.empty());
     cleanGuestLeftovers();
     if (app.script.empty()) {
@@ -5469,6 +5909,7 @@ int main(int argc, char **argv) {
         if (!app.script.empty()) runScriptStep();
         novedades::tick();
         tienda::tick();
+        store::tick();
         envio::tick();
         dropFilesTick();
         globalShortcuts();

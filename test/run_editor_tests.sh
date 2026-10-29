@@ -57,6 +57,17 @@ S2D_JUEGOS_DIR="$T/juegos" python3 tools/source_cuentas.py creador FloppaKFC --s
 S2D_JUEGOS_DIR="$T/juegos" python3 tools/source_play.py destacar otro-aventura-de-plataformas --sin-subir | grep -v Firmado
 sed "s|CAPTURA|$T/sourceplay.png|" test/editor_sourceplay2.txt > "$T/guion_sp2.txt"
 XDG_CONFIG_HOME="$T/spcfg" S2D_TIENDA_URL="file://$T/juegos/" S2D_FIRMA_PUBLICA="$PUB" "$ED" --script "$T/guion_sp2.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
+echo "== Source Store: crear paquetes de sprites y sonidos, publicarlos, descargarlos y anadirlos a un proyecto"
+mkdir -p "$T/stpaq" "$T/stsp" "$T/stso" "$T/stcfg" "$T/stcfg2"
+cp test/proyecto_prueba.source2d.json "$T/st.json"
+sed "s|PROYECTO|$T/st.json|; s|PAQ|$T/stpaq|g" test/editor_store.txt > "$T/guion_st.txt"
+XDG_CONFIG_HOME="$T/stcfg" "$ED" --script "$T/guion_st.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
+S2D_SPRITES_DIR="$T/stsp" S2D_EDITOR="$ED" python3 tools/source_store.py sprites anadir "$T/stpaq/sprites/"* --sin-subir | grep "Publicado\|CONTENIDO"
+S2D_SONIDOS_DIR="$T/stso" S2D_EDITOR="$ED" python3 tools/source_store.py sonidos anadir "$T/stpaq/sonidos/"* --sin-subir | grep "Publicado\|CONTENIDO"
+cp test/proyecto_prueba.source2d.json "$T/st2.json"
+sed "s|PROYECTO|$T/st2.json|; s|CAPTURA|$T/store.png|" test/editor_store2.txt > "$T/guion_st2.txt"
+XDG_CONFIG_HOME="$T/stcfg2" S2D_STORE_SPRITES_URL="file://$T/stsp/" S2D_STORE_SONIDOS_URL="file://$T/stso/" S2D_FIRMA_PUBLICA="$PUB" \
+    S2D_CONTADOR_URL="file://$T/cont/" "$ED" --script "$T/guion_st2.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
 echo "== Publicar en Source Play con un GitHub de mentira (entrar con codigo, envio, revision, registro, perfil y seguir)"
 python3 test/desktop/github_falso.py 47790 "$T/ghsub" 2>/dev/null & GHP=$!
 mkdir -p "$T/ghsub" "$T/ghcfg"; cp "$T/imagen.png" "$T/ghsub/avatar.png"; sleep 0.5

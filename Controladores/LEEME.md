@@ -6,6 +6,8 @@ Programas para llevar lo que se publica (se abren desde la terminal, desde cualq
 |---|---|
 | `Controladores/Noticias.sh` | Noticias de Inicio > Noticias (con encuestas) y publicar versiones nuevas del editor |
 | `Controladores/Source-Play.sh` | Source Play: revisar envíos, aprobarlos o rechazarlos, publicar tus juegos, retirar, denuncias |
+| `Controladores/Source-Sprite.sh` | Source Store de sprites (sprites, tiles y autotiles): envíos, publicar, retirar, destacados, denuncias |
+| `Controladores/Source-Sound.sh` | Source Store de sonidos (música y efectos de Source Sound): lo mismo que Source-Sprite.sh |
 | `Controladores/Source-Cuentas.sh` | Cuentas registradas en Source Play e insignias: verificada (azul), admin (dorada) o creador (morada con estrella) |
 
 Los dos firman con tu clave (piden la contraseña). Con `S2D_SIN_SUBIR=1` delante firman pero no suben nada (para probar).
@@ -31,3 +33,12 @@ Los dos firman con tu clave (piden la contraseña). Con `S2D_SIN_SUBIR=1` delant
   (con la insignia de quien denuncia y de la cuenta denunciada).
 - **Destacados:** Source-Play.sh > Destacados. Salen arriba del todo en Source Play; debajo, los favoritos de cada persona.
 - **Insignias:** `cuentas.json` en `source2d-juegos`, firmado con tu clave. Lo cambia `Source-Cuentas.sh`.
+
+## Source Store (sprites y sonidos)
+
+- **Repositorios** (ya creados): `FloppaKFC/source2d-sprites` y `FloppaKFC/source2d-sonidos`, clonados en
+  `../source2d-sprites` y `../source2d-sonidos`. Igual que Source Play: catálogo firmado en el repositorio y los paquetes
+  (`.s2dpaquete`, comprimidos) como archivos de sus Releases.
+- **Envíos:** llegan a `source2d-envios` con el título `Sprites: ...` o `Sonidos: ...`. Se revisan con `Source-Sprite.sh`
+  y `Source-Sound.sh`; "probar" saca el contenido a una carpeta para abrirlo en el editor.
+- En sonidos solo se aceptan creaciones de Source Sound (notas, no audio grabado): el editor rechaza lo demás.

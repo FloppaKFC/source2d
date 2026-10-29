@@ -1,0 +1,10 @@
+# Source Store: "Crear paquete" de sprites (sprites y tiles del proyecto) y de sonidos (la cancion Test), a una carpeta
+open PROYECTO
+wait 10
+store.cancion
+wait 5
+store.paquete sprites PAQ/sprites
+store.espera
+store.paquete sonidos PAQ/sonidos
+store.espera
+quit
