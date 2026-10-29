@@ -26,6 +26,7 @@
 //
 //========================================================================
 
+extern int s2d_drag_hover;   // Source 2D (definida en input.c): hay archivos arrastrandose sobre la ventana
 #include "internal.h"
 
 #if defined(_GLFW_X11)
@@ -1610,11 +1611,13 @@ static void processEvent(XEvent *event)
 
                 if (list && formats)
                     XFree(formats);
+                s2d_drag_hover = _glfw.x11.xdnd.format ? 1 : 0;   // Source 2D
             }
             else if (event->xclient.message_type == _glfw.x11.XdndDrop)
             {
                 // The drag operation has finished by dropping on the window
                 Time time = CurrentTime;
+                s2d_drag_hover = 0;   // Source 2D
 
                 if (_glfw.x11.xdnd.version > _GLFW_XDND_VERSION)
                     return;
@@ -1686,6 +1689,15 @@ static void processEvent(XEvent *event)
                 XSendEvent(_glfw.x11.display, _glfw.x11.xdnd.source,
                            False, NoEventMask, &reply);
                 XFlush(_glfw.x11.display);
+            }
+            else
+            {
+                // Source 2D: el arrastre salio de la ventana sin soltar nada
+                static Atom leave = None;
+                if (leave == None)
+                    leave = XInternAtom(_glfw.x11.display, "XdndLeave", False);
+                if (event->xclient.message_type == leave)
+                    s2d_drag_hover = 0;
             }
 
             return;

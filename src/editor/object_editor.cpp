@@ -1,5 +1,10 @@
 #include "object_editor.hpp"
 #include "code_editor.hpp"
+#include "school.hpp"
+#include "collision_editor.hpp"
+#include "tileset_editor.hpp"
+#include "tiles_obj.hpp"
+#include <cmath>
 #include <algorithm>
 #include <cstring>
 
@@ -14,7 +19,21 @@ std::string createObject(Project &proj, const std::string &kind) {
                              {"jump", 620}, {"friction", 0.85}, {"airFriction", 0.99}, {"bounce", 0}, {"mass", 1}, {"spin", 0}}},
               {"vars", json::array()}, {"animations", json::array()}, {"flipOnMove", true}, {"comportamientos", json::object()}};
     if (kind == "sprite" && !proj.sprites().empty()) o["spriteId"] = jstr(proj.sprites()[0], "id");
-    if (kind == "tile" && proj.doc.contains("tilesets") && !proj.doc["tilesets"].empty()) o["tilesetId"] = jstr(proj.doc["tilesets"][0], "id");
+    if (kind == "sprite" && proj.sprites().empty()) {   // el primero: con su sprite en blanco listo para dibujar
+        json px = json::array();
+        for (int i = 0; i < 32 * 32; i++) px.push_back("");
+        std::string sid = makeUid("s");
+        proj.sprites().push_back({{"id", sid}, {"name", "Objeto " + std::to_string(n)}, {"width", 32}, {"height", 32}, {"frames", json::array({{{"pixels", px}}})}});
+        o["spriteId"] = sid;
+    }
+    if (kind == "tile") {   // cada objeto Tile tiene su mapa de tiles (el primero del proyecto o uno nuevo)
+        if (proj.doc.contains("tilesets") && proj.doc["tilesets"].is_array() && !proj.doc["tilesets"].empty()) o["tilesetId"] = jstr(proj.doc["tilesets"][0], "id");
+        else {
+            o["tilesetId"] = createTileset(proj, "Tiles 1", 16, 4, 2);
+            if (json *ts = findById(proj.doc["tilesets"], jstr(o, "tilesetId"))) starterTiles(*ts);
+        }
+    }
+    if (kind == "light") { o["name"] = "Luz " + std::to_string(n); o["light"] = {{"radius", 160}, {"intensity", 1}, {"color", "#ffd9a0"}, {"flicker", 0}}; }
     if (kind == "text") { o["name"] = "Texto " + std::to_string(n); o["text"] = {{"content", "Texto"}, {"size", 24}, {"color", "#ffffff"}, {"align", "left"}}; }
     if (kind == "button") { o["name"] = "Boton " + std::to_string(n); o["button"] = {{"text", "Boton"}, {"fontSize", 15}, {"bg", "#3a4150"}, {"fg", "#ffffff"}, {"width", 150}, {"height", 36}, {"radius", 5}}; }
     if (kind == "tile") o["name"] = "Tile " + std::to_string(n);
@@ -120,6 +139,8 @@ static void bhAdd(json &o, const std::string &type) {
 void objectAddBehavior(json &obj, const std::string &type) { bhAdd(obj, type); }
 void objectRemoveBehavior(json &obj, const std::string &type) { bhRemove(obj, type); }
 
+static void animPreview(Project &proj, ImDrawList *dl, const json &anim, ImVec2 a, ImVec2 b);
+
 /* ---------------- interfaz ---------------- */
 std::string ObjectEditor::title(Project &proj) {
     json *o = findById(proj.doc["objects"], objectId);
@@ -142,6 +163,7 @@ void ObjectEditor::tabProps(Project &proj, json &o) {
     std::string type = jstr(o, "type", "sprite");
     ImGui::SeparatorText("General");
     labelRow("Nombre"); editText("##name", o, "name");
+    school::anchor("obj.name");
     {   // objeto de una escena o global (en todas las escenas)
         bool global = jstr(o, "scene").empty();
         std::string owner;
@@ -162,10 +184,12 @@ void ObjectEditor::tabProps(Project &proj, json &o) {
     }
     ImGui::TextDisabled("Si lo renombras, actualiza las expresiones de los eventos que usen el nombre (Jugador.X).");
     if (type == "sprite") {
-        labelRow("Sprite");
-        if (comboById("##sprite", o, "spriteId", proj.sprites(), "(sin sprite)")) proj.rev++;
+        labelRow("Dibujo");   // las animaciones y su colision, en la pestana Animaciones
+        ImGui::TextDisabled("Las animaciones y sus colisiones están en la pestaña Animaciones.");
         ImGui::Dummy(ImVec2(182, 0)); ImGui::SameLine();
-        if (ImGui::Button("Editar sprite") && !jstr(o, "spriteId").empty() && onOpenSprite) onOpenSprite(jstr(o, "spriteId"));
+        bool esHit = ImGui::Button("Editar sprite");
+        school::anchor("obj.editsprite");
+        if (esHit && !jstr(o, "spriteId").empty() && onOpenSprite) onOpenSprite(jstr(o, "spriteId"));
         ImGui::SameLine();
         if (ImGui::Button("Nuevo sprite") && onNewSprite) { std::string id = onNewSprite(jstr(o, "name"), 32, 32); o["spriteId"] = id; if (onOpenSprite) onOpenSprite(id); }
     } else if (type == "text") {
@@ -203,8 +227,32 @@ void ObjectEditor::tabProps(Project &proj, json &o) {
         }
     } else if (type == "tile") {
         if (!proj.doc.contains("tilesets")) proj.doc["tilesets"] = json::array();
-        labelRow("Conjunto de tiles"); comboById("##ts", o, "tilesetId", proj.doc["tilesets"], "(todos)");
-        ImGui::TextDisabled("Las condiciones de tiles de este objeto miran los mapas de este conjunto.");
+        labelRow("Mapa de tiles"); if (comboById("##ts", o, "tilesetId", proj.doc["tilesets"], "(ninguno)")) proj.rev++;
+        ImGui::Dummy(ImVec2(182, 0)); ImGui::SameLine();
+        if (ImGui::Button("Editar tiles y colisiones") && !jstr(o, "tilesetId").empty() && onOpenTileset) onOpenTileset(jstr(o, "tilesetId"));
+        ImGui::SameLine();
+        if (ImGui::Button("Nuevo mapa de tiles")) {
+            o["tilesetId"] = createTileset(proj, jstr(o, "name") + " tiles", 16, 4, 2);
+            proj.rev++;
+            if (onOpenTileset) onOpenTileset(jstr(o, "tilesetId"));
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Importar imagen...") && onImportTiles) onImportTiles(jstr(o, "id"));
+        ImGui::Dummy(ImVec2(182, 0)); ImGui::SameLine();
+        editBool("Activar autotile", o, "autotile", false);
+        if (jbool(o, "autotile", false)) {
+            labelRow("Autotile"); comboById("##at", o, "autotileId", projectAutotiles(proj), "(elige uno)");
+            if (projectAutotiles(proj).empty()) { ImGui::Dummy(ImVec2(182, 0)); ImGui::SameLine(); ImGui::TextDisabled("Crea uno en el panel del proyecto > Autotiles."); }
+        }
+        ImGui::TextDisabled("Píntalo en la escena: elige el objeto en la lista de objetos de la escena. Cada instancia\n"
+                            "es un mapa que crece y se achica solo, y se puede mover entero. Las colisiones son las de sus tiles.");
+    } else if (type == "light") {
+        json &L = sub(o, "light");
+        labelRow("Radio"); editNum("##lr", L, "radius", 160, 1, "%.0f px", 4, 4000);
+        labelRow("Intensidad"); editNum("##li", L, "intensity", 1, 0.01f, "%.2f", 0, 1);
+        labelRow("Color del brillo"); editColor("##lc", L, "color", "#ffd9a0");
+        labelRow("Parpadeo"); editNum("##lf", L, "flicker", 0, 0.01f, "%.2f", 0, 1);
+        ImGui::TextDisabled("Ilumina la oscuridad de las capas (Capas > Oscuridad). Ponla en la escena como cualquier objeto.");
     }
     if (type == "sprite") {   // nine-slice: al escalarlo, las esquinas y los bordes no se estiran (paneles, botones, barras)
         json &nn = sub(o, "nine");
@@ -285,44 +333,222 @@ void ObjectEditor::tabProps(Project &proj, json &o) {
     codeField("##onupdate", h, "onUpdate", ImVec2(-1, 110), CodeLang::JS, true);
 }
 
+// operaciones con los frames de un sprite: la imagen final (frames), la de cada capa (layers[].frames) y la
+// duracion de cada frame (durations) se mueven juntas. op: 'm' mover i a j, 'd' borrar i, 'c' duplicar i, 'n' frame vacio al final
+void objectFrameOp(json &sp, char op, int i, int j) {
+    auto apply = [&](json &arr, const json &blank) {
+        if (!arr.is_array()) return;
+        int n = (int)arr.size();
+        if (op == 'n') { arr.push_back(blank); return; }
+        if (i < 0 || i >= n) return;
+        if (op == 'd') arr.erase(arr.begin() + i);
+        else if (op == 'c') arr.insert(arr.begin() + i + 1, arr[i]);
+        else if (op == 'm' && j >= 0 && j < n && j != i) { json v = arr[i]; arr.erase(arr.begin() + i); arr.insert(arr.begin() + j, v); }
+    };
+    int w = (int)jnum(sp, "width", 32), h = (int)jnum(sp, "height", 32);
+    json empty = json::array();
+    for (int k = 0; k < w * h; k++) empty.push_back("");
+    if (!sp.contains("frames") || !sp["frames"].is_array()) sp["frames"] = json::array();
+    apply(sp["frames"], json{{"pixels", empty}});
+    if (sp.contains("layers") && sp["layers"].is_array()) for (auto &L : sp["layers"]) if (L.contains("frames")) apply(L["frames"], empty);
+    if (sp.contains("durations") && sp["durations"].is_array() && !sp["durations"].empty()) apply(sp["durations"], sp["durations"].back());
+}
+
+// vista previa animada de una animacion (su sprite a sus fps), centrada en el cuadro a-b
+static void animPreview(Project &proj, ImDrawList *dl, const json &anim, ImVec2 a, ImVec2 b) {
+    ui::checkerboard(dl, a, b, 6);
+    json *sp = proj.spriteById(jstr(anim, "spriteId"));
+    int n = sp && (*sp)["frames"].is_array() ? (int)(*sp)["frames"].size() : 0;
+    if (!n) return;
+    int fps = std::max(1, (int)jnum(anim, "fps", 8));
+    int f = (int)(ImGui::GetTime() * fps) % n;
+    if (!jbool(anim, "loop", true)) f = std::min(n - 1, (int)(std::fmod(ImGui::GetTime(), (n + fps) / (double)fps) * fps));
+    if (ui::PixTexture *tx = spriteFrameTex(proj, jstr(*sp, "id"), f)) {
+        float bw = b.x - a.x - 8, bh = b.y - a.y - 8, sc = std::min(bw / tx->w, bh / tx->h), w = tx->w * sc, h = tx->h * sc;
+        ImVec2 c((a.x + b.x) / 2, (a.y + b.y) / 2);
+        dl->AddImage(tx->id(), ImVec2(c.x - w / 2, c.y - h / 2), ImVec2(c.x + w / 2, c.y + h / 2));
+    }
+}
+
+// tira de frames de una animacion: arrastrar para cambiar el orden, x para borrar, clic derecho para mas
+void ObjectEditor::framesStrip(Project &proj, json &anim) {
+    json *sp = proj.spriteById(jstr(anim, "spriteId"));
+    if (!sp) { ImGui::TextDisabled("Esta animación no tiene sprite: elige uno arriba."); return; }
+    json &frames = (*sp)["frames"];
+    int n = frames.is_array() ? (int)frames.size() : 0;
+    float cell = 72, gap = 8;
+    // vista previa animada a la izquierda (fuera de la tira, que se desliza sin taparla)
+    {
+        ImDrawList *dl = ImGui::GetWindowDrawList();
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        ImGui::Dummy(ImVec2(cell + 24, cell + 20));
+        animPreview(proj, dl, anim, p, ImVec2(p.x + cell + 24, p.y + cell + 24));
+        dl->AddText(ImVec2(p.x + 4, p.y + cell + 26), ui::kDim, "Vista previa");
+        ImGui::SameLine(0, 16);
+    }
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));   // sin el fondo de la tarjeta encima otra vez
+    ImGui::BeginChild("##strip", ImVec2(0, cell + 52), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
+    ImGui::PopStyleColor();
+    ImDrawList *dl = ImGui::GetWindowDrawList();   // la de la tira: recorta lo que se sale por los lados
+    int moveFrom = -1, moveTo = -1, del = -1, dup = -1;
+    for (int i = 0; i < n; i++) {
+        ImGui::PushID(i);
+        if (i) ImGui::SameLine(0, gap);
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        ImGui::InvisibleButton("##fr", ImVec2(cell, cell + 18));
+        bool hov = ImGui::IsItemHovered();
+        if (ImGui::BeginDragDropSource()) {
+            ImGui::SetDragDropPayload("S2D_FRAME", &i, sizeof i);
+            ImGui::Text("Frame %d", i + 1);
+            ImGui::EndDragDropSource();
+        }
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload *pl = ImGui::AcceptDragDropPayload("S2D_FRAME")) { moveFrom = *(const int *)pl->Data; moveTo = i; }
+            ImGui::EndDragDropTarget();
+        }
+        if (ImGui::BeginPopupContextItem("##fctx")) {
+            if (ImGui::MenuItem("Duplicar")) dup = i;
+            if (ImGui::MenuItem("Mover a la izquierda", nullptr, false, i > 0)) { moveFrom = i; moveTo = i - 1; }
+            if (ImGui::MenuItem("Mover a la derecha", nullptr, false, i + 1 < n)) { moveFrom = i; moveTo = i + 1; }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Eliminar", nullptr, false, n > 1)) del = i;
+            ImGui::EndPopup();
+        }
+        if (hov && ImGui::IsMouseDoubleClicked(0) && onOpenSprite) onOpenSprite(jstr(*sp, "id"));
+        ui::checkerboard(dl, p, ImVec2(p.x + cell, p.y + cell), 6);
+        if (ui::PixTexture *tx = spriteFrameTex(proj, jstr(*sp, "id"), i)) {
+            float sc = (cell - 8) / std::max(tx->w, tx->h), w = tx->w * sc, h = tx->h * sc;
+            dl->AddImage(tx->id(), ImVec2(p.x + (cell - w) / 2, p.y + (cell - h) / 2), ImVec2(p.x + (cell + w) / 2, p.y + (cell + h) / 2));
+        }
+        dl->AddRect(p, ImVec2(p.x + cell, p.y + cell), hov ? ui::kPrimary : IM_COL32(255, 255, 255, 40), 4, 0, hov ? 2.0f : 1.0f);
+        char num[16]; snprintf(num, sizeof num, "%d", i + 1);
+        dl->AddText(ImVec2(p.x + cell / 2 - ImGui::CalcTextSize(num).x / 2, p.y + cell + 2), ui::kDim, num);
+        if (hov && n > 1) {   // x para borrar de una
+            ImVec2 xa(p.x + cell - 18, p.y + 2), xb(p.x + cell - 2, p.y + 18);
+            bool on = ImGui::IsMouseHoveringRect(xa, xb);
+            dl->AddRectFilled(xa, xb, on ? IM_COL32(240, 96, 93, 255) : IM_COL32(40, 40, 48, 230), 4);
+            dl->AddLine(ImVec2(xa.x + 4, xa.y + 4), ImVec2(xb.x - 4, xb.y - 4), IM_COL32_WHITE, 1.5f);
+            dl->AddLine(ImVec2(xb.x - 4, xa.y + 4), ImVec2(xa.x + 4, xb.y - 4), IM_COL32_WHITE, 1.5f);
+            if (on && ImGui::IsMouseReleased(0) && !ImGui::GetDragDropPayload()) del = i;
+            ImGui::SetTooltip("Arrastra para cambiar el orden. Clic derecho: más opciones. Doble clic: dibujar");
+        }
+        ImGui::PopID();
+    }
+    if (n) ImGui::SameLine(0, gap);
+    if (ImGui::Button("+##addf", ImVec2(36, cell))) objectFrameOp(*sp, 'n', 0, 0);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Añadir un frame vacío al final");
+    ImGui::EndChild();
+    bool changed = true;
+    if (moveFrom >= 0 && moveTo >= 0 && moveFrom != moveTo) objectFrameOp(*sp, 'm', moveFrom, moveTo);
+    else if (del >= 0 && n > 1) objectFrameOp(*sp, 'd', del, 0);
+    else if (dup >= 0) objectFrameOp(*sp, 'c', dup, 0);
+    else if ((int)(*sp)["frames"].size() == n) changed = false;
+    if (changed) { proj.rev++; proj.dirty = true; if (onSpriteChanged) onSpriteChanged(jstr(*sp, "id")); }
+}
+
+// animacion nueva: la primera usa el sprite del objeto; las demas, un sprite nuevo del mismo tamano para dibujarla
+void ObjectEditor::addAnimation(Project &proj, json &o) {
+    size_t count = o["animations"].size();
+    std::string name = count == 0 ? "Idle" : "Anim " + std::to_string(count + 1), sid = jstr(o, "spriteId");
+    if (count || sid.empty() || !proj.spriteById(sid)) {
+        json *base = proj.spriteById(sid);
+        int w = base ? (int)jnum(*base, "width", 32) : 32, h = base ? (int)jnum(*base, "height", 32) : 32;
+        sid = onNewSprite ? onNewSprite(jstr(o, "name") + " " + name, w, h) : "";
+        if (jstr(o, "spriteId").empty()) o["spriteId"] = sid;
+    }
+    json &anims = o["animations"];   // despues de tocar el objeto (una clave nueva lo mueve en memoria)
+    anims.push_back({{"id", makeUid("a")}, {"name", name}, {"spriteId", sid}, {"fps", 8}, {"loop", true}});
+    curAnim = (int)anims.size() - 1;
+    proj.rev++; proj.dirty = true;
+}
+
 void ObjectEditor::tabAnims(Project &proj, json &o) {
+    // todas las claves que se usan aqui, antes de coger referencias: anadir una clave al objeto mueve las demas en
+    // memoria y dejaria "anims" apuntando a nada (asi se caia el editor)
     if (!o.contains("animations") || !o["animations"].is_array()) o["animations"] = json::array();
+    if (!o.contains("collision")) o["collision"] = nullptr;
+    if (!o.contains("animSlots") || !o["animSlots"].is_object()) o["animSlots"] = json::object();
+    if (!o.contains("flipOnMove")) o["flipOnMove"] = true;
+    if (!o.contains("spriteId")) o["spriteId"] = nullptr;
     json &anims = o["animations"];
     editBool("Voltear al moverse hacia la izquierda", o, "flipOnMove", true);
     ImGui::Spacing();
-    if (ImGui::BeginTable("##anims", 6, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_SizingStretchProp)) {
-        ImGui::TableSetupColumn("Nombre", 0, 1.2f); ImGui::TableSetupColumn("Sprite", 0, 1.4f);
-        ImGui::TableSetupColumn("FPS", 0, 0.6f); ImGui::TableSetupColumn("Bucle", ImGuiTableColumnFlags_WidthFixed, 50);
-        ImGui::TableSetupColumn("Eventos (fotograma:nombre)", 0, 1.3f);
-        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 180);
-        ImGui::TableHeadersRow();
-        int del = -1;
-        for (int i = 0; i < (int)anims.size(); i++) {
-            json &a = anims[i];
-            ImGui::PushID(i);
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn(); ImGui::SetNextItemWidth(-1); editText("##an", a, "name");
-            ImGui::TableNextColumn(); ImGui::SetNextItemWidth(-1); if (comboById("##as", a, "spriteId", proj.sprites())) proj.rev++;
-            ImGui::TableNextColumn(); ImGui::SetNextItemWidth(-1); editNum("##af", a, "fps", 8, 0.2f, "%.0f", 1, 60);
-            ImGui::TableNextColumn(); editBool("##al", a, "loop", true);
-            ImGui::TableNextColumn(); ImGui::SetNextItemWidth(-1); editText("##aev", a, "events", "3:paso, 7:golpe");
-            ImGui::TableNextColumn();
-            if (ImGui::SmallButton("Editar sprite") && onOpenSprite && !jstr(a, "spriteId").empty()) onOpenSprite(jstr(a, "spriteId"));
-            ImGui::SameLine();
-            if (ImGui::SmallButton("Quitar")) del = i;
-            ImGui::PopID();
-        }
-        ImGui::EndTable();
-        if (del >= 0) {
-            std::string id = jstr(anims[del], "id");
-            anims.erase(anims.begin() + del);
-            if (o.contains("animSlots") && o["animSlots"].is_object())
-                for (auto it = o["animSlots"].begin(); it != o["animSlots"].end();) { if (it.value() == id) it = o["animSlots"].erase(it); else ++it; }
-        }
+    if (anims.empty()) {
+        ImGui::TextWrapped("Este objeto todavía no tiene animaciones. Cada animación es una tira de dibujos que se van pasando "
+                           "(quieto, caminar, saltar...). La primera usa el dibujo que ya tiene el objeto.");
+        ImGui::Spacing();
     }
-    if (ui::primaryButton("+ Añadir animación"))
-        anims.push_back({{"id", makeUid("a")}, {"name", "Anim " + std::to_string(anims.size() + 1)}, {"spriteId", jstr(o, "spriteId")}, {"fps", 8}, {"loop", true}});
+    int del = -1;
+    for (int i = 0; i < (int)anims.size(); i++) {   // una tarjeta por animacion: sus datos y sus frames
+        json &a = anims[i];
+        ImGui::PushID(i);
+        bool cur = i == curAnim;
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, cur ? ImVec4(124 / 255.f, 92 / 255.f, 255 / 255.f, 0.10f) : ImVec4(44 / 255.f, 44 / 255.f, 55 / 255.f, 1));
+        ImGui::PushStyleColor(ImGuiCol_Border, cur ? ImGui::ColorConvertU32ToFloat4(ui::kPrimary) : ImGui::GetStyleColorVec4(ImGuiCol_Border));
+        ImGui::BeginChild("##acard", ImVec2(0, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::IsMouseClicked(0)) curAnim = i;
+        ImGui::AlignTextToFramePadding();
+        ImGui::SetNextItemWidth(170); editText("##an", a, "name");
+        ImGui::SameLine(); ImGui::TextDisabled("Sprite"); ImGui::SameLine();
+        ImGui::SetNextItemWidth(160); if (comboById("##as", a, "spriteId", proj.sprites())) proj.rev++;
+        ImGui::SameLine(); ImGui::TextDisabled("FPS"); ImGui::SameLine();
+        ImGui::SetNextItemWidth(60); editNum("##af", a, "fps", 8, 0.2f, "%.0f", 1, 60);
+        ImGui::SameLine(); editBool("Bucle", a, "loop", true);
+        ImGui::SameLine(); ImGui::SetNextItemWidth(150); editText("##aev", a, "events", "eventos: 3:paso");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Eventos de la animación (fotograma:nombre), por ejemplo 3:paso, 7:golpe");
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Editar sprite") && onOpenSprite && !jstr(a, "spriteId").empty()) onOpenSprite(jstr(a, "spriteId"));
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Quitar")) del = i;
+        framesStrip(proj, a);
+        ImGui::EndChild();
+        ImGui::PopStyleColor(2);
+        ImGui::PopID();
+        ImGui::Spacing();
+    }
+    if (del >= 0) {
+        std::string id = jstr(anims[del], "id");
+        anims.erase(anims.begin() + del);
+        if (o.contains("animSlots") && o["animSlots"].is_object())
+            for (auto it = o["animSlots"].begin(); it != o["animSlots"].end();) { if (it.value() == id) it = o["animSlots"].erase(it); else ++it; }
+    }
+    if (ui::primaryButton("+ Añadir animación")) addAnimation(proj, o);
     ImGui::TextDisabled("Sin animaciones por estado, se usa la llamada Idle (quieto) o Walk (caminar).");
+    if (curAnim >= (int)anims.size()) curAnim = (int)anims.size() - 1;
+    if (curAnim < 0 && !anims.empty()) curAnim = 0;
+
+    // colision: la de cada animacion (agachado, mas baja...) o, sin animaciones, la del objeto
+    ImGui::SeparatorText("Colisión");
+    school::anchor("obj.collision");
+    ImGui::TextDisabled("Con qué parte del dibujo choca. Cada animación puede tener la suya: agachado, por ejemplo, más baja.");
+    json *target = &o["collision"];
+    std::string sid = jstr(o, "spriteId");
+    if (!anims.empty()) {
+        labelRow("Animación");
+        if (ImGui::BeginCombo("##colanim", jstr(anims[curAnim], "name").c_str())) {
+            for (int i = 0; i < (int)anims.size(); i++) if (ImGui::Selectable((jstr(anims[i], "name") + "##ca" + std::to_string(i)).c_str(), i == curAnim)) curAnim = i;
+            ImGui::EndCombo();
+        }
+        json &ca = anims[curAnim];
+        if (!ca.contains("collision")) ca["collision"] = nullptr;
+        target = &ca["collision"];
+        sid = jstr(ca, "spriteId");
+    }
+    json *sp = proj.spriteById(sid);
+    int sw = sp ? (int)jnum(*sp, "width", 32) : 32, sh = sp ? (int)jnum(*sp, "height", 32) : 32;
+    int nf = sp && (*sp)["frames"].is_array() ? (int)(*sp)["frames"].size() : 1;
+    if (nf > 1) { labelRow("Frame de referencia"); ImGui::SliderInt("##colframe", &colFrame, 1, nf); }
+    colFrame = std::clamp(colFrame, 1, std::max(1, nf));
+    if (collisionEditor("##colmask", *target, sp ? spriteFrameTex(proj, sid, colFrame - 1) : nullptr, sw, sh, 300)) { proj.dirty = true; proj.rev++; }
+    if (anims.size() > 1) {
+        if (ImGui::Button("Aplicar a todas las animaciones")) {
+            json m = *target;
+            for (auto &a : anims) a["collision"] = m;
+            proj.dirty = true;
+            if (onStatus) onStatus("La colisión de " + jstr(anims[curAnim], "name") + " se puso en todas las animaciones");
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Copia esta forma a las demás animaciones del objeto");
+    }
 
     auto types = objBehaviorTypes(o);
     bool plat = std::find(types.begin(), types.end(), "platformer") != types.end();
@@ -446,7 +672,9 @@ void ObjectEditor::tabBehaviors(Project &, json &o) {
         ImGui::Spacing();
     }
     if (!remove.empty()) bhRemove(o, remove);
-    if (ui::primaryButton("+ Añadir un comportamiento")) ImGui::OpenPopup("Añadir un comportamiento");
+    bool addBh = ui::primaryButton("+ Añadir un comportamiento");
+    school::anchor("bh.add");
+    if (addBh) ImGui::OpenPopup("Añadir un comportamiento");
     ImGui::SetNextWindowSize(ImVec2(720, 0), ImGuiCond_Appearing);
     if (ui::beginModal("Añadir un comportamiento", nullptr)) {
         ImGui::TextDisabled("Los de movimiento (plataformero, cenital, estrategia) se sustituyen entre si.");
@@ -458,7 +686,9 @@ void ObjectEditor::tabBehaviors(Project &, json &o) {
             ImGui::PushID(c.type);
             std::string label = std::string(c.name) + (has ? " (ya lo tiene)" : "") + "\n";
             ImVec2 p = ImGui::GetCursorScreenPos();
-            if (ImGui::Button("##pick", ImVec2(340, 64))) { bhAdd(o, c.type); ImGui::CloseCurrentPopup(); }
+            bool pick = ImGui::Button("##pick", ImVec2(340, 64));
+            school::anchor((std::string("bh.") + c.type).c_str());
+            if (pick) { bhAdd(o, c.type); ImGui::CloseCurrentPopup(); }
             ImDrawList *dl = ImGui::GetWindowDrawList();
             dl->AddText(ImVec2(p.x + 10, p.y + 8), IM_COL32(235, 235, 242, 255), label.c_str());
             dl->AddText(ImGui::GetFont(), 13, ImVec2(p.x + 10, p.y + 28), ui::kDim, c.desc, nullptr, 320);
@@ -531,6 +761,14 @@ void ObjectEditor::draw(Project &proj) {
     if (focusMe) { ImGui::SetNextWindowFocus(); focusMe = false; }
     ImGui::SetNextWindowSize(ImVec2(820, 640), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(title(proj).c_str(), &open)) { ImGui::End(); hist.track(*op); return; }
+    drawBody(proj);
+    ImGui::End();
+}
+
+// el contenido (cabecera y pestanas); tambien dentro del editor de escena
+void ObjectEditor::drawBody(Project &proj) {
+    json *op = findById(proj.doc["objects"], objectId);
+    if (!op) { open = false; return; }
     json &o = *op;
     json before = o;
     bool focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
@@ -548,17 +786,19 @@ void ObjectEditor::draw(Project &proj) {
     std::string type = jstr(o, "type", "sprite");
     ImGui::TextDisabled("%s", objTypeLabel(type));
     ImGui::SetCursorPos(ImVec2(tp.x, tp.y + 56));
+    if (nextTab >= 0) { forceTab = nextTab; nextTab = -1; }   // pedido desde una pestana (se aplica al fotograma siguiente)
     if (ImGui::BeginTabBar("##otabs")) {
         auto fl = [&](int i) { return forceTab == i ? ImGuiTabItemFlags_SetSelected : 0; };
         if (ImGui::BeginTabItem("Propiedades", nullptr, fl(0))) { ImGui::BeginChild("##p"); tabProps(proj, o); ImGui::EndChild(); ImGui::EndTabItem(); }
         if (type == "sprite" && ImGui::BeginTabItem("Animaciones", nullptr, fl(1))) { ImGui::BeginChild("##a"); tabAnims(proj, o); ImGui::EndChild(); ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("Comportamientos", nullptr, fl(2))) { ImGui::BeginChild("##b"); tabBehaviors(proj, o); ImGui::EndChild(); ImGui::EndTabItem(); }
+        bool bhTab = ImGui::BeginTabItem("Comportamientos", nullptr, fl(2));
+        school::anchor("obj.tab.bh");
+        if (bhTab) { ImGui::BeginChild("##b"); tabBehaviors(proj, o); ImGui::EndChild(); ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem("Variables", nullptr, fl(3))) { ImGui::BeginChild("##v"); tabVars(o); ImGui::EndChild(); ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem("Efecto", nullptr, fl(4))) { ImGui::BeginChild("##e"); tabEffect(proj, o); ImGui::EndChild(); ImGui::EndTabItem(); }
         forceTab = -1;
         ImGui::EndTabBar();
     }
-    ImGui::End();
     if (o != before) proj.dirty = true;
     hist.track(o);
 }

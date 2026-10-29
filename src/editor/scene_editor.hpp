@@ -5,6 +5,9 @@
 #include <string>
 #include <vector>
 #include "assets.hpp"
+#include "tiles_obj.hpp"
+#include "object_editor.hpp"
+#include <memory>
 
 class SceneEditor {
 public:
@@ -13,14 +16,21 @@ public:
     bool open = true, focusMe = true;
     std::function<void(const std::string &)> onOpenObject, onPlayScene;
     std::function<void()> onNewObject;
+    std::function<void(const std::string &)> onOpenTileset;
+    std::function<void()> onOpenLayers;
+    std::function<void(ObjectEditor &)> onSetupObject;   // conecta el editor de objeto de dentro (abrir sprites...)
+    std::unique_ptr<ObjectEditor> objView;               // objeto abierto dentro de la escena (en lugar del lienzo)
+    void editObject(const std::string &objId);
+    std::function<std::string()> onNewTileObject;
 
     void draw(Project &proj);
     std::string title(Project &proj);
 
     // operaciones (tambien para las pruebas automaticas)
     Mode mode = Select;
-    std::string placeObj, curTilemap;
+    std::string placeObj, paintObj;    // paintObj: objeto Tile con el que se pinta
     int paintTile = 0;
+    bool newPiece = false;              // el siguiente trazo empieza un mapa aparte (otra instancia)
     std::vector<std::string> sel;
     std::string placeAt(Project &proj, json &sc, float wx, float wy);   // devuelve el id de la instancia
     void deleteSelected(json &sc);
@@ -30,7 +40,6 @@ public:
     void moveSelected(json &sc, float dx, float dy);
     bool undo(json &sc) { return hist.doUndo(sc); }
     bool redo(json &sc) { return hist.doRedo(sc); }
-    void addTilemap(Project &proj, json &sc);
 
 private:
     float zoom = 1, panX = 40, panY = 40;
@@ -44,6 +53,10 @@ private:
     std::vector<json> clip;
     JsonHistory hist;
     ImVec2 canvasPos;
+    std::string popId;                  // instancia recien soltada (animacion de aparecer)
+    double popAt = -1;
+    ImVec2 ghost{0, 0};                 // fantasma del objeto arrastrado desde la lista
+    bool ghostOn = false;
 
     ImVec2 toScreen(float x, float y) const { return ImVec2(canvasPos.x + panX + x * zoom, canvasPos.y + panY + y * zoom); }
     ImVec2 toWorld(ImVec2 s) const { return ImVec2((s.x - canvasPos.x - panX) / zoom, (s.y - canvasPos.y - panY) / zoom); }
@@ -54,7 +67,8 @@ private:
     void drawProps(Project &proj, json &sc);
     void instanceProps(Project &proj, json &sc, json &inst);
     void sceneProps(Project &proj, json &sc);
-    void tilemapProps(Project &proj, json &sc);
+    void tilePaintProps(Project &proj, json &sc);
+    json *paintTarget(Project &proj, json &sc, bool create);
     void layersProps(Project &proj);
     void shortcuts(Project &proj, json &sc);
 };

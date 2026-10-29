@@ -1,4 +1,5 @@
 #include "sprite_editor.hpp"
+#include "school.hpp"
 #include "collab.hpp"
 #include "assets.hpp"
 #include <algorithm>
@@ -807,6 +808,7 @@ void SpriteEditor::drawToolbar() {
         const ToolInfo *ti = toolInfo(G.tools[show]);
         ImGui::PushID(g);
         bool clicked = ui::iconButton("##g", ti->ic, active >= 0, ti->name, 32);
+        if (g == 2) school::anchor("sprite.pencil");
         ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
         bool many = G.tools.size() > 1;
         if (many) ImGui::GetWindowDrawList()->AddTriangleFilled(ImVec2(mx.x - 2, mx.y - 8), ImVec2(mx.x - 2, mx.y - 2), ImVec2(mx.x - 8, mx.y - 2), ui::kText2);

@@ -105,7 +105,7 @@ std::string sceneName(Project &proj, const std::string &sceneId) {
 
 /* ---------------- objetos ---------------- */
 const char *objTypeLabel(const std::string &type) {
-    return type == "text" ? "Texto" : type == "button" ? "Botón" : type == "tile" ? "Tile" : type == "group" ? "Grupo" : "Sprite";
+    return type == "text" ? "Texto" : type == "button" ? "Botón" : type == "tile" ? "Tile" : type == "group" ? "Grupo" : type == "light" ? "Luz" : "Sprite";
 }
 
 ObjSize objBaseSize(Project &proj, const json &obj) {
@@ -185,6 +185,16 @@ void drawObjectAt(ImDrawList *dl, Project &proj, const json &obj, ImVec2 c, floa
         dl->AddText(ui::gameFont(), fs, ImVec2(c.x - ts.x / 2, c.y - ts.y / 2), colorU32(jstr(b, "fg", "#ffffff"), alpha), txt.c_str());
         return;
     }
+    if (type == "light") {   // luz: su radio como un halo y una bombilla en el centro
+        const json L = obj.contains("light") ? obj["light"] : json::object();
+        Px lc = parseColor(jstr(L, "color", "#ffd9a0"));
+        float r = (float)jnum(L, "radius", 160) * zoom;
+        for (int k = 6; k >= 1; k--) dl->AddCircleFilled(c, r * k / 6, IM_COL32(lc.r, lc.g, lc.b, alpha * 10 / 255), 48);
+        dl->AddCircle(c, r, IM_COL32(lc.r, lc.g, lc.b, alpha * 90 / 255), 48, 1);
+        dl->AddCircleFilled(c, 7, IM_COL32(lc.r, lc.g, lc.b, alpha), 16);
+        dl->AddCircle(c, 7, IM_COL32(30, 30, 36, alpha), 16, 1.5f);
+        return;
+    }
     std::string spId = jstr(obj, "spriteId");
     ui::PixTexture *tx = spriteFrameTex(proj, spId, frame);
     if (!tx) {
@@ -216,6 +226,15 @@ void objectThumb(Project &proj, const json &obj, float size) {
 void objectThumbAt(ImDrawList *dl, Project &proj, const json &obj, ImVec2 p, float size) {
     dl->AddRectFilled(p, ImVec2(p.x + size, p.y + size), IM_COL32(22, 22, 28, 255), 4);
     std::string type = jstr(obj, "type", "sprite");
+    if (type == "tile" && proj.doc.contains("tilesets"))   // su primer tile
+        if (ui::PixTexture *tt = tileTex(proj, jstr(obj, "tilesetId"), 0)) { dl->AddImage(tt->id(), ImVec2(p.x + 3, p.y + 3), ImVec2(p.x + size - 3, p.y + size - 3)); return; }
+    if (type == "light") {
+        Px lc = parseColor(obj.contains("light") ? jstr(obj["light"], "color", "#ffd9a0") : "#ffd9a0");
+        ImVec2 c(p.x + size / 2, p.y + size / 2);
+        for (int k = 4; k >= 1; k--) dl->AddCircleFilled(c, size * 0.45f * k / 4, IM_COL32(lc.r, lc.g, lc.b, 40), 24);
+        dl->AddCircleFilled(c, size * 0.16f, IM_COL32(lc.r, lc.g, lc.b, 255), 16);
+        return;
+    }
     if (type == "text" || type == "button" || type == "tile" || type == "group") {
         const char *l = type == "text" ? "T" : type == "button" ? "B" : type == "group" ? "G" : "#";
         ImVec2 ts = ImGui::CalcTextSize(l);

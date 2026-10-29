@@ -3,15 +3,22 @@
 # Trabaja sobre una copia local del repositorio publico FloppaKFC/source2d-versiones (por defecto ../source2d-versiones,
 # o S2D_VERSIONES_DIR): cambia noticias.json, lo firma con build/firma (pide tu contrasena) y lo sube con git.
 #   anunciar.py "Titulo" "Texto"  [--tipo aviso|evento|actualizacion|consejo] [--imagen foto.png] [--enlace https://...]
-#                                 [--fijar] [--hasta 2026-12-31] [--importante] [--para "Beta 0.1" --para windows]
+#                                 [--inferior "texto que va debajo de la imagen"]
+# En el texto y en --inferior, {lista:Uno, Dos, Tres} sale como una lista con puntos; lo de fuera, como texto normal.
+# En el texto, {encuesta: "Pregunta", "Opcion 1", "Opcion 2", ..., "3d"} pone una encuesta en ese sitio. Lo ultimo es
+# cuanto dura (30m, 12h, 3d, 2 semanas, o una fecha AAAA-MM-DD [HH:MM]); sin eso, o con "", no se cierra nunca.
+# Los votos van a un contador publico (abacus.jasoncameron.dev); --resultados ID los muestra.
+#                                 [--fijar] [--hasta 2026-12-31] [--importante] [--notificar] [--para "Beta 0.1" --para windows]
 #   anunciar.py --lista
 #   anunciar.py --editar 3 [--titulo ...] [--texto ...] [las mismas opciones; --sin-imagen --sin-enlace --soltar ...]
 #   anunciar.py --borrar 3
 # --sin-subir deja los cambios firmados en la carpeta sin hacer git commit ni push.
-import argparse, datetime, hashlib, json, os, shutil, subprocess, sys
+import argparse, datetime, hashlib, json, os, re, secrets, shutil, subprocess, sys, urllib.request
 
 AUTOR = "@floppa-1550"
 TIPOS = ["aviso", "evento", "actualizacion", "consejo"]
+CONTADOR = os.environ.get("S2D_CONTADOR_URL", "https://abacus.jasoncameron.dev/")
+ESPACIO = "source2d-floppa"   # el editor usa el mismo (novedades.cpp)
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIRMA = os.path.join(RAIZ, "build", "firma")
 
@@ -94,6 +101,86 @@ def fecha_valida(s):
     return s
 
 
+def duracion(t):
+    """segundos hasta el cierre (o fecha absoluta) -> instante unix; None = sin limite"""
+    t = t.strip().lower()
+    if not t:
+        return None
+    m = re.fullmatch(r"(\d+)\s*(m|min|minutos?|h|horas?|d|d[ií]as?|s|sem|semanas?)", t)
+    if m:   # la unidad por su primera letra: minutos, horas, dias, semanas
+        seg = {"m": 60, "h": 3600, "d": 86400, "s": 7 * 86400}[m.group(2)[0]]
+        return int(datetime.datetime.now().timestamp()) + int(m.group(1)) * seg
+    for f in ("%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            d = datetime.datetime.strptime(t, f)
+            if f == "%Y-%m-%d":
+                d += datetime.timedelta(days=1)   # hasta el final de ese dia
+            return int(d.timestamp())
+        except ValueError:
+            pass
+    return False   # no es una duracion: es una opcion mas
+
+
+def sacar_encuesta(texto, id_):
+    """Busca {encuesta: "P", "A", "B", "3d"} en el texto. Devuelve (texto con {encuesta} en su sitio, encuesta) o (texto, None)."""
+    a = texto.find("{encuesta")
+    if a < 0:
+        return texto, None
+    b = a
+    dentro = False
+    while b < len(texto):   # la llave que cierra, sin contar las que vayan entre comillas
+        c = texto[b]
+        if c == '"':
+            dentro = not dentro
+        elif c == "}" and not dentro:
+            break
+        b += 1
+    if b >= len(texto):
+        sys.exit("A la encuesta le falta la llave } del final")
+    cuerpo = texto[a + len("{encuesta"):b].lstrip()
+    if cuerpo.startswith(":"):
+        cuerpo = cuerpo[1:]
+    if '"' in cuerpo:
+        partes = re.findall(r'"([^"]*)"', cuerpo)
+    else:
+        partes = [x.strip() for x in cuerpo.split(",")]
+    if not partes:
+        sys.exit("La encuesta esta vacia")
+    pregunta, resto = partes[0].strip(), partes[1:]
+    cierra = None
+    if resto:
+        c = duracion(resto[-1])
+        if c is not False:
+            cierra = c
+            resto = resto[:-1]
+    opciones = [x.strip() for x in resto if x.strip()]
+    if not pregunta:
+        sys.exit("La encuesta necesita una pregunta")
+    if not 2 <= len(opciones) <= 10:
+        sys.exit("La encuesta necesita entre 2 y 10 opciones")
+    if cierra is not None and cierra <= datetime.datetime.now().timestamp():
+        sys.exit("La encuesta ya estaria cerrada: revisa el tiempo")
+    if texto.find("{encuesta", b) >= 0:
+        sys.exit("Solo cabe una encuesta por noticia")
+    e = {"pregunta": pregunta, "opciones": opciones, "clave": f"n{id_}-{secrets.token_hex(4)}"}
+    if cierra is not None:
+        e["cierra"] = cierra
+    return texto[:a] + "{encuesta}" + texto[b + 1:], e
+
+
+def votos(e):
+    r = []
+    for i in range(len(e["opciones"])):
+        try:
+            with urllib.request.urlopen(f"{CONTADOR}get/{ESPACIO}/{e['clave']}-{i}", timeout=10) as f:
+                r.append(int(json.load(f).get("value", 0)))
+        except urllib.error.HTTPError as x:
+            r.append(0 if x.code == 404 else None)
+        except Exception:
+            r.append(None)
+    return r
+
+
 def main():
     ap = argparse.ArgumentParser(description="Publica un anuncio en Inicio > Noticias de Source 2D")
     ap.add_argument("titulo", nargs="?")
@@ -103,10 +190,15 @@ def main():
     ap.add_argument("--tipo", choices=TIPOS)
     ap.add_argument("--imagen")
     ap.add_argument("--enlace")
+    ap.add_argument("--inferior", help="texto debajo de la imagen (admite {lista:a, b, c})")
+    ap.add_argument("--sin-inferior", action="store_true")
     ap.add_argument("--fijar", action="store_true")
     ap.add_argument("--soltar", action="store_true", help="quita la marca de fijada (con --editar)")
     ap.add_argument("--hasta", type=fecha_valida, help="AAAA-MM-DD: a partir del dia siguiente ya no sale")
     ap.add_argument("--importante", action="store_true", help="sale en una ventana una vez al abrir el editor")
+    ap.add_argument("--normal", action="store_true", help="con --editar: ni importante ni fijada")
+    ap.add_argument("--notificar", action="store_true", help="sale como notificacion arriba en los editores abiertos con internet")
+    ap.add_argument("--sin-notificar", action="store_true", help="con --editar: ya no sale como notificacion")
     ap.add_argument("--para", action="append", help="solo para esta version (\"Beta 0.1\") o sistema (linux, windows); se puede repetir")
     ap.add_argument("--version", help="nombre de una version de versiones.json: la tarjeta trae el boton para bajarla")
     ap.add_argument("--sin-imagen", action="store_true")
@@ -114,6 +206,8 @@ def main():
     ap.add_argument("--editar", type=int, metavar="ID")
     ap.add_argument("--borrar", type=int, metavar="ID")
     ap.add_argument("--lista", action="store_true")
+    ap.add_argument("--sin-encuesta", action="store_true", help="con --editar: quita la encuesta")
+    ap.add_argument("--resultados", type=int, metavar="ID", help="votos de la encuesta de esa noticia")
     ap.add_argument("--sin-subir", action="store_true")
     a = ap.parse_args()
 
@@ -124,12 +218,34 @@ def main():
     if a.lista:
         hoy = datetime.date.today().isoformat()
         for n in ns:
-            marcas = [m for m, on in (("fijada", n.get("fijada")), ("importante", n.get("importante")),
+            marcas = [m for m, on in (("fijada", n.get("fijada")), ("importante", n.get("importante")), ("notificar", n.get("notificar")),
+                                      ("encuesta", n.get("encuesta")),
                                       ("caducada", n.get("hasta") and n["hasta"] < hoy)) if on]
             print(f"{n['id']:>4}  {n.get('fecha', '')}  [{n.get('tipo', 'aviso')}] {n.get('titulo', '')}"
                   + (f"  ({', '.join(marcas)})" if marcas else ""))
         if not ns:
             print("Todavia no hay noticias.")
+        return
+
+    if a.resultados is not None:
+        n = next((x for x in ns if x.get("id") == a.resultados), None)
+        if not n or not n.get("encuesta"):
+            sys.exit(f"La noticia {a.resultados} no tiene encuesta")
+        e = n["encuesta"]
+        print(e["pregunta"])
+        if e.get("cierra"):
+            fin = datetime.datetime.fromtimestamp(e["cierra"])
+            print(("Terminó el " if fin < datetime.datetime.now() else "Termina el ") + fin.strftime("%Y-%m-%d %H:%M"))
+        else:
+            print("Sin límite de tiempo")
+        v = votos(e)
+        total = sum(x for x in v if x)
+        for op, x in zip(e["opciones"], v):
+            if x is None:
+                print(f"  {op}: (no se pudo leer)")
+            else:
+                print(f"  {op}: {x} voto{'s' if x != 1 else ''}" + (f"  ({100 * x // total} %)" if total else ""))
+        print(f"Total: {total}")
         return
 
     if a.borrar is not None:
@@ -153,19 +269,33 @@ def main():
             ns.append(n)
             mensaje = f"Noticia: {titulo}"
         if a.titulo2 or (a.editar is None and a.titulo): n["titulo"] = a.titulo2 or a.titulo
-        if a.texto2 is not None or (a.editar is None and a.texto): n["texto"] = a.texto2 if a.texto2 is not None else a.texto
+        if a.texto2 is not None or (a.editar is None and a.texto):
+            texto, e = sacar_encuesta(a.texto2 if a.texto2 is not None else a.texto, n["id"])
+            n["texto"] = texto
+            if e:
+                n["encuesta"] = e   # encuesta nueva (votos desde cero)
+            elif "{encuesta}" not in texto and n.get("encuesta"):
+                n["texto"] = texto + " {encuesta}"   # se cambio el texto: la encuesta que habia sigue, al final
+        if a.sin_encuesta:
+            n.pop("encuesta", None)
+            n["texto"] = n.get("texto", "").replace("{encuesta}", "").strip()
         if a.tipo: n["tipo"] = a.tipo
         if a.imagen: n["imagen"] = copiar_imagen(d, a.imagen)
         if a.sin_imagen: n.pop("imagen", None)
+        if a.inferior is not None: n["inferior"] = a.inferior
+        if a.sin_inferior: n.pop("inferior", None)
         if a.enlace:
             if not a.enlace.startswith("https://"):
                 sys.exit("El enlace tiene que empezar por https://")
             n["enlace"] = a.enlace
         if a.sin_enlace: n.pop("enlace", None)
+        if a.normal: n.pop("importante", None); n.pop("fijada", None)
         if a.fijar: n["fijada"] = True
         if a.soltar: n.pop("fijada", None)
         if a.hasta: n["hasta"] = a.hasta
         if a.importante: n["importante"] = True
+        if a.notificar: n["notificar"] = True
+        if a.sin_notificar: n.pop("notificar", None)
         if a.para: n["para"] = a.para
         if a.version: n["version"] = a.version
 

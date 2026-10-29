@@ -1,4 +1,5 @@
 #include "project_docs.hpp"
+#include "school.hpp"
 #include "code_editor.hpp"
 #include "thumbnails.hpp"
 #include "raylib.h"
@@ -217,7 +218,9 @@ void SettingsEditor::draw(Project &proj) {
         ImGui::EndTable();
     }
     if (del >= 0) gl.erase(gl.begin() + del);
-    if (ui::primaryButton("+ Variable global")) gl.push_back({{"name", "var" + std::to_string(gl.size() + 1)}, {"type", "normal"}, {"value", 0}});
+    bool addG = ui::primaryButton("+ Variable global");
+    school::anchor("settings.globals");
+    if (addG) gl.push_back({{"name", "var" + std::to_string(gl.size() + 1)}, {"type", "normal"}, {"value", 0}});
 
     // idiomas: tabla clave -> texto por idioma. En textos {t:clave}; en expresiones T("clave")
     ImGui::SeparatorText("Idiomas");

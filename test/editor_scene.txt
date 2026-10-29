@@ -1,34 +1,49 @@
 open PROYECTO
 wait 3
-sc.count 20
+jexpect /objects/6/type "tile"
+jexpect /scenes/0/tilemaps []
+sc.count 21
 sc.placeobj Moneda
 sc.place 333 222
-sc.count 21
+sc.count 22
 sc.expectsel x 336
 sc.expectsel y 224
 sc.move 10 0
 sc.expectsel x 346
 sc.dup
-sc.count 22
+sc.count 23
 sc.expectsel x 362
 sc.del
-sc.count 21
-sc.undo
 sc.count 22
+sc.undo
+sc.count 23
 sc.redo
-sc.count 21
+sc.count 22
 sc.pick 120 400
 sc.expectsel x 120
 sc.pick 5000 5000
-sc.tilemap 0
-sc.paint 8 8 3
-jexpect /scenes/0/tilemaps/0/data/0 3
-sc.paint 8 8 -1
-jexpect /scenes/0/tilemaps/0/data/0 -1
+sc.tileobj Terreno
+sc.newpiece
+sc.paint 3000 100 3
+sc.count 23
+jexpect /scenes/0/instances/22/x 2992
+jexpect /scenes/0/instances/22/y 96
+jexpect /scenes/0/instances/22/tm/cols 1
+sc.paint 3040 132 3
+jexpect /scenes/0/instances/22/tm/cols 4
+jexpect /scenes/0/instances/22/tm/rows 3
+jexpect /scenes/0/instances/22/tm/data/11 3
+sc.paint 2992 96 -1
+jexpect /scenes/0/instances/22/x 3040
+jexpect /scenes/0/instances/22/y 128
+jexpect /scenes/0/instances/22/tm/cols 1
+sc.paint 3040 128 -1
+sc.count 22
+sc.mode select
 newobject text
-jexpect /objects/6/type "text"
-jexpect /objects/6/name "Texto 7"
-jexpect /objects/6/hud true
+jexpect /objects/7/type "text"
+jexpect /objects/7/name "Texto 8"
+jexpect /objects/7/hud true
 object Jugador
 addbh health
 jexpect /objects/0/behaviorList/0/type "health"
@@ -45,6 +60,19 @@ jexpect /scenes/1/width 960
 scene Nivel 1
 wait 4
 shot CAPTURA_ESCENA
+sc.editobj Jugador
+sc.objtab 1
+wait 3
+sc.frameop n 0 0
+sc.frameop c 0 0
+jexpect /sprites/0/frames/2/pixels/0 ""
+sc.frameop m 2 0
+jexpect /sprites/0/frames/0/pixels/0 ""
+sc.frameop d 0 0
+sc.frameop d 0 0
+wait 2
+shot CAPTURA_ANIM
+
 wait 2
 object Jugador
 wait 4

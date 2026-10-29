@@ -120,13 +120,13 @@ const json *byId(const json &doc, const char *list, const std::string &id) {
 
 }  // namespace
 
-void renderProjectThumb(const json &doc, int w, int h, std::vector<Px> &out) {
+void renderProjectThumb(const json &doc, int w, int h, std::vector<Px> &out, int sceneIdx) {
     out.assign(w * h, Px{0x1D, 0x1D, 0x26, 255});
     const json st = doc.contains("settings") ? doc["settings"] : json::object();
     float VW = std::max(1.0, jnum(st, "width", 960)), VH = std::max(1.0, jnum(st, "height", 540));
     float s = std::min(w / VW, h / VH);
     if (!doc.contains("scenes") || !doc["scenes"].is_array() || doc["scenes"].empty()) return;
-    const json &sc = doc["scenes"][0];
+    const json &sc = doc["scenes"][sceneIdx >= 0 && sceneIdx < (int)doc["scenes"].size() ? sceneIdx : 0];
     // el mundo se ve con el zoom inicial de la camara; los objetos HUD van en pixeles de pantalla
     float cz = sc.contains("camera") && sc["camera"].is_object() ? (float)jnum(sc["camera"], "zoom", 1) : 1;
     if (!(cz > 0)) cz = 1;
@@ -137,8 +137,18 @@ void renderProjectThumb(const json &doc, int w, int h, std::vector<Px> &out) {
 
     // mapas de tiles
     std::map<std::string, std::vector<Px>> cache;
-    if (sc.contains("tilemaps") && sc["tilemaps"].is_array())
-        for (auto &tm : sc["tilemaps"]) {
+    // los de antes (escena) y los de los objetos Tile (cada instancia, con su esquina en x, y)
+    std::vector<json> maps;
+    if (sc.contains("tilemaps") && sc["tilemaps"].is_array()) for (auto &tm : sc["tilemaps"]) maps.push_back(tm);
+    if (sc.contains("instances") && sc["instances"].is_array())
+        for (auto &it : sc["instances"]) {
+            const json *o = byId(doc, "objects", jstr(it, "objectId"));
+            if (!o || jstr(*o, "type") != "tile" || !it.contains("tm") || !it["tm"].is_object()) continue;
+            json m = it["tm"];
+            m["tilesetId"] = jstr(*o, "tilesetId"); m["x"] = jnum(it, "x", 0); m["y"] = jnum(it, "y", 0);
+            maps.push_back(m);
+        }
+    for (auto &tm : maps) {
             const json *ts = byId(doc, "tilesets", jstr(tm, "tilesetId"));
             if (!ts || !tm.contains("data") || !tm["data"].is_array() || !ts->contains("tiles")) continue;
             int T = (int)jnum(*ts, "tileSize", 16), cols = (int)jnum(tm, "cols", 0), rows = (int)jnum(tm, "rows", 0);
@@ -178,6 +188,7 @@ void renderProjectThumb(const json &doc, int w, int h, std::vector<Px> &out) {
         float x = (float)jnum(it, "x", 0), y = (float)jnum(it, "y", 0), sx = (float)jnum(it, "scaleX", 1), sy = (float)jnum(it, "scaleY", 1);
         int alpha = (int)(std::clamp(jnum(it, "opacity", 100), 0.0, 100.0) * 2.55);
         std::string type = jstr(*obj, "type", "sprite");
+        if (type == "tile" || type == "light" || type == "group") continue;
         Canvas &cv = jbool(*obj, "hud", false) ? hud : cv0;
         if (type == "text") {
             const json t = obj->contains("text") ? (*obj)["text"] : json::object();
@@ -240,14 +251,14 @@ std::string fileProjectName(const std::string &path) {
     return it != g_files.end() && !it->second.name.empty() ? it->second.name : fs::path(path).stem().stem().string();
 }
 
-ui::PixTexture *docThumb(const std::string &key, const json &doc, int rev, bool live) {
+ui::PixTexture *docThumb(const std::string &key, const json &doc, int rev, bool live, int sceneIdx) {
     Thumb &t = g_docs[key];
     double now = GetTime();
     if ((t.stamp != rev || (live && now - t.at > 1.5)) && (g_budget > 0 || !t.tex.tex.id)) {
         g_budget--;
         t.stamp = rev; t.at = now;
         std::vector<Px> px;
-        renderProjectThumb(doc, kThumbW, kThumbH, px);
+        renderProjectThumb(doc, kThumbW, kThumbH, px, sceneIdx);
         upload(t, px);
     }
     return &t.tex;

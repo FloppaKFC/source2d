@@ -1,4 +1,6 @@
 #include "project.hpp"
+#include "exporter.hpp"
+#include "tiles_obj.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -69,15 +71,19 @@ static void migrateSingleScene(json &d) {
 }
 
 bool Project::load(const std::string &file, std::string &err) {
-    std::ifstream in(file);
+    std::ifstream in(file, std::ios::binary);
     if (!in) { err = "No se pudo abrir " + file; return false; }
     try {
-        json d = json::parse(in);
+        std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        json d;
+        if (exporter::isSourcePack(bytes)) { if (!exporter::sourceUnpack(bytes, d, err)) return false; }   // .source2d comprimido
+        else d = json::parse(bytes);
         if (!d.is_object() || !d.contains("sprites") || !d.contains("objects") || !d.contains("scenes")) {
             err = "El archivo no es un proyecto de Source 2D";
             return false;
         }
         migrateSingleScene(d);
+        migrateSceneTilemaps(d);
         doc = std::move(d);
     } catch (const std::exception &e) {
         err = std::string("JSON no válido: ") + e.what();

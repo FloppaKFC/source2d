@@ -16,12 +16,18 @@ bool available(const std::string &os, bool lite);     // el editor lleva lo nece
 bool needsFull(const json &doc, std::string &why);
 // escribe el juego; info: tamano y motor usado, para avisar al usuario
 bool exportGame(const json &doc, const std::string &out, const std::string &os, bool lite, std::string &err, std::string &info);
+// a una carpeta dir: <name>.exe / <name>.x86_64 (el motor) y datos/juego.source2d.json; html: index.html
+bool exportFolder(const json &doc, const std::string &dir, const std::string &os, const std::string &name, std::string &err, std::string &info);
 // motor completo de un sistema, descomprimido (para probar el juego desde el editor)
 bool unpackPlayer(const std::string &os, std::vector<unsigned char> &out);
 unsigned long playerSize(const std::string &os);      // tamano del motor completo descomprimido (0 si no esta)
 // el proyecto como va en el juego: imagenes de pixeles con paleta y los datos en base64 pasados a binario (soft: se
 // comprimen bien; hard: ya vienen comprimidos, como OGG o PNG). El jugador lo vuelve a armar sin perder nada.
 struct Packed { std::string json, soft, hard; };
-Packed packed(const json &doc);
+Packed packed(const json &doc, bool pixels = true);   // pixels: imagenes de pixeles con paleta (solo para el jugador)
+// .source2d: el proyecto en LZMA (y los datos en binario) para pasarlo a otro Source 2D
+std::string sourcePack(const json &doc);
+bool isSourcePack(const std::string &bytes);
+bool sourceUnpack(const std::string &bytes, json &doc, std::string &err);
 std::string kb(long bytes);
 }

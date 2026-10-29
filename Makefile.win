@@ -68,6 +68,9 @@ $(OUT)/source2d-player.exe: $(RES) src/main.c src/platform_raylib.c src/text.c s
 LITE       = $(OUT)/lite
 LITE_FLAGS = -Os -flto -w -ffunction-sections -fdata-sections
 LITE_RL    = $(patsubst %,$(LITE)/raylib/%.o,rcore rtextures utils raudio rglfw)
+# GLFW lleva un parche de Source 2D (aviso de archivos arrastrandose encima): rglfw.o depende de esos archivos
+GLFW_PATCHED = $(RAYLIB_DIR)/external/glfw/src/input.c $(RAYLIB_DIR)/external/glfw/src/x11_window.c
+$(OUT)/raylib/rglfw.o $(LITE)/raylib/rglfw.o: $(GLFW_PATCHED)
 LITE_QJS   = $(patsubst %,$(LITE)/qjs/%.o,$(QJS_SRC))
 $(LITE)/raylib/%.o: $(RAYLIB_DIR)/%.c src/raylib_lite_config.h
 	@mkdir -p $(LITE)/raylib

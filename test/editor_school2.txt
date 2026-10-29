@@ -1,0 +1,55 @@
+# escuela con Floppa: la nota Principal (Plataformero), con pasos "Estoy listo" y pasos que avanzan solos
+home.new Escuela Floppa
+wait 3
+school.start principal
+wait 40
+shot CAPTURA1
+school.expectstep 0
+school.ready
+wait 90
+school.expectstep 1
+wait 30
+shot CAPTURA2
+newobject sprite
+wait 90
+school.expectstep 2
+spriteobj
+wait 90
+school.expectstep 3
+school.ready
+wait 10
+school.expectstep 3
+tool pencil
+color #ff0000
+stroke 1 1 5 5
+wait 5
+school.ready
+wait 90
+school.expectstep 4
+wait 20
+shot CAPTURA3
+placelast
+wait 90
+school.expectstep 5
+addbh platformer
+wait 90
+school.expectstep 6
+newobject tile
+wait 90
+school.expectstep 7
+scene Escena 1
+sc.tileobj Tile 2
+sc.paint 100 400 0
+sc.paint 116 400 0
+sc.paint 132 400 0
+sc.paint 148 400 0
+sc.paint 164 400 0
+sc.paint 180 400 0
+wait 90
+school.expectstep 8
+school.note preview
+wait 90
+school.expectstep 9
+school.ready
+wait 90
+quit

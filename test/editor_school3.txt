@@ -1,0 +1,126 @@
+# Escuela: leccion 0 (conoce el editor), Monedas y puntos con "Hazlo por mi" en cada paso, Musica con la Cancion de
+# Floppa y la despedida al cerrar el proyecto
+home.new Escuela Editor
+wait 3
+school.start editor
+wait 30
+school.expectstep 0
+school.ready
+wait 90
+school.expectstep 1
+shot CAPTURA1
+school.ready
+wait 90
+school.ready
+wait 90
+school.ready
+wait 90
+school.expectstep 4
+school.note preview
+wait 90
+school.ready
+wait 90
+school.ready
+wait 90
+school.expectstep 7
+bar.tree
+wait 90
+school.expectstep 8
+shot CAPTURA2
+bar.tree
+wait 3
+school.ready
+wait 90
+school.ready
+wait 90
+school.ready
+wait 90
+school.ready
+wait 90
+school.ready
+wait 90
+school.expectstep 13
+bar.events
+wait 90
+school.expectstep 14
+school.ready
+wait 90
+school.ready
+wait 90
+school.ready
+wait 90
+school.expectstep 17
+school.ready
+wait 90
+save
+wait 3
+closeproject
+wait 3
+home.new Escuela Monedas
+wait 3
+school.start monedas
+wait 10
+school.ready
+wait 90
+school.expectstep 1
+school.auto
+wait 90
+school.expectstep 2
+school.auto
+wait 90
+school.auto
+wait 90
+school.auto
+wait 90
+school.expectstep 5
+school.auto
+wait 90
+school.auto
+wait 90
+school.expectstep 7
+school.auto
+wait 90
+school.auto
+wait 90
+school.expectstep 9
+jexpect /globals/0/name "puntos"
+school.note preview
+wait 90
+school.expectstep 10
+shot CAPTURA3
+school.ready
+wait 90
+save
+wait 3
+closeproject
+wait 3
+home.new Escuela Musica
+wait 3
+school.start musica
+wait 10
+school.ready
+wait 90
+school.expectstep 1
+school.auto
+wait 90
+school.expectstep 2
+wait 10
+shot CAPTURA4
+jexpect /music/0/song/bars 16
+school.note sound.play
+wait 90
+school.ready
+wait 90
+school.ready
+wait 90
+school.expectstep 5
+school.auto
+wait 90
+school.expectstep 6
+save
+wait 3
+closeproject
+wait 20
+shot CAPTURA5
+wait 200
+quit

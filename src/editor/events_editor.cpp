@@ -1,4 +1,5 @@
 #include "events_editor.hpp"
+#include "school.hpp"
 #include "collab.hpp"
 #include "code_editor.hpp"
 #include <algorithm>
@@ -1176,7 +1177,9 @@ void EventsEditor::drawEvent(Project &proj, json &evs, int i) {
 }
 
 void EventsEditor::drawToolbar(Project &proj) {
-    if (ui::primaryButton("+ Añadir un evento")) addEvent(proj, "", false);
+    bool addHit = ui::primaryButton("+ Añadir un evento");
+    school::anchor("events.add");
+    if (addHit) addEvent(proj, "", false);
     ImGui::SameLine();
     bool canSub = sel >= 0 && sel < (int)events(proj).size() && !events(proj)[sel].contains("kind");
     ImGui::BeginDisabled(!canSub);

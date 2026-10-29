@@ -1,0 +1,60 @@
+# Inicio > Source Sprite y Source Sound (lista de creaciones), archivos arrastrados a la ventana, objetos arrastrados
+# a la escena, exportar .source2d y notificacion de noticias
+wait 3
+sound.studio
+sound.note 0 60 4
+sound.note 4 64 4
+sound.save CARPETA/Sonidos/Melodía.s2dsound
+sound.close
+studio.new 16 16
+tool pencil
+color #ff8800
+stroke 1 1 14 14
+studio.export CARPETA/Sprites/Cruz.s2dsprite 0 0
+studio.export CARPETA/Cruz.s2sprite 0 0
+studio.close
+home.section 4
+wait 20
+shot CAPTURA1
+home.section 6
+wait 20
+shot CAPTURA2
+expectstudio 0
+drop.hover 1
+wait 10
+drop.file CARPETA/Cruz.s2sprite
+wait 5
+expectstudio 1
+studio.close
+drop.file CARPETA/Sonidos/Melodía.s2dsound
+wait 5
+expectstudio 2
+sound.close
+drop.file PLAT
+wait 10
+expectproject 1
+scene Nivel 1
+wait 10
+sc.count 21
+press 70 265
+wait 2
+move 150 320
+wait 2
+move 400 400
+wait 2
+move 560 460
+wait 4
+release
+wait 4
+sc.count 22
+export.source CARPETA/Juego.source2d
+expectfile CARPETA/Juego.source2d
+save
+drop.file CARPETA/Juego.source2d
+wait 10
+expectproject 1
+expectfile CARPETA/Aventura de plataformas/Aventura de plataformas.source2d.json
+notif.prueba Noticia de prueba
+wait 20
+shot CAPTURA3
+quit

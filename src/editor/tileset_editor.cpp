@@ -1,4 +1,5 @@
 #include "tileset_editor.hpp"
+#include "collision_editor.hpp"
 #include <algorithm>
 
 std::string createTileset(Project &proj, const std::string &name, int T, int cols, int rows) {
@@ -132,6 +133,14 @@ void TilesetEditor::draw(Project &proj) {
         bool danger = jbool(t, "danger", false);
         if (ImGui::Checkbox("Peligro (pinchos)", &danger)) { t["danger"] = danger; proj.dirty = true; }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("En los eventos se pregunta con la condición \"toca un tile peligroso\"");
+        if (jbool(t, "solid", false) || jbool(t, "oneway", false) || jbool(t, "ladder", false) || jbool(t, "danger", false)) {
+            // forma: medio tile para escalones, puntos para rampas (el personaje sube solo por ellos)
+            ImGui::SeparatorText("Colisión del tile");
+            if (!t.contains("collision")) t["collision"] = nullptr;
+            float mw = std::min(220.0f, ImGui::GetContentRegionAvail().x - 60);
+            if (collisionEditor("##tilecol", t["collision"], tileTex(proj, tilesetId, cur), T, T, mw)) proj.dirty = true;
+            ImGui::TextDisabled("Medio tile = escalón; con Puntos, una rampa. El personaje los sube andando.");
+        }
         ImGui::Spacing();
         if (ImGui::Button("Copiar al siguiente") && cur + 1 < (int)tiles.size()) {
             pix.pushUndo();

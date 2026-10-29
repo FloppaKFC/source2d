@@ -116,6 +116,20 @@
     function layerOf(inst) { return layers[layerIdOf(inst)]; }
     (project.scenes || []).forEach(function (s) { scenes[s.id] = s; });
     (project.tilesets || []).forEach(function (t) { tilesets[t.id] = t; });
+    /* objetos Tile: cada instancia lleva su mapa (it.tm, con la esquina en x, y) y se juega como un mapa de tiles
+       en la capa del objeto */
+    (project.scenes || []).forEach(function (s) {
+      if (s._tileInst) return;
+      s._tileInst = true;
+      var keep = [];
+      (s.instances || []).forEach(function (it) {
+        var o = objects[it.objectId];
+        if (!o || o.type !== 'tile' || !it.tm || !it.tm.data) { keep.push(it); return; }
+        (s.tilemaps || (s.tilemaps = [])).push({ id: 'ti_' + it.id, objectId: it.objectId, tilesetId: o.tilesetId, x: n(it.x), y: n(it.y),
+          cols: n(it.tm.cols), rows: n(it.tm.rows), data: it.tm.data, layer: o.capa || 'base', shader: it.tm.shader || '' });
+      });
+      s.instances = keep;
+    });
 
     var frameCache = {}, tileCache = {};
     var frameBy = {};
@@ -508,6 +522,7 @@
         if (obj.flipOnMove !== false && inst.faceX) inst.flipX = inst.faceX < 0 ? -1 : 1;
         var want = pickAnim(inst, obj, b, moving);
         if (want.name !== inst.animName) { inst.animName = want.name; inst.animT = 0; }
+        inst._mask = want.collision || obj.collision || null; inst._maskSp = want.spriteId;   /* su colision */
         if (!inst.animPaused) inst.animT += dt * (inst.animSpeed != null ? inst.animSpeed : 1);
         inst.animLen = Math.max(1, sprites[want.spriteId] && sprites[want.spriteId].frames ? sprites[want.spriteId].frames.length : 1);
         inst.animDone = want.loop === false && Math.floor(inst.animT * n(want.fps, 8)) >= inst.animLen;
@@ -619,10 +634,41 @@
     /* tamano de una instancia; el de los sprites se guarda en la instancia mientras no cambien su escala ni su sprite */
     function instSize(inst) {
       var obj = objDef(inst), c = inst._sz;
-      if (c && c.obj === obj && c.sx === inst.scaleX && c.sy === inst.scaleY) return c;
+      if (c && c.obj === obj && c.sx === inst.scaleX && c.sy === inst.scaleY && c.mk === inst._mask && c.fx === inst.flipX) return c;
       var r = instSizeCalc(inst, obj);
-      if (!obj.type || obj.type === 'sprite') { r.obj = obj; r.sx = inst.scaleX; r.sy = inst.scaleY; inst._sz = r; }
+      if (!obj.type || obj.type === 'sprite') { r.obj = obj; r.sx = inst.scaleX; r.sy = inst.scaleY; r.mk = inst._mask; r.fx = inst.flipX; inst._sz = r; }
       return r;
+    }
+    /* Colision con forma propia (pestana Animaciones > Colision): la de la animacion que se ve o, si no tiene, la del
+       objeto. {shape: rect|square|circle|ellipse|poly, x, y, w, h, points: [[x, y]...]} en pixeles del sprite, con el
+       origen arriba a la izquierda. Para moverse y chocar con el escenario cuenta su caja (que puede no estar centrada:
+       agachado, la caja baja); las condiciones de colision entre objetos usan la forma exacta. */
+    function maskOf(inst, obj) {
+      var m = inst._mask !== undefined ? inst._mask : obj.collision;
+      return m && m.shape && m.shape !== 'none' ? m : null;
+    }
+    function maskBounds(m) {
+      if (m.shape === 'poly' && m.points && m.points.length) {
+        var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+        for (var i = 0; i < m.points.length; i++) {
+          var q = m.points[i];
+          x0 = Math.min(x0, n(q[0], 0)); y0 = Math.min(y0, n(q[1], 0)); x1 = Math.max(x1, n(q[0], 0)); y1 = Math.max(y1, n(q[1], 0));
+        }
+        return [x0, y0, x1, y1];
+      }
+      var x = n(m.x, 0), y = n(m.y, 0);
+      return [x, y, x + Math.max(0, n(m.w, 0)), y + Math.max(0, n(m.h, 0))];
+    }
+    /* contorno de la forma en pixeles del sprite (circulos y elipses como poligonos de 16 lados) */
+    function maskOutline(m) {
+      if (m.shape === 'poly' && m.points && m.points.length >= 3) return m.points.map(function (q) { return [n(q[0], 0), n(q[1], 0)]; });
+      var b = maskBounds(m);
+      if (m.shape === 'circle' || m.shape === 'ellipse') {
+        var cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2, rx = (b[2] - b[0]) / 2, ry = (b[3] - b[1]) / 2, out = [];
+        for (var k = 0; k < 16; k++) out.push([cx + rx * Math.cos(k * Math.PI / 8), cy + ry * Math.sin(k * Math.PI / 8)]);
+        return out;
+      }
+      return [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
     }
     function instSizeCalc(inst, obj) {
       var w = 32, h = 32;
@@ -640,8 +686,14 @@
         var bt = obj.button || {};
         w = n(bt.width, 160); h = n(bt.height, 42);
       } else {
-        var sp = sprites[obj.spriteId];
+        var sp = sprites[inst._maskSp] || sprites[obj.spriteId];
         if (sp) { w = sp.width; h = sp.height; }
+        var mk = maskOf(inst, obj);
+        if (mk) {
+          var bb = maskBounds(mk), sx = inst.scaleX || 1, sy = inst.scaleY || 1, fl = inst.flipX === -1 ? -1 : 1;
+          return { w: Math.abs((bb[2] - bb[0]) * sx), h: Math.abs((bb[3] - bb[1]) * sy), ox: ((bb[0] + bb[2]) / 2 - w / 2) * sx * fl,
+                   oy: ((bb[1] + bb[3]) / 2 - h / 2) * sy, mask: mk, sw: w, sh: h };
+        }
       }
       /* caja de colision propia (ancho/alto en pixeles, centrada; 0 = la del sprite). No cambia con la escala: asi
          estirar y aplastar al saltar o aterrizar es solo visual y no altera la fisica */
@@ -650,6 +702,42 @@
     }
     function boxesOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
       return Math.abs(ax - bx) * 2 < aw + bw && Math.abs(ay - by) * 2 < ah + bh;
+    }
+    /* centro de la caja de colision (con forma propia puede no estar en el centro del dibujo) */
+    function cX(inst, s) { return s.ox ? inst.x + s.ox : inst.x; }
+    function cY(inst, s) { return s.oy ? inst.y + s.oy : inst.y; }
+    /* la forma en el mundo (girada con la instancia) */
+    function worldShape(inst, s) {
+      var pts, sx = inst.scaleX || 1, sy = inst.scaleY || 1, fl = inst.flipX === -1 ? -1 : 1;
+      if (s.mask) pts = maskOutline(s.mask).map(function (q) { return [(q[0] - s.sw / 2) * sx * fl, (q[1] - s.sh / 2) * sy]; });
+      else { var w2 = s.w / 2, h2 = s.h / 2; pts = [[-w2, -h2], [w2, -h2], [w2, h2], [-w2, h2]]; }
+      var a = s.mask ? n(inst.angle, 0) * Math.PI / 180 : 0, co = Math.cos(a), si = Math.sin(a);
+      for (var i = 0; i < pts.length; i++) {
+        var x = pts[i][0], y = pts[i][1];
+        pts[i] = [inst.x + x * co - y * si, inst.y + x * si + y * co];
+      }
+      return pts;
+    }
+    /* separacion de ejes entre dos poligonos convexos (los de puntos sueltos cuentan como su envolvente) */
+    function polysOverlap(A, B) {
+      for (var pass = 0; pass < 2; pass++) {
+        var P = pass ? B : A;
+        for (var i = 0; i < P.length; i++) {
+          var j = (i + 1) % P.length, nx = P[i][1] - P[j][1], ny = P[j][0] - P[i][0];
+          var a0 = 1e18, a1 = -1e18, b0 = 1e18, b1 = -1e18, k, d;
+          for (k = 0; k < A.length; k++) { d = A[k][0] * nx + A[k][1] * ny; if (d < a0) a0 = d; if (d > a1) a1 = d; }
+          for (k = 0; k < B.length; k++) { d = B[k][0] * nx + B[k][1] * ny; if (d < b0) b0 = d; if (d > b1) b1 = d; }
+          if (a1 <= b0 || b1 <= a0) return false;
+        }
+      }
+      return true;
+    }
+    /* dos instancias se tocan: por su caja y, si alguna tiene forma propia, por la forma exacta */
+    function instOverlap(a, b) {
+      var sa = instSize(a), sb = instSize(b);
+      if (!boxesOverlap(cX(a, sa), cY(a, sa), sa.w, sa.h, cX(b, sb), cY(b, sb), sb.w, sb.h)) return false;
+      if (!sa.mask && !sb.mask) return true;
+      return polysOverlap(worldShape(a, sa), worldShape(b, sb));
     }
     function instScreenPos(inst) {
       if (objDef(inst).hud) return { x: inst.x, y: inst.y };
@@ -762,7 +850,7 @@
       return set ? all.filter(function (i) { return set[i.id]; }) : all.slice();
     }
     function loadScene(id, keepTransition) {
-      state.timers = {}; state.timeScale = 1; state.waits = []; state.paused = false; state.darkness = null; state.darkColor = null;
+      state.timers = {}; state.timeScale = 1; state.waits = []; state.paused = false; state.darkness = null; state.darkColor = null; state.layerDark = {};
       clearParticles(); invalidateTiles();
       var sc = scenes[id]; if (!sc) return;
       state.sceneId = id; state.instances = []; state.frame = 0;
@@ -844,10 +932,7 @@
         remove: function (i) {
           state.instances = state.instances.filter(function (x) { return x !== i; });
         },
-        collide: function (a, b) {
-          var sa = instSize(a), sb = instSize(b);
-          return boxesOverlap(a.x, a.y, sa.w, sa.h, b.x, b.y, sb.w, sb.h);
-        },
+        collide: function (a, b) { return instOverlap(a, b); },
         camera: {
           get x() { return cam.x; }, get y() { return cam.y; }, get zoom() { return cam.zoom; },
           follow: function (i, smooth) { cam.followId = i ? i.id : null; if (smooth != null) cam.smooth = smooth; },
@@ -1387,7 +1472,8 @@
           var start = -1;
           for (var c = 0; c <= tm.cols; c++) {
             var idx = c < tm.cols ? tm.data[r * tm.cols + c] : -1, tl = idx >= 0 ? tiles[idx] : null;
-            var solid = !!(tl && tl.solid && !tl.oneway);
+            var shaped = !!(tl && tl.collision && tl.collision.shape && tl.collision.shape !== 'none');
+            var solid = !!(tl && tl.solid && !tl.oneway && !shaped);
             if (solid && start < 0) start = c;
             else if (!solid && start >= 0) {
               var count = c - start;
@@ -1396,6 +1482,18 @@
             }
             if (!tl || c >= tm.cols) continue;
             var cx = tm.x + (c + 0.5) * T, cy = tm.y + (r + 0.5) * T;
+            if (shaped) {   /* forma propia: escalones y rampas (tiras horizontales); escalera y peligro, su caja */
+              var tx0 = tm.x + c * T, ty0 = tm.y + r * T, tsz = T, k = 1;
+              if (tl.solid || tl.oneway) tileSlices(tl.collision, tsz).forEach(function (sl) {
+                if (!tl.oneway) anySteps = true;
+                boxes.push({ x: tx0 + sl[0] * k, y: ty0 + sl[1] * k, w: sl[2] * k, h: sl[3] * k, oneway: !!tl.oneway, step: tl.oneway ? 0 : Math.max(4, T / 2 + 0.5) });
+              });
+              var mb = maskBounds(tl.collision);
+              var mbox = { x: tx0 + (mb[0] + mb[2]) / 2 * k, y: ty0 + (mb[1] + mb[3]) / 2 * k, w: (mb[2] - mb[0]) * k, h: (mb[3] - mb[1]) * k, src: null };
+              if (tl.ladder) ladders.push(mbox);
+              if (tl.danger) danger.push(mbox);
+              continue;
+            }
             if (tl.oneway) boxes.push({ x: cx, y: cy, w: T, h: T, oneway: true });
             if (tl.ladder) ladders.push({ x: cx, y: cy, w: T, h: T, src: null });
             /* los peligros (pinchos) perdonan un poco: su caja es mas pequena que el tile */
@@ -1413,6 +1511,31 @@
       tileSolids = { boxes: boxes, grid: grid, ladders: ladders, danger: danger, sceneId: state.sceneId };
       return tileSolids;
     }
+    /* forma de un tile en tiras horizontales [centro x, centro y, ancho, alto] (en pixeles del tile): asi una rampa o
+       unos escalones son cajas, y el personaje sube por ellos (ver "step" en la fisica) */
+    var STEP_MAX = 40, anySteps = false;   /* margen de busqueda para los escalones (el limite de cada caja va en box.step) */
+    function tileSlices(m, T) {
+      var N = Math.max(2, Math.min(16, Math.round(T / 2))), hS = T / N, out = [], pts = maskOutline(m), b = maskBounds(m);
+      var ell = m.shape === 'circle' || m.shape === 'ellipse', rect = m.shape === 'rect' || m.shape === 'square';
+      if (rect) return [[(b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[2] - b[0], b[3] - b[1]]];
+      for (var k = 0; k < N; k++) {
+        var y = (k + 0.5) * hS, x0 = 1e9, x1 = -1e9;
+        if (ell) {
+          var cy = (b[1] + b[3]) / 2, ry = (b[3] - b[1]) / 2, rx = (b[2] - b[0]) / 2, t = ry > 0 ? (y - cy) / ry : 2;
+          if (Math.abs(t) < 1) { var hx = rx * Math.sqrt(1 - t * t); x0 = (b[0] + b[2]) / 2 - hx; x1 = (b[0] + b[2]) / 2 + hx; }
+        } else for (var i = 0; i < pts.length; i++) {
+          var p0 = pts[i], p1 = pts[(i + 1) % pts.length];
+          if ((p0[1] <= y) === (p1[1] <= y)) continue;
+          var x = p0[0] + (y - p0[1]) * (p1[0] - p0[0]) / (p1[1] - p0[1]);
+          x0 = Math.min(x0, x); x1 = Math.max(x1, x);
+        }
+        if (x1 - x0 < 0.5) continue;
+        var last = out[out.length - 1];
+        if (last && Math.abs(last[0] - (x0 + x1) / 2) < 0.01 && Math.abs(last[2] - (x1 - x0)) < 0.01) { last[1] += hS / 2; last[3] += hS; }   /* misma tira: se juntan */
+        else out.push([(x0 + x1) / 2, y, x1 - x0, hS]);
+      }
+      return out;
+    }
     function tilesNow() { return tileSolids && tileSolids.sceneId === state.sceneId ? tileSolids : buildTileCache(); }
     /* objetos solidos de este fotograma, tambien en una rejilla de celdas de TILE_CHUNK px (como los tiles): asi cada
        objeto que se mueve solo mira los solidos de su zona, no todos (con cientos de cajas eran n x n comparaciones) */
@@ -1421,10 +1544,10 @@
       for (var i = 0; i < state.instances.length; i++) {
         var inst = state.instances[i], b = behav(inst);
         if (!b.solid || layerOf(inst).solid === false) continue;
-        var s = instSize(inst), box = { x: inst.x, y: inst.y, w: s.w, h: s.h, oneway: !!b.oneway, src: inst, stamp: 0 };
+        var s = instSize(inst), box = { x: cX(inst, s), y: cY(inst, s), w: s.w, h: s.h, oneway: !!b.oneway, src: inst, stamp: 0 };
         out.push(box);
-        var c0 = Math.floor((inst.x - s.w / 2) / TILE_CHUNK), c1 = Math.floor((inst.x + s.w / 2) / TILE_CHUNK);
-        var r0 = Math.floor((inst.y - s.h / 2) / TILE_CHUNK), r1 = Math.floor((inst.y + s.h / 2) / TILE_CHUNK);
+        var c0 = Math.floor((box.x - s.w / 2) / TILE_CHUNK), c1 = Math.floor((box.x + s.w / 2) / TILE_CHUNK);
+        var r0 = Math.floor((box.y - s.h / 2) / TILE_CHUNK), r1 = Math.floor((box.y + s.h / 2) / TILE_CHUNK);
         for (var r = r0; r <= r1; r++) for (var c = c0; c <= c1; c++) { var k = GK(r, c); (grid[k] || (grid[k] = [])).push(box); }
       }
       out.grid = grid;
@@ -1450,20 +1573,20 @@
     function buildSolidBoxes() { return buildInstanceSolids().concat(tilesNow().boxes); }
     /* toca un tile con la marca indicada (danger, solid, ladder, oneway) */
     function touchesTileFlag(inst, flag) {
-      var s = instSize(inst), tc = tilesNow(), i;
+      var s = instSize(inst), tc = tilesNow(), i, ix = cX(inst, s), iy = cY(inst, s);
       if (flag === 'danger') {
-        for (i = 0; i < tc.danger.length; i++) { var d = tc.danger[i]; if (boxesOverlap(inst.x, inst.y, s.w, s.h, d.x, d.y, d.w, d.h)) return true; }
+        for (i = 0; i < tc.danger.length; i++) { var d = tc.danger[i]; if (boxesOverlap(ix, iy, s.w, s.h, d.x, d.y, d.w, d.h)) return true; }
         return false;
       }
       if (flag === 'ladder') {
-        for (i = 0; i < tc.ladders.length; i++) { var l = tc.ladders[i]; if (boxesOverlap(inst.x, inst.y, s.w, s.h, l.x, l.y, l.w, l.h)) return true; }
+        for (i = 0; i < tc.ladders.length; i++) { var l = tc.ladders[i]; if (boxesOverlap(ix, iy, s.w, s.h, l.x, l.y, l.w, l.h)) return true; }
         return false;
       }
-      var near = solidsNear([], inst.x - s.w / 2 - 1, inst.y - s.h / 2 - 1, inst.x + s.w / 2 + 1, inst.y + s.h / 2 + 1);
+      var near = solidsNear([], ix - s.w / 2 - 1, iy - s.h / 2 - 1, ix + s.w / 2 + 1, iy + s.h / 2 + 1);
       for (i = 0; i < near.length; i++) {
         var b = near[i];
         if ((flag === 'oneway') !== !!b.oneway) continue;
-        if (boxesOverlap(inst.x, inst.y, s.w + 2, s.h + 2, b.x, b.y, b.w, b.h)) return true;
+        if (boxesOverlap(ix, iy, s.w + 2, s.h + 2, b.x, b.y, b.w, b.h)) return true;
       }
       return false;
     }
@@ -1636,20 +1759,23 @@
         var bounce = clamp(n(b.bounce, 0), 0, 1), free = freeBody(inst);
         var wasGrounded = inst.grounded;
         inst.grounded = false; inst.groundRef = null; inst.wallL = false; inst.wallR = false;
-        var sz = instSize(inst), hw = sz.w / 2, hh = sz.h / 2;
-        var prevBottom = inst.y + hh;
+        var sz = instSize(inst), hw = sz.w / 2, hh = sz.h / 2, ox = sz.ox || 0, oy = sz.oy || 0;
+        var prevBottom = inst.y + oy + hh;
         /* solo los solidos cerca del recorrido de este fotograma (los mapas de tiles van por zonas) */
-        var mx = Math.abs(inst.vx * dt) + 4, my = Math.abs(inst.vy * dt) + 4;
-        var solids = solidsNear(instSolids, inst.x - hw - mx, inst.y - hh - my, inst.x + hw + mx, inst.y + hh + my);
+        var mx = Math.abs(inst.vx * dt) + 4, my = Math.abs(inst.vy * dt) + 4 + (wasGrounded && anySteps ? STEP_MAX : 0);
+        var solids = solidsNear(instSolids, inst.x + ox - hw - mx, inst.y + oy - hh - my, inst.x + ox + hw + mx, inst.y + oy + hh + my);
 
         inst.x += inst.vx * dt;
         for (var i = 0; i < solids.length; i++) {
           var s = solids[i];
           if (s.oneway || s.src === inst) continue;
-          if (boxesOverlap(inst.x, inst.y, sz.w, sz.h, s.x, s.y, s.w, s.h)) {
+          if (boxesOverlap(inst.x + ox, inst.y + oy, sz.w, sz.h, s.x, s.y, s.w, s.h)) {
+            /* escalones y rampas de tiles con forma: si el borde de arriba esta a poca altura de los pies, se sube */
+            var rise = inst.y + oy + hh - (s.y - s.h / 2);
+            if (s.step && wasGrounded && inst.vy >= 0 && rise > 0 && rise <= s.step) { inst.y -= rise + 0.01; continue; }
             if (inst.vx > 0) inst.wallR = true; else if (inst.vx < 0) inst.wallL = true;
-            if (inst.vx > 0) inst.x = s.x - s.w / 2 - hw;
-            else if (inst.vx < 0) inst.x = s.x + s.w / 2 + hw;
+            if (inst.vx > 0) inst.x = s.x - s.w / 2 - hw - ox;
+            else if (inst.vx < 0) inst.x = s.x + s.w / 2 + hw - ox;
             if (free && s.src && freeBody(s.src)) impulse(inst, s.src, 'vx', bounce);
             else inst.vx = bounce > 0 && Math.abs(inst.vx * bounce) > 20 ? -inst.vx * bounce : 0;
           }
@@ -1658,12 +1784,12 @@
         for (var j = 0; j < solids.length; j++) {
           var u = solids[j];
           if (u.src === inst) continue;
-          if (boxesOverlap(inst.x, inst.y, sz.w, sz.h, u.x, u.y, u.w, u.h)) {
+          if (boxesOverlap(inst.x + ox, inst.y + oy, sz.w, sz.h, u.x, u.y, u.w, u.h)) {
             if (u.oneway && !(inst.dropT > 0)) {
               if (!(inst.vy > 0 && prevBottom <= u.y - u.h / 2 + 6)) continue;
             }
             if (inst.vy > 0) {
-              inst.y = u.y - u.h / 2 - hh;
+              inst.y = u.y - u.h / 2 - hh - oy;
               inst.groundRef = u.src || null;
               /* contra otro cuerpo libre en el aire: se reparten la velocidad segun la masa. Si el de abajo esta apoyado, el
                  suelo se lleva el golpe y este cae encima como sobre algo fijo (asi las pilas se quedan quietas) */
@@ -1675,11 +1801,22 @@
               else if (bounce > 0.08 && inst.vy * bounce > 40) { inst.vy = -inst.vy * bounce; }
               else { inst.vy = 0; inst.grounded = true; if (!wasGrounded) inst.evLandPending = true; }
             } else if (inst.vy < 0) {
-              inst.y = u.y + u.h / 2 + hh;
+              inst.y = u.y + u.h / 2 + hh - oy;
               if (free && u.src && freeBody(u.src)) impulse(inst, u.src, 'vy', bounce);
               else inst.vy = bounce > 0.08 ? -inst.vy * bounce : 0;
             }
           }
+        }
+        /* bajando una rampa o unos escalones: se queda pegado al suelo en vez de ir dando saltitos */
+        if (wasGrounded && !inst.grounded && inst.vy >= 0 && !(inst.dropT > 0)) {
+          var feet = inst.y + oy + hh, best = null;
+          for (var q2 = 0; q2 < solids.length; q2++) {
+            var g = solids[q2], top = g.y - g.h / 2;
+            if (!g.step || g.src === inst || top < feet - 0.5 || top > feet + g.step) continue;
+            if (Math.abs(inst.x + ox - g.x) * 2 >= sz.w + g.w) continue;
+            if (!best || top < best.y - best.h / 2) best = g;
+          }
+          if (best) { inst.y = best.y - best.h / 2 - hh - oy; inst.vy = 0; inst.grounded = true; }
         }
         if (free) {
           if (inst.grounded && Math.abs(inst.vx) < 2) inst.vx = 0;
@@ -1698,7 +1835,7 @@
         var it = state.instances[i];
         if (!behav(it).ladder) continue;
         var s = instSize(it);
-        out.push({ x: it.x, y: it.y, w: s.w, h: s.h, src: it });
+        out.push({ x: cX(it, s), y: cY(it, s), w: s.w, h: s.h, src: it });
       }
       return out.concat(tilesNow().ladders);
     }
@@ -1706,18 +1843,18 @@
       for (var i = 0; i < ladders.length; i++) {
         var L = ladders[i];
         if (L.src === inst) continue;
-        if (boxesOverlap(inst.x, inst.y, sz.w, sz.h, L.x, L.y, L.w, L.h)) return true;
+        if (boxesOverlap(cX(inst, sz), cY(inst, sz), sz.w, sz.h, L.x, L.y, L.w, L.h)) return true;
       }
       return false;
     }
 
     /* toca una pared solida (de tiles) por el lado dir (-1 izquierda, 1 derecha) a media altura */
     function nearWall(inst, dir) {
-      var s = instSize(inst), x = inst.x + dir * 3, h = s.h * 0.6;
-      var near = solidsNear([], x - s.w / 2 - 1, inst.y - h / 2, x + s.w / 2 + 1, inst.y + h / 2);
+      var s = instSize(inst), x = cX(inst, s) + dir * 3, y = cY(inst, s), h = s.h * 0.6;
+      var near = solidsNear([], x - s.w / 2 - 1, y - h / 2, x + s.w / 2 + 1, y + h / 2);
       for (var i = 0; i < near.length; i++) {
         var q = near[i];
-        if (!q.oneway && boxesOverlap(x, inst.y, s.w, h, q.x, q.y, q.w, q.h)) return true;
+        if (!q.oneway && !q.step && boxesOverlap(x, y, s.w, h, q.x, q.y, q.w, q.h)) return true;
       }
       return false;
     }
@@ -2136,11 +2273,9 @@
         case 'collision': {
           var la = objInstances(p.object), lb = objInstances(p.with); found = false;
           for (i = 0; i < la.length; i++) {
-            var sa = instSize(la[i]);
             for (var j = 0; j < lb.length; j++) {
               if (la[i].id === lb[j].id) continue;
-              var sb = instSize(lb[j]);
-              if (boxesOverlap(la[i].x, la[i].y, sa.w, sa.h, lb[j].x, lb[j].y, sb.w, sb.h)) {
+              if (instOverlap(la[i], lb[j])) {
                 pick(picks, p.object, la[i].id); pick(picks, p.with, lb[j].id); found = true;
               }
             }
@@ -2263,7 +2398,7 @@
       for (i = 0; i < project.objects.length; i++) if (project.objects[i].id === objId) o = project.objects[i];
       for (i = 0; i < tms.length; i++) {
         if (!tms[i].data || !tilesets[tms[i].tilesetId]) continue;
-        if (!o || !o.tilesetId || tms[i].tilesetId === o.tilesetId) out.push(tms[i]);
+        if (!o || !o.tilesetId || tms[i].tilesetId === o.tilesetId || tms[i].objectId === objId) out.push(tms[i]);
       }
       return out;
     }
@@ -2579,6 +2714,12 @@
         case 'sendMessage': state.msgNext[resolveStr(p.name)] = true; break;
         case 'setLanguage': state.lang = resolveStr(p.lang); break;
         case 'setDarkness': state.darkness = clamp(resolveVal(p.value), 0, 100); if (p.color) state.darkColor = resolveStr(p.color); break;
+        case 'layerDarkness': {
+          var ldn = resolveStr(p.layer), ldk = null;
+          for (var lk in layers) if (lk === ldn || layers[lk].name === ldn) ldk = lk;
+          if (ldk) (state.layerDark || (state.layerDark = {}))[ldk] = { v: clamp(resolveVal(p.value), 0, 100), c: p.color ? resolveStr(p.color) : null };
+          break;
+        }
         case 'pathTo': {
           var ptx = resolveVal(p.x), pty = resolveVal(p.y);
           anyPath = true;
@@ -2686,10 +2827,10 @@
           for (i = 0; i < list.length; i++) for (var so = 0; so < others.length; so++) {
             var A = list[i], B = others[so];
             if (A === B) continue;
-            var sa = instSize(A), sb = instSize(B);
-            var ox = (sa.w + sb.w) / 2 - Math.abs(A.x - B.x), oy = (sa.h + sb.h) / 2 - Math.abs(A.y - B.y);
+            var sa = instSize(A), sb = instSize(B), ax = cX(A, sa), ay = cY(A, sa), bx2 = cX(B, sb), by2 = cY(B, sb);
+            var ox = (sa.w + sb.w) / 2 - Math.abs(ax - bx2), oy = (sa.h + sb.h) / 2 - Math.abs(ay - by2);
             if (ox <= 0 || oy <= 0) continue;
-            if (ox < oy) A.x += A.x < B.x ? -ox : ox; else A.y += A.y < B.y ? -oy : oy;
+            if (ox < oy) A.x += ax < bx2 ? -ox : ox; else A.y += ay < by2 ? -oy : oy;
           }
           break;
         }
@@ -3539,6 +3680,7 @@
     }
     function drawInstance(inst) {
       var obj = objDef(inst);
+      if (obj.type === 'light') return;                              /* las luces solo se ven en la oscuridad */
       if (!inst.visible || inst.opacity <= 0 || inst.flashHide) return;
       /* lo mas comun (un sprite sin filtro, tinte, contorno ni imagen propia): una sola llamada de dibujo */
       if ((!obj.type || obj.type === 'sprite') && !inst.img && !inst.tint && !inst.effectFilter && !obj.shader && !inst.outline && !obj.outline && !obj.nine && ctx.drawSprite) {
@@ -3676,12 +3818,20 @@
       img.update();
       return (lightImg = img);
     }
-    function drawLighting(shX, shY) {
+    /* oscuridad de una capa (la de la accion o la de la capa en el editor); null si no tiene */
+    function layerDarkness(lid) {
+      var o = state.layerDark && state.layerDark[lid], L = layers[lid];
+      if (o) return o.v > 0 ? o : null;
+      return L && n(L.darkness, 0) > 0 ? { v: n(L.darkness, 0), c: L.darkColor } : null;
+    }
+    /* la oscuridad tapa lo dibujado hasta ahora (la capa y las de debajo); las luces le abren agujeros. Sin argumentos:
+       la oscuridad de la escena (proyectos de antes y la accion "Oscuridad de la escena") */
+    function drawLighting(shX, shY, darkV, darkC) {
       var sc = scenes[state.sceneId], lt = (sc && sc.light) || {};
-      var dark = state.darkness != null ? state.darkness : n(lt.darkness, 0);
+      var dark = darkV != null ? darkV : state.darkness != null ? state.darkness : n(lt.darkness, 0);
       if (!(dark > 0)) return;
       if (!lightSurf) lightSurf = S2D.surface(VW, VH);
-      var main = ctx, lc = lightSurf.ctx, cam = state.camera, z = cam.zoom || 1, rgb = hexRGB(state.darkColor || lt.color || '#05060f');
+      var main = ctx, lc = lightSurf.ctx, cam = state.camera, z = cam.zoom || 1, rgb = hexRGB(darkV != null ? (darkC || '#05060f') : (state.darkColor || lt.color || '#05060f'));
       lc.setTransform(1, 0, 0, 1, 0, 0);
       lc.globalCompositeOperation = 'copy';
       lc.globalAlpha = 1;
@@ -3691,8 +3841,8 @@
       var glows = [];
       for (var i = 0; i < state.instances.length; i++) {
         var o = state.instances[i], od = o._od || objDef(o);
-        if (!od.behaviorList || !od.behaviorList.length || !o.visible) continue;
-        var L = bhOf(o, 'light');
+        if (!o.visible) continue;
+        var L = od.type === 'light' ? (od.light || {}) : od.behaviorList && od.behaviorList.length ? bhOf(o, 'light') : null;
         if (!L) continue;
         var r = Math.max(4, n(L.radius, 160)), it = clamp(n(L.intensity, 1), 0, 1), fl = clamp(n(L.flicker, 0), 0, 1);
         if (fl) { var w = Math.sin(state.time * 17 + o.id) * 0.5 + Math.sin(state.time * 31 + o.id * 3) * 0.5; r *= 1 - fl * 0.08 * (w + 1); it *= 1 - fl * 0.15 * (w + 1); }
@@ -3869,8 +4019,18 @@
         if (layers[lid].hidden) continue;
         var lcode = layerShaderCode(lid);
           var tl0 = profT();
-        if (lcode && !layerHasContent(lid, drawList)) { profAdd('capa ' + lid, tl0); continue; }   /* capa vacia: sin pase de shader */
-        if (lcode) { drawLayerShaded(lid, par, shX, shY, cam, drawList, lcode); profAdd('capa ' + lid + ' (con shader)', tl0); continue; }
+        if (lcode && !layerHasContent(lid, drawList)) {                /* capa vacia: sin pase de shader */
+          profAdd('capa ' + lid, tl0);
+          var lde = layerDarkness(lid);
+          if (lde) drawLighting(shX, shY, lde.v, lde.c);
+          continue;
+        }
+        if (lcode) {
+          drawLayerShaded(lid, par, shX, shY, cam, drawList, lcode); profAdd('capa ' + lid + ' (con shader)', tl0);
+          var lds = layerDarkness(lid);
+          if (lds) drawLighting(shX, shY, lds.v, lds.c);
+          continue;
+        }
         ctx.save();
         camTransform(par, shX, shY);
         drawTilemaps(lid, par);
@@ -3878,6 +4038,8 @@
         profAdd('capa ' + lid, tl0);
         if (lid === 'base') { tl0 = profT(); drawParticles(); profAdd('particulas', tl0); }   /* encima de los objetos de la capa principal */
         ctx.restore();
+        var ldk = layerDarkness(lid);
+        if (ldk) drawLighting(shX, shY, ldk.v, ldk.c);
       }
       var tlg = profT();
       drawLighting(shX, shY);

@@ -4,16 +4,16 @@ wait 3
 bar.scene
 wait 3
 bar.expectkind scene
-sc.count 20
+sc.count 21
 sc.placeobj Moneda
 sc.place 333 222
-sc.count 21
+sc.count 22
 bar.undo
 wait 1
-sc.count 20
+sc.count 21
 bar.redo
 wait 1
-sc.count 21
+sc.count 22
 bar.events
 wait 3
 bar.expectkind events
@@ -24,7 +24,7 @@ wait 3
 bar.expectkind scene
 bar.undo
 wait 1
-sc.count 20
+sc.count 21
 shot CAPTURA_ESCENA
 wait 2
 bar.settings

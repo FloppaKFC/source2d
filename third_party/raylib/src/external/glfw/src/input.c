@@ -26,6 +26,10 @@
 //========================================================================
 
 #include "internal.h"
+
+// Source 2D: 1 mientras se arrastran archivos sobre la ventana (lo pone x11_window.c; en Windows siempre 0)
+int s2d_drag_hover = 0;
+
 #include "mappings.h"
 
 #include <assert.h>

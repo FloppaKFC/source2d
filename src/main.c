@@ -96,6 +96,7 @@ static const char *self_path(void) {
     return n > 0 && n < sizeof p ? p : NULL;
 }
 #else
+#include <unistd.h>
 static const char *self_path(void) { return "/proc/self/exe"; }
 #endif
 #include "s2d_fallback.h"   /* despues de windows.h */
@@ -1078,7 +1079,25 @@ int main(int argc, char **argv) {
         proj = expand_blobs((char *)payload, &plen);
         proj_len = plen; payload = NULL;
         project_title(proj, NULL, title, sizeof title);
-    } else if (!payload && project_path) {           /* source2d-player <proyecto.source2d.json> */
+    }
+    /* exportado a carpeta: el motor solo, con el juego en datos/juego.source2d.json a su lado */
+    static char beside[4096];
+    if (!payload && !proj && !project_path && self_path()) {
+#ifdef _WIN32
+        snprintf(beside, sizeof beside, "%s", self_path());
+#else
+        ssize_t bl = readlink(self_path(), beside, sizeof beside - 1);   /* /proc/self/exe -> la ruta de verdad */
+        beside[bl > 0 ? bl : 0] = 0;
+#endif
+        char *sl = strrchr(beside, '/'), *bs = strrchr(beside, '\\');
+        if (bs > sl) sl = bs;
+        if (sl && (size_t)(sl - beside) + 32 < sizeof beside) {
+            strcpy(sl + 1, "datos/juego.source2d.json");
+            FILE *t = fopen(beside, "rb");
+            if (t) { fclose(t); project_path = beside; }
+        }
+    }
+    if (!payload && !proj && project_path) {           /* source2d-player <proyecto.source2d.json> */
         proj = read_text_file(project_path, &proj_len);
         if (proj) project_title(proj, project_path, title, sizeof title);
     }

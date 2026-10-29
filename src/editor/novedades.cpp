@@ -12,6 +12,7 @@
 #include "version.hpp"
 #include "../../third_party/monocypher/monocypher.h"
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -31,23 +32,45 @@ const char *kSistema = "windows", *kExe = "Source2D.exe";
 const char *kSistema = "linux", *kExe = "Source2D";
 #endif
 const char *kBase = "https://raw.githubusercontent.com/FloppaKFC/source2d-versiones/main/";
-const time_t kCada = 3 * 3600;               // se vuelve a mirar cada 3 h si el editor sigue abierto
+const time_t kCada = 3 * 3600;               // busqueda completa cada 3 h si el editor sigue abierto
+const double kSondeo = 5;                    // y cada 5 s se mira si cambio la firma de las noticias (un archivo de 128 bytes)
+// votos de las encuestas: contador publico sin cuenta. /get/<espacio>/<clave> lee, /hit/... suma 1 (y devuelve el total)
+const char *kContador = "https://abacus.jasoncameron.dev/", *kEspacio = "source2d-floppa";
+const double kVotosCada = 20;
 
 struct Bajada { sys::Proc p; std::string dest, hash; bool vivo = false; int code = 0; };   // code: salida de curl (22 = no esta en el servidor)
+struct Conteo {                              // los votos de una encuesta
+    std::vector<long long> n;
+    std::vector<Bajada> b;                   // una lectura por opcion
+    Bajada voto;
+    double at = -1e9;
+    std::string error;
+};
 struct DescargaVer { Version v; sys::Proc p; bool vivo = false; std::string parcial, final_, error; };
 
 bool g_on = false, g_buscar = false, g_pruebas = false, g_hayCache = false;
-std::string g_base = kBase, g_versDir, g_estado;
+std::string g_base = kBase, g_versDir, g_estado, g_contador = kContador;
 uint8_t g_pub[32];
 std::vector<Noticia> g_news;
 std::vector<Version> g_vers;
-std::set<int> g_leidas, g_vistas, g_nuevas;
+std::set<int> g_leidas, g_vistas, g_nuevas, g_notificadas;
 std::vector<Bajada> g_meta, g_imgs;
+Bajada g_sondeo;                             // la firma de noticias.json, para ver si hay algo nuevo
+double g_sondeoAt = -1e9;
 std::map<std::string, DescargaVer> g_desc;
+std::map<int, Conteo> g_enc;
+std::map<int, int> g_votos;                  // id de noticia -> opcion que voto este editor
+std::set<int> g_enviados;                    // los votos que el contador ya recibio (los demas se reintentan)
 time_t g_ultima = 0;
 
 std::string dir() { return ui::configDir() + "/noticias"; }
 std::string tmpDir() { return dir() + "/descarga"; }
+double reloj() { return (double)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count() / 1000.0; }
+// los archivos de las noticias pasan por la cache de GitHub (5 min): con ?t= se pide el de ahora mismo
+std::string sinCache(const std::string &url) {
+    if (url.rfind("https://", 0) != 0) return url;
+    return url + "?t=" + std::to_string((long long)time(nullptr));
+}
 
 bool fromHex(std::string s, uint8_t *b, size_t n) {
     while (!s.empty() && (s.back() == '\n' || s.back() == '\r' || s.back() == ' ')) s.pop_back();
@@ -124,7 +147,9 @@ bool lanzarCurl(Bajada &b, const std::string &url, const std::vector<std::string
 
 void guardarLeidas() {
     if (g_pruebas && !getenv("S2D_NOVEDADES_URL")) return;
-    json j = {{"leidas", g_leidas}, {"vistas", g_vistas}};
+    json v = json::object();
+    for (auto &kv : g_votos) v[std::to_string(kv.first)] = kv.second;
+    json j = {{"leidas", g_leidas}, {"vistas", g_vistas}, {"notificadas", g_notificadas}, {"votos", v}, {"enviados", g_enviados}};
     sys::writeDurable(dir() + "/leidas.json", j.dump());
 }
 
@@ -145,8 +170,21 @@ void cargarCache() {
             if (!mine) continue;
         }
         Noticia o;
-        o.id = x.value("id", 0); o.titulo = x.value("titulo", ""); o.texto = x.value("texto", ""); o.tipo = x.value("tipo", "aviso");
+        o.id = x.value("id", 0); o.titulo = x.value("titulo", ""); o.texto = x.value("texto", ""); o.inferior = x.value("inferior", ""); o.tipo = x.value("tipo", "aviso");
         o.fecha = x.value("fecha", ""); o.version = x.value("version", ""); o.fijada = x.value("fijada", false); o.importante = x.value("importante", false);
+        o.notificar = x.value("notificar", false);
+        if (x.contains("encuesta") && x["encuesta"].is_object()) {
+            auto &e = x["encuesta"];
+            Encuesta en;
+            en.pregunta = e.value("pregunta", ""); en.clave = e.value("clave", "");
+            en.cierra = e.contains("cierra") && e["cierra"].is_number() ? e["cierra"].get<long long>() : 0;
+            if (e.contains("opciones") && e["opciones"].is_array())
+                for (auto &op : e["opciones"]) if (op.is_string() && en.opciones.size() < 10) en.opciones.push_back(op);
+            // la clave va en la direccion del contador: solo letras, numeros y guiones
+            bool ok = !en.clave.empty() && en.clave.size() <= 40 && en.opciones.size() >= 2;
+            for (char c : en.clave) if (!(isalnum((unsigned char)c) || c == '-')) ok = false;
+            if (ok) { o.hayEncuesta = true; o.encuesta = en; }
+        }
         std::string en = x.value("enlace", "");
         if (en.rfind("https://", 0) == 0) o.enlace = en;
         if (x.contains("imagen") && x["imagen"].is_object()) {
@@ -227,6 +265,8 @@ void iniciar(bool buscar, const std::string &versionsDir, bool pruebas) {
         if (!url) return;
     }
     if (url && *url) g_base = url;
+    if (const char *c = getenv("S2D_CONTADOR_URL")) g_contador = c;
+    else if (pruebas) g_contador.clear();   // las pruebas no votan de verdad
     if (!fromHex(pub, g_pub, 32)) return;
     g_on = true;
     g_buscar = buscar;
@@ -238,6 +278,10 @@ void iniciar(bool buscar, const std::string &versionsDir, bool pruebas) {
     if (j.is_object()) {
         for (auto &x : j.value("leidas", json::array())) if (x.is_number_integer()) g_leidas.insert(x.get<int>());
         for (auto &x : j.value("vistas", json::array())) if (x.is_number_integer()) g_vistas.insert(x.get<int>());
+        for (auto &x : j.value("notificadas", json::array())) if (x.is_number_integer()) g_notificadas.insert(x.get<int>());
+        if (j.contains("votos") && j["votos"].is_object())
+            for (auto &kv : j["votos"].items()) if (kv.value().is_number_integer()) g_votos[atoi(kv.key().c_str())] = kv.value().get<int>();
+        for (auto &x : j.value("enviados", json::array())) if (x.is_number_integer()) g_enviados.insert(x.get<int>());
     }
     cargarCache();
     if (buscar) buscarAhora();
@@ -251,7 +295,7 @@ void buscarAhora() {
     for (const char *nm : {"noticias.json", "noticias.json.firma", "versiones.json", "versiones.json.firma"}) {
         Bajada b;
         b.dest = tmpDir() + "/" + nm;
-        if (!lanzarCurl(b, g_base + nm, {"--max-time", "30", "--max-filesize", "2000000"})) {
+        if (!lanzarCurl(b, sinCache(g_base + nm), {"--max-time", "30", "--max-filesize", "2000000"})) {
             g_estado = "No se encontró curl: no se pueden buscar noticias.";
             g_meta.clear();
             return;
@@ -292,7 +336,57 @@ void tick() {
         } else if (sz < d.v.tam) d.error = "Se cortó la descarga. Pulsa otra vez para seguir donde se quedó.";
         else { fs::remove(fs::u8path(d.parcial), ec); d.error = "El archivo descargado no coincide con la firma y se borró."; }
     }
+    // votos: {"value": N}; si la clave aun no existe el contador dice 404 (curl 22) y es que hay 0
+    auto valor = [](Bajada &b) -> long long {
+        json j = json::parse(leer(b.dest), nullptr, false);
+        std::error_code ec;
+        fs::remove(fs::u8path(b.dest), ec);
+        if (b.code == 22 || (g_pruebas && b.code == 37)) return 0;   // 37: en las pruebas (file://) el archivo no existe
+        if (b.code != 0 || !j.is_object() || !j.contains("value") || !j["value"].is_number_integer()) return -1;
+        return j["value"].get<long long>();
+    };
+    for (auto &kv : g_enc) {
+        Conteo &c = kv.second;
+        for (size_t i = 0; i < c.b.size(); i++) {
+            Bajada &b = c.b[i];
+            if (!b.vivo || !sys::finished(b.p, &b.code)) continue;
+            b.vivo = false;
+            long long v = valor(b);
+            if (v >= 0 && i < c.n.size()) c.n[i] = v;
+            if (v < 0) c.error = "No se pudieron leer los votos.";
+        }
+        if (c.voto.vivo && sys::finished(c.voto.p, &c.voto.code)) {
+            c.voto.vivo = false;
+            long long v = valor(c.voto);
+            auto it = g_votos.find(kv.first);
+            if (v < 0) c.error = "No se pudo enviar el voto: se volverá a intentar.";
+            else {
+                if (it != g_votos.end() && it->second >= 0 && it->second < (int)c.n.size()) c.n[it->second] = v;
+                c.error.clear();
+                g_enviados.insert(kv.first);
+                guardarLeidas();
+            }
+        }
+    }
     if (g_buscar && g_meta.empty() && time(nullptr) - g_ultima > kCada) buscarAhora();
+    // sondeo: si la firma de noticias.json cambio, hay noticias nuevas (o editadas): se buscan ya
+    if (g_sondeo.vivo) {
+        if (sys::finished(g_sondeo.p, &g_sondeo.code)) {
+            g_sondeo.vivo = false;
+            std::string nueva = leer(g_sondeo.dest), vieja = leer(dir() + "/noticias.json.firma");
+            auto limpio = [](std::string t) { while (!t.empty() && (t.back() == '\n' || t.back() == '\r' || t.back() == ' ')) t.pop_back(); return t; };
+            if (g_sondeo.code == 0 && !limpio(nueva).empty() && limpio(nueva) != limpio(vieja) && g_meta.empty()) buscarAhora();
+            std::error_code ec;
+            fs::remove(fs::u8path(g_sondeo.dest), ec);
+        }
+    } else if (g_buscar && g_meta.empty() && reloj() - g_sondeoAt >= kSondeo) {
+        g_sondeoAt = reloj();
+        std::error_code ec;
+        fs::create_directories(fs::u8path(dir()), ec);
+        g_sondeo = Bajada{};
+        g_sondeo.dest = dir() + "/sondeo.firma";
+        lanzarCurl(g_sondeo, sinCache(g_base + "noticias.json.firma"), {"--max-time", "4", "--max-filesize", "4096"});
+    }
 }
 
 void setBuscar(bool on) {
@@ -318,10 +412,75 @@ const Noticia *importantePendiente() {
     for (auto &x : g_news) if (x.importante && !g_vistas.count(x.id)) return &x;
     return nullptr;
 }
+const Noticia *notificacionPendiente() {
+    for (auto &x : g_news) if (x.notificar && !g_notificadas.count(x.id) && !g_leidas.count(x.id)) return &x;
+    return nullptr;
+}
+void notificada(int id) {
+    g_notificadas.insert(id);
+    guardarLeidas();
+}
 void importanteVisto(int id) {
     g_vistas.insert(id);
     if (!g_leidas.count(id)) { g_nuevas.insert(id); g_leidas.insert(id); }
     guardarLeidas();
+}
+
+namespace {
+std::string urlVoto(const char *accion, const Encuesta &e, int i) {
+    return g_contador + accion + "/" + kEspacio + "/" + e.clave + "-" + std::to_string(i);
+}
+void enviarVoto(const Noticia &n, Conteo &c) {
+    auto it = g_votos.find(n.id);
+    if (it == g_votos.end() || c.voto.vivo || g_contador.empty()) return;
+    std::error_code ec;
+    fs::create_directories(fs::u8path(dir() + "/encuestas"), ec);
+    c.voto = Bajada{};
+    c.voto.dest = dir() + "/encuestas/" + std::to_string(n.id) + "-voto.json";
+    lanzarCurl(c.voto, urlVoto("hit", n.encuesta, it->second), {"--max-time", "15", "--max-filesize", "4096"});
+}
+}  // namespace
+
+bool encuestaCerrada(const Noticia &n) { return n.encuesta.cierra > 0 && (long long)time(nullptr) >= n.encuesta.cierra; }
+
+void mirarEncuesta(const Noticia &n) {
+    if (!g_on || !n.hayEncuesta) return;
+    Conteo &c = g_enc[n.id];
+    if (c.n.size() != n.encuesta.opciones.size()) c.n.assign(n.encuesta.opciones.size(), -1);
+    if (!g_buscar || g_contador.empty() || c.voto.vivo || reloj() - c.at < kVotosCada) return;
+    for (auto &b : c.b) if (b.vivo) return;
+    c.at = reloj();
+    // un voto que no llego (sin internet al votar) se vuelve a mandar antes de leer
+    if (g_votos.count(n.id) && !g_enviados.count(n.id) && !encuestaCerrada(n)) { enviarVoto(n, c); return; }
+    std::error_code ec;
+    fs::create_directories(fs::u8path(dir() + "/encuestas"), ec);
+    c.b.assign(n.encuesta.opciones.size(), Bajada{});
+    for (size_t i = 0; i < c.b.size(); i++) {
+        c.b[i].dest = dir() + "/encuestas/" + std::to_string(n.id) + "-" + std::to_string(i) + ".json";
+        lanzarCurl(c.b[i], urlVoto("get", n.encuesta, (int)i), {"--max-time", "15", "--max-filesize", "4096"});
+    }
+}
+std::vector<long long> votos(int id) {
+    auto it = g_enc.find(id);
+    return it == g_enc.end() ? std::vector<long long>() : it->second.n;
+}
+int miVoto(int id) {
+    auto it = g_votos.find(id);
+    return it == g_votos.end() ? -1 : it->second;
+}
+void votar(const Noticia &n, int opcion) {
+    if (!g_on || !n.hayEncuesta || g_votos.count(n.id) || opcion < 0 || opcion >= (int)n.encuesta.opciones.size() || encuestaCerrada(n)) return;
+    g_votos[n.id] = opcion;
+    guardarLeidas();
+    Conteo &c = g_enc[n.id];
+    if (c.n.size() != n.encuesta.opciones.size()) c.n.assign(n.encuesta.opciones.size(), -1);
+    if (c.n[opcion] >= 0) c.n[opcion]++;   // se ve ya; el contador confirma el total al contestar
+    if (g_buscar) enviarVoto(n, c);
+    else c.error = "Buscar noticias está apagado en Opciones: el voto se enviará al activarlo.";
+}
+std::string errorEncuesta(int id) {
+    auto it = g_enc.find(id);
+    return it == g_enc.end() ? "" : it->second.error;
 }
 
 void descargar(const Version &v) {

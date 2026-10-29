@@ -1,0 +1,31 @@
+# Source Sound: suelto (musica con piano y bateria, exportar a .wav y .mp3) y dentro del proyecto (Musica y sonidos)
+wait 3
+sound.studio
+wait 3
+sound.note 0 60 4
+sound.note 4 64 4
+sound.note 8 67 8
+sound.track 1 bateria
+sound.note 0 0 1
+sound.note 4 1 1
+sound.note 8 0 1
+sound.note 12 1 1
+sound.track 0
+wait 3
+shot CAPTURA_MUSICA
+sound.export SALIDA_WAV
+sound.export SALIDA_MP3
+sound.close
+open PROYECTO
+wait 3
+sound.newproj sfx
+wait 3
+shot CAPTURA_EFECTO
+sound.newproj music
+sound.note 0 60 2
+wait 3
+jexpect /music/0/mime "audio/wav"
+jexpect /music/0/song/mode "sfx"
+jexpect /music/1/song/tracks/0/notes/0/1 60
+save SALIDA_PROY
+quit

@@ -5463,6 +5463,31 @@
      "d": "#05060f"
     }
    ]
+  },
+  "layerDarkness": {
+   "cat": "Escena",
+   "gd": "Efecto visual",
+   "label": "Oscuridad de una capa (luces)",
+   "params": [
+    {
+     "k": "layer",
+     "l": "capa (nombre)",
+     "t": "text",
+     "d": "Principal"
+    },
+    {
+     "k": "value",
+     "l": "0-100",
+     "t": "number",
+     "d": 70
+    },
+    {
+     "k": "color",
+     "l": "color",
+     "t": "text",
+     "d": "#05060f"
+    }
+   ]
   }
  },
  "sentences": {
@@ -5716,7 +5741,8 @@
    "setLanguage": "Poner el idioma {lang}",
    "pathTo": "{object} va a {x};{y} buscando el camino (velocidad {speed})",
    "pathStop": "{object} deja de seguir su camino",
-   "setDarkness": "Oscuridad de la escena al {value} % ({color})"
+   "setDarkness": "Oscuridad de la escena al {value} % ({color})",
+   "layerDarkness": "Oscuridad de la capa {layer} al {value} % ({color})"
   }
  },
  "paramNames": {

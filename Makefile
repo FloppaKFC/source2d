@@ -31,7 +31,10 @@ build build/gen:
 
 # ---- dependencias propias ----
 # raylib con OpenGL 2.1: abre tambien en graficas viejas (Intel GMA y similares); lo moderno sigue igual de rapido
-$(RAYLIB_A):
+# GLFW lleva un parche de Source 2D (aviso de archivos arrastrandose encima): si cambia, se rehace rglfw.o
+GLFW_PATCHED = $(RAYLIB_DIR)/external/glfw/src/input.c $(RAYLIB_DIR)/external/glfw/src/x11_window.c
+$(RAYLIB_A): $(GLFW_PATCHED)
+	rm -f $(RAYLIB_DIR)/rglfw.o
 	$(MAKE) -C $(RAYLIB_DIR) PLATFORM=PLATFORM_DESKTOP RAYLIB_LIBTYPE=STATIC GRAPHICS=GRAPHICS_API_OPENGL_21
 
 $(QJS_A):
@@ -88,10 +91,12 @@ build/gen/presets.h: $(wildcard src/editor/presets/*) tools/bin2h.py | build/gen
 	python3 tools/bin2h.py src/editor/presets/estilo.js preset_estilo build/gen/preset_estilo.h
 	python3 tools/bin2h.py src/editor/presets/extension.js preset_extension build/gen/preset_extension.h
 	python3 tools/bin2h.py src/editor/presets/steam.js preset_steam build/gen/preset_steam.h
-	printf '#pragma once\n#include "preset_lluvia.h"\n#include "preset_estilo.h"\n#include "preset_extension.h"\n#include "preset_steam.h"\n' > $@
+	python3 tools/bin2h.py src/editor/presets/floppa1.s2dsprite preset_floppa1 build/gen/preset_floppa1.h
+	python3 tools/bin2h.py src/editor/presets/floppa2.s2dsprite preset_floppa2 build/gen/preset_floppa2.h
+	python3 tools/bin2h.py src/editor/presets/cancion_floppa.s2dsound preset_cancion build/gen/preset_cancion.h
+	printf '#pragma once\n#include "preset_lluvia.h"\n#include "preset_estilo.h"\n#include "preset_extension.h"\n#include "preset_steam.h"\n#include "preset_floppa1.h"\n#include "preset_floppa2.h"\n#include "preset_cancion.h"\n' > $@
 
-# juegos de prueba: no van dentro del editor, sino en la carpeta Ejemplos (tools/release.sh). El editor de pruebas los
-# encuentra tambien aqui, en la raiz. Cada uno lo genera su guion:
+# juegos de prueba: no van dentro del editor (ni en la Release). El editor de pruebas los encuentra aqui, en la raiz. Cada uno lo genera su guion:
 #   examples_ajedrez.source2d.json         tools/make_chess.py (con tools/chess_art.py)
 #   examples_maxwell.source2d.json         tools/make_maxwell.py (animacion de 36 imagenes en tools/maxwell_giro.png)
 #   examples_platform_test.source2d.json   tools/make_platform_test.py (nivel en tools/platform_level.py, arte en tools/platform_art.py)

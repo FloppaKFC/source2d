@@ -1,4 +1,4 @@
-# exportar: normal y ligera (motor y juego comprimidos) para Linux y Windows, y para la web (.html y .zip con index.html); sin proyecto abierto no exporta nada
+# exportar: a una carpeta (motor + datos/juego.source2d.json), normal y ligera (motor y juego comprimidos) para Linux y Windows, y para la web (.html y .zip con index.html); sin proyecto abierto no exporta nada
 wait 3
 export SALIDA_NADA linux ligera
 wait 3
@@ -9,5 +9,6 @@ export SALIDA_LIGERO linux ligera
 export SALIDA_WIN windows ligera
 export SALIDA_HTML html
 export SALIDA_ZIP html
+export SALIDA_CARPETA-linux linux carpeta
 exportwait
 quit

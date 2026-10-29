@@ -198,7 +198,7 @@ static bool writeImage(const std::string &path, std::vector<Px> &px, int w, int 
 bool SpriteEditor::exportFile(const std::string &path, int layout, bool withJson, std::string &err) const {
     std::string ext = lowerExt(path);
     int F = (int)st.layers[0].cels.size();
-    if (ext == ".s2dsprite") {                       // formato propio: capas, frames, duraciones y paleta (se puede seguir editando)
+    if (ext == ".s2dsprite" || ext == ".s2sprite") { // formato propio (.s2sprite: el de exportar para Source): capas, frames, duraciones y paleta (se puede seguir editando)
         json j;
         j["format"] = "source2d-sprite";
         writeTo(j);
@@ -270,7 +270,7 @@ bool SpriteEditor::exportFile(const std::string &path, int layout, bool withJson
 
 bool SpriteEditor::loadImageFile(const std::string &path, std::string &err) {
     std::string ext = lowerExt(path);
-    if (ext == ".s2dsprite") {
+    if (ext == ".s2dsprite" || ext == ".s2sprite") {
         std::ifstream in(path, std::ios::binary);
         std::stringstream ss; ss << in.rdbuf();
         json j = json::parse(ss.str(), nullptr, false);

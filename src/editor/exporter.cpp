@@ -3,12 +3,14 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <regex>
 #include "raylib.h"
 #include "players_bin.h"
 #include "assets.hpp"
 #include "lzdec.h"
 #include "lzenc.h"
+#include "project_docs.hpp"
 #include "runtime_js.h"
 #include "gfx_web_js.h"
 
@@ -175,9 +177,9 @@ static void collectBlobs(json &j, Blobs &bl) {
     if (!b64Decode(s.data() + start, s.size() - start, bin)) return;
     (alreadyCompressed(bin) ? bl.hard : bl.soft).push_back({&s, std::move(bin)});
 }
-Packed packed(const json &doc) {
+Packed packed(const json &doc, bool pixels) {
     json d = doc;
-    packPixels(d);
+    if (pixels) packPixels(d);
     Blobs bl;
     collectBlobs(d, bl);
     Packed out;
@@ -212,6 +214,51 @@ static std::vector<unsigned char> pack(const void *data, size_t len, bool &lzma)
     MemFree(z);
     lzma = false;
     return out;
+}
+
+/* .source2d (Exportar > Solo para Source 2D): el proyecto con los datos en base64 pasados a binario y todo en LZMA,
+   como la exportacion ligera, pero sin motor. Formato:
+     "S2DPAK1\n", largo del JSON, largo de "soft", largo de "hard", largo comprimido (8 bytes cada uno, little endian),
+     LZMA(JSON + soft) y "hard" tal cual (lo que ya viene comprimido, como OGG o PNG). */
+static const char kPak[] = "S2DPAK1\n";
+static void put64(std::string &o, unsigned long long v) { for (int i = 0; i < 8; i++) { o += (char)(v & 255); v >>= 8; } }
+static unsigned long long get64(const unsigned char *p) { unsigned long long v = 0; for (int i = 7; i >= 0; i--) v = v << 8 | p[i]; return v; }
+std::string sourcePack(const json &doc) {
+    Packed pk = packed(doc, false);
+    std::string plain = pk.json + pk.soft;
+    std::vector<unsigned char> z(plain.size() + plain.size() / 2 + 64);
+    size_t n = lz_encode((const uint8_t *)plain.data(), plain.size(), z.data(), z.size(), kProjProps);
+    if (!n) return "";
+    std::string out(kPak, 8);
+    put64(out, pk.json.size()); put64(out, pk.soft.size()); put64(out, pk.hard.size()); put64(out, n);
+    out.append((const char *)z.data(), n);
+    out += pk.hard;
+    return out;
+}
+bool isSourcePack(const std::string &b) { return b.size() >= 40 && !memcmp(b.data(), kPak, 8); }
+// vuelve a poner cada marca "\u0001S2DB:inicio:largo:prefijo" como prefijo + base64
+static void expandBlobs(json &j, const std::string &bin) {
+    if (j.is_structured()) { for (auto &v : j) expandBlobs(v, bin); return; }
+    if (!j.is_string()) return;
+    const std::string &s = j.get_ref<const std::string &>();
+    if (s.rfind("\x01S2DB:", 0) != 0) return;
+    unsigned long long off = 0, len = 0;
+    size_t p1 = s.find(':', 6), p2 = p1 == std::string::npos ? p1 : s.find(':', p1 + 1);
+    if (p2 == std::string::npos) return;
+    off = strtoull(s.c_str() + 6, nullptr, 10); len = strtoull(s.c_str() + p1 + 1, nullptr, 10);
+    if (off + len > bin.size()) return;
+    j = s.substr(p2 + 1) + base64Encode((const unsigned char *)bin.data() + off, (size_t)len);
+}
+bool sourceUnpack(const std::string &b, json &doc, std::string &err) {
+    const unsigned char *p = (const unsigned char *)b.data();
+    unsigned long long jl = get64(p + 8), sl = get64(p + 16), hl = get64(p + 24), zl = get64(p + 32);
+    if (40 + zl + hl != b.size() || jl + sl > (1ULL << 33)) { err = "El archivo .source2d está dañado"; return false; }
+    std::string plain(jl + sl, '\0');
+    if (lz_decode((uint8_t *)plain.data(), plain.size(), p + 40, zl, kProjProps) != 0) { err = "El archivo .source2d está dañado"; return false; }
+    doc = json::parse(plain.substr(0, jl), nullptr, false);
+    if (doc.is_discarded()) { err = "El archivo .source2d está dañado"; return false; }
+    expandBlobs(doc, plain.substr(jl) + b.substr(40 + zl));
+    return true;
 }
 
 unsigned long playerSize(const std::string &os) { return binFor(os, "full").raw; }
@@ -343,4 +390,38 @@ bool exportGame(const json &doc, const std::string &out, const std::string &os, 
     return true;
 }
 
+}
+
+namespace exporter {
+/* a una carpeta: el motor sin nada dentro y el juego al lado, en datos/juego.source2d.json (el motor lo busca ahi);
+   para la web, la pagina como index.html. Asi se puede cambiar el juego sin volver a exportar el motor. */
+bool exportFolder(const json &doc, const std::string &dir, const std::string &os, const std::string &name, std::string &err, std::string &info) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    fs::create_directories(fs::path(dir) / "datos", ec);
+    if (ec) { err = "No se pudo crear la carpeta " + dir; return false; }
+    if (os == "html") {
+        fs::remove(fs::path(dir) / "datos", ec);
+        return exportHtml(doc, (fs::path(dir) / "index.html").string(), err, info);
+    }
+    std::vector<unsigned char> eng;
+    if (!unpackPlayer(os, eng) || eng.empty()) { err = "Este editor no lleva el motor de " + os; return false; }
+    fs::path exe = fs::path(dir) / (name + (os == "windows" ? ".exe" : ".x86_64"));
+    FILE *f = fopen(exe.string().c_str(), "wb");
+    if (!f || fwrite(eng.data(), 1, eng.size(), f) != eng.size()) { if (f) fclose(f); err = "No se pudo escribir " + exe.string(); return false; }
+    fclose(f);
+    std::string js = doc.dump();
+    f = fopen((fs::path(dir) / "datos" / "juego.source2d.json").string().c_str(), "wb");
+    if (!f || fwrite(js.data(), 1, js.size(), f) != js.size()) { if (f) fclose(f); err = "No se pudo escribir datos/juego.source2d.json"; return false; }
+    fclose(f);
+    f = fopen((fs::path(dir) / "datos" / "LEEME.txt").string().c_str(), "wb");
+    if (f) {
+        fputs("Hecho con Source 2D.\n"
+              "juego.source2d.json es el juego: el motor (el ejecutable de la carpeta de arriba) lo carga al abrirse.\n"
+              "Puedes abrirlo en el editor de Source 2D, cambiarlo y guardarlo aqui sin volver a exportar.\n", f);
+        fclose(f);
+    }
+    info = kb((long)(eng.size() + js.size())) + ", en una carpeta";
+    return true;
+}
 }
