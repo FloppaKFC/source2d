@@ -22,8 +22,8 @@ namespace envio {
 namespace {
 // OAuth App "Source 2D" de FloppaKFC (github.com/settings/developers, con "Enable Device Flow"). Es publico: no es un
 // secreto. Mientras este vacio, "Entrar con GitHub" explica que falta.
-const char *kClientId = "";
-const char *kDueno = "FloppaKFC", *kRepo = "source2d-envios";
+const char *kClientId = "Ov23lipmhcQcBtNRYcEX";
+const char *kDueno = "FloppaKFC", *kRepo = "source2d-envios", *kRepoJuegos = "source2d-juegos";
 
 bool g_pruebas = false;
 std::string g_api = "https://api.github.com", g_web = "https://github.com", g_clientId = kClientId;
@@ -80,6 +80,7 @@ struct Pet {
     std::string metodo, url, cuerpo;
     bool form = false, conToken = true;
     std::function<void(int, const json &)> fin;
+    bool estrellas = false;   // Accept: application/vnd.github.star+json (fechas de las estrellas)
 };
 std::deque<Pet> g_cola;
 bool g_activa = false;
@@ -92,7 +93,7 @@ void lanzarSiguiente() {
     g_actual = std::move(g_cola.front());
     g_cola.pop_front();
     std::string hdr = "Accept: application/json\nUser-Agent: Source2D\n";
-    if (!g_actual.form) hdr = "Accept: application/vnd.github+json\nX-GitHub-Api-Version: 2022-11-28\nUser-Agent: Source2D\nContent-Type: application/json\n";
+    if (!g_actual.form) hdr = std::string("Accept: application/vnd.github") + (g_actual.estrellas ? ".star" : "") + "+json\nX-GitHub-Api-Version: 2022-11-28\nUser-Agent: Source2D\nContent-Type: application/json\n";
     if (g_actual.conToken && !g_token.empty()) hdr += "Authorization: Bearer " + g_token + "\n";
     escribirPrivado(tmp("cabeceras"), hdr);
     std::error_code ec;
@@ -153,9 +154,13 @@ void guardarMio(const Mio &m) {
     sys::writeDurable(dir() + "/github-envios.json", out.dump());
 }
 
+// registro en Source Play: una estrella en el repositorio de juegos (PUT es idempotente: repetirlo no cambia nada)
+void registrar() {
+    pedir({"PUT", g_api + "/user/starred/" + kDueno + "/" + kRepoJuegos, "", false, true, nullptr});
+}
 void pedirUsuario() {
     pedir({"GET", g_api + "/user", "", false, true, [](int code, const json &b) {
-        if (code == 200 && b.is_object() && b.contains("login")) { g_user = b["login"].get<std::string>(); g_errCuenta.clear(); guardarCuenta(); cargarMios(); }
+        if (code == 200 && b.is_object() && b.contains("login")) { g_user = b["login"].get<std::string>(); g_errCuenta.clear(); guardarCuenta(); cargarMios(); registrar(); }
         else if (code == 401) { g_token.clear(); g_user.clear(); guardarCuenta(); g_errCuenta = "GitHub ya no acepta la sesión: vuelve a entrar."; }
         else if (code == 0) g_errCuenta = "Sin conexión con GitHub.";
     }});
@@ -246,7 +251,121 @@ void iniciar(bool pruebas) {
     if (!g_token.empty()) { cargarMios(); pedirUsuario(); }
 }
 
+namespace {
+std::map<std::string, Perfil> g_perfiles;
+std::vector<std::pair<std::string, std::string>> g_registrados;
+double g_registradosAt = -1e9;
+struct Avatar { sys::Proc p; std::string login, dest; };
+std::vector<Avatar> g_avatares;
+bool loginSeguro(const std::string &s) {
+    if (s.empty() || s.size() > 39) return false;
+    for (char c : s) if (!(isalnum((unsigned char)c) || c == '-')) return false;
+    return true;
+}
+std::vector<std::string> logins(const json &b) {
+    std::vector<std::string> r;
+    if (b.is_array()) for (auto &x : b) if (x.is_object() && x.contains("login") && x["login"].is_string()) r.push_back(x["login"]);
+    return r;
+}
+}  // namespace
+
+void pedirPerfil(const std::string &login) {
+    if (!loginSeguro(login) || g_perfiles.count(login)) return;
+    Perfil &p = g_perfiles[login];
+    p.login = login;
+    pedir({"GET", g_api + "/users/" + login, "", false, true, [login](int code, const json &b) {
+        Perfil &p = g_perfiles[login];
+        if (code != 200 || !b.is_object()) { p.error = true; return; }
+        p.cargado = true;
+        p.nombre = b.contains("name") && b["name"].is_string() ? b["name"].get<std::string>() : "";
+        p.bio = b.contains("bio") && b["bio"].is_string() ? b["bio"].get<std::string>() : "";
+        p.creado = b.contains("created_at") && b["created_at"].is_string() ? b["created_at"].get<std::string>().substr(0, 10) : "";
+        p.seguidores = b.value("followers", 0); p.siguiendo = b.value("following", 0);
+        std::string av = b.contains("avatar_url") && b["avatar_url"].is_string() ? b["avatar_url"].get<std::string>() : "";
+        if (av.rfind("https://", 0) == 0 || (g_pruebas && av.rfind("file://", 0) == 0)) {
+            Avatar a; a.login = login; a.dest = dir() + "/avatares/" + login + ".img";
+            std::error_code ec;
+            fs::create_directories(fs::u8path(a.dest).parent_path(), ec);
+            std::string url = av + (av.find('?') == std::string::npos ? "?s=160" : "&s=160");
+            if (sys::spawn({"curl", "-fsL", "--proto", g_pruebas ? "=https,file" : "=https", "--max-time", "30", "--max-filesize", "2000000", "-o", a.dest, url}, &a.p, true))
+                g_avatares.push_back(a);
+        }
+    }});
+    if (conectado() && login != g_user)
+        pedir({"GET", g_api + "/user/following/" + login, "", false, true, [login](int code, const json &) {
+            g_perfiles[login].sigo = code == 204 ? 1 : code == 404 ? 0 : -1;
+        }});
+}
+const Perfil *perfil(const std::string &login) {
+    auto it = g_perfiles.find(login);
+    return it == g_perfiles.end() ? nullptr : &it->second;
+}
+void pedirListas(const std::string &login) {
+    auto it = g_perfiles.find(login);
+    if (it == g_perfiles.end() || it->second.listas) return;
+    it->second.listas = true;
+    pedir({"GET", g_api + "/users/" + login + "/followers?per_page=100", "", false, true, [login](int code, const json &b) {
+        if (code == 200) g_perfiles[login].listaSeguidores = logins(b);
+    }});
+    pedir({"GET", g_api + "/users/" + login + "/following?per_page=100", "", false, true, [login](int code, const json &b) {
+        if (code == 200) g_perfiles[login].listaSiguiendo = logins(b);
+    }});
+}
+void seguir(const std::string &login, bool si) {
+    if (!conectado() || !loginSeguro(login) || login == g_user) return;
+    pedir({si ? "PUT" : "DELETE", g_api + "/user/following/" + login, "", false, true, [login, si](int code, const json &) {
+        if (code != 204) return;
+        Perfil &p = g_perfiles[login];
+        if (p.sigo != (si ? 1 : 0) && p.seguidores >= 0) p.seguidores += si ? 1 : -1;
+        p.sigo = si ? 1 : 0;
+        p.listas = false; p.listaSeguidores.clear(); p.listaSiguiendo.clear();
+        auto yo = g_perfiles.find(g_user);   // y mis "siguiendo"
+        if (yo != g_perfiles.end() && yo->second.siguiendo >= 0) { yo->second.siguiendo += si ? 1 : -1; yo->second.listas = false; }
+    }});
+}
+void pedirRegistrados() {
+    if (reloj() - g_registradosAt < (g_pruebas ? 1 : 120)) return;
+    g_registradosAt = reloj();
+    // con la cabecera star+json cada estrella trae su fecha (starred_at)
+    Pet p{"GET", g_api + "/repos/" + kDueno + "/" + kRepoJuegos + "/stargazers?per_page=100", "", false, true, [](int code, const json &b) {
+        if (code != 200 || !b.is_array()) return;
+        g_registrados.clear();
+        for (auto &x : b) {
+            if (!x.is_object() || !x.contains("user") || !x["user"].is_object()) continue;
+            std::string l = x["user"].value("login", ""), f = x.value("starred_at", "");
+            if (loginSeguro(l)) g_registrados.push_back({l, f.substr(0, 10)});
+        }
+        std::sort(g_registrados.begin(), g_registrados.end(), [](auto &a, auto &b) { return a.second > b.second; });
+    }};
+    p.estrellas = true;
+    pedir(p);
+}
+const std::vector<std::pair<std::string, std::string>> &registrados() { return g_registrados; }
+std::string unido(const std::string &login) {
+    for (auto &r : g_registrados) if (r.first == login) return r.second;
+    return "";
+}
+
+namespace {
+void tickAvatares() {
+    for (auto it = g_avatares.begin(); it != g_avatares.end();) {
+        int code = 0;
+        if (!sys::finished(it->p, &code)) { ++it; continue; }
+        // la foto se guarda con su extension de verdad (raylib elige el formato por la extension)
+        std::string head = leer(it->dest).substr(0, 4), ext = head.rfind("\x89PNG", 0) == 0 ? ".png" : head.rfind("\xFF\xD8", 0) == 0 ? ".jpg" : "";
+        std::error_code ec;
+        if (code == 0 && !ext.empty()) {
+            std::string fin = it->dest.substr(0, it->dest.size() - 4) + ext;
+            fs::rename(fs::u8path(it->dest), fs::u8path(fin), ec);
+            if (!ec) g_perfiles[it->login].avatar = fin;
+        } else fs::remove(fs::u8path(it->dest), ec);
+        it = g_avatares.erase(it);
+    }
+}
+}  // namespace
+
 void tick() {
+    tickAvatares();
     if (g_activa && sys::finished(g_proc)) terminarPeticion();
     lanzarSiguiente();
     if (g_entrando && !g_activa && g_cola.empty() && reloj() >= g_proximoSondeo) {
@@ -266,7 +385,7 @@ void entrar() {
     g_errCuenta.clear();
     if (g_clientId.empty()) { g_errCuenta = "Falta registrar la aplicación de Source 2D en GitHub (pon su Client ID en src/editor/envio.cpp)."; return; }
     g_entrando = true; g_codigo.clear();
-    pedir({"POST", g_web + "/login/device/code", "client_id=" + urlEnc(g_clientId) + "&scope=public_repo", true, false, [](int code, const json &b) {
+    pedir({"POST", g_web + "/login/device/code", "client_id=" + urlEnc(g_clientId) + "&scope=public_repo%20user%3Afollow", true, false, [](int code, const json &b) {
         if (code != 200 || !b.is_object() || !b.contains("user_code") || !b.contains("device_code")) {
             g_entrando = false;
             g_errCuenta = code == 0 ? "Sin conexión con GitHub." : "GitHub no dio un código (" + std::to_string(code) + ").";

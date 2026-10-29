@@ -6,7 +6,9 @@ import base64, json, os, sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 PUERTO, SALIDA = int(sys.argv[1]), sys.argv[2]
-estado = {"sondeos": 0, "refs": 0}
+estado = {"sondeos": 0, "refs": 0, "registrado": False, "sigo": False}
+PERFIL = {"login": "amiga", "name": "Amiga Prueba", "bio": "Hago juegos de ritmo", "created_at": "2020-05-01T10:00:00Z",
+          "followers": 3, "following": 1, "avatar_url": "file://" + os.path.abspath(os.path.join(SALIDA, "avatar.png"))}
 
 
 class H(BaseHTTPRequestHandler):
@@ -61,10 +63,24 @@ class H(BaseHTTPRequestHandler):
             return self.responder(201, {"number": 7, "html_url": "https://github.com/FloppaKFC/source2d-envios/pull/7"})
         self.responder(404, {"message": "Not Found"})
 
+    def do_DELETE(self):
+        if not self.autorizado():
+            return
+        if self.path == "/user/following/amiga":
+            estado["sigo"] = False
+            return self.responder(204, {})
+        self.responder(404, {"message": "Not Found"})
+
     def do_PUT(self):
         b = self.cuerpo()
         if not self.autorizado():
             return
+        if self.path == "/user/starred/FloppaKFC/source2d-juegos":
+            estado["registrado"] = True
+            return self.responder(204, {})
+        if self.path == "/user/following/amiga":
+            estado["sigo"] = True
+            return self.responder(204, {})
         pre = "/repos/creador/source2d-envios/contents/"
         if self.path.startswith(pre):
             j = json.loads(b)
@@ -83,6 +99,24 @@ class H(BaseHTTPRequestHandler):
             return
         if self.path == "/user":
             return self.responder(200, {"login": "creador"})
+        if self.path == "/repos/FloppaKFC/source2d-juegos/stargazers?per_page=100":
+            if "star+json" not in (self.headers.get("Accept") or ""):
+                return self.responder(200, [{"login": "creador"}])
+            gente = [{"starred_at": "2026-10-01T09:00:00Z", "user": {"login": "amiga"}}]
+            if estado["registrado"]:
+                gente.append({"starred_at": "2026-10-29T12:00:00Z", "user": {"login": "creador"}})
+            return self.responder(200, gente)
+        if self.path == "/users/amiga":
+            return self.responder(200, dict(PERFIL, followers=PERFIL["followers"] + (1 if estado["sigo"] else 0)))
+        if self.path == "/users/creador":
+            return self.responder(200, {"login": "creador", "name": None, "created_at": "2019-01-01T00:00:00Z", "followers": 0,
+                                        "following": 1 if estado["sigo"] else 0, "avatar_url": ""})
+        if self.path == "/user/following/amiga":
+            return self.responder(204 if estado["sigo"] else 404, {})
+        if self.path == "/users/amiga/followers?per_page=100":
+            return self.responder(200, [{"login": "uno"}, {"login": "dos"}, {"login": "tres"}] + ([{"login": "creador"}] if estado["sigo"] else []))
+        if self.path == "/users/amiga/following?per_page=100":
+            return self.responder(200, [{"login": "uno"}])
         if self.path == "/repos/creador/source2d-envios/git/ref/heads/main":
             estado["refs"] += 1   # la copia tarda un poco en existir
             if estado["refs"] < 2:

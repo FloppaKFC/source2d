@@ -5,6 +5,9 @@ wait 20
 tienda.espera
 tienda.expect 2
 tienda.portadas
+tienda.insignia Floppa 1
+tienda.insignia otro 2
+tienda.insignia nadie 0
 tienda.descargar
 tienda.instalados
 tienda.fuente clave-mala-12345 0

@@ -35,6 +35,7 @@ std::string g_base = kBase, g_contador = kContador, g_estado;
 uint8_t g_pub[32];
 std::vector<Juego> g_juegos;
 std::set<std::string> g_retirados;
+std::map<std::string, int> g_insignias;     // login en minusculas -> 1 verificada, 2 admin
 std::vector<Bajada> g_meta, g_portadas, g_juegosBaj, g_fuentes, g_cuentas, g_hits;
 std::map<std::string, std::string> g_errores;
 std::map<std::string, Cuenta> g_cuenta;
@@ -138,7 +139,22 @@ void pedirPortada(Juego &o) {
     if (lanzar(b, g_base + o.portada.ruta, {"--max-time", "60", "--max-filesize", "4000000"})) g_portadas.push_back(b);
 }
 
+bool firmado(const std::string &data, const std::string &firma, const char *tipo, json &out) {
+    uint8_t sig[64];
+    if (data.empty() || !fromHex(firma, sig, 64) || crypto_eddsa_check(sig, g_pub, (const uint8_t *)data.data(), data.size()) != 0) return false;
+    out = json::parse(data, nullptr, false);
+    return out.is_object() && out.value("tipo", "") == tipo && out.value("autor", "") == S2D_FIRMA_AUTOR;
+}
+std::string minus(std::string s) { for (auto &c : s) c = (char)tolower((unsigned char)c); return s; }
+void cargarCuentas() {
+    g_insignias.clear();
+    json c;
+    if (!firmado(leer(dir() + "/cuentas.json"), leer(dir() + "/cuentas.json.firma"), "cuentas", c)) return;
+    for (auto &[k, v] : std::map<std::string, int>{{"verificados", 1}, {"admins", 2}})
+        if (c.contains(k) && c[k].is_array()) for (auto &x : c[k]) if (x.is_string()) g_insignias[minus(x)] = std::max(g_insignias[minus(x)], v);
+}
 void cargarCache() {
+    cargarCuentas();
     g_juegos.clear(); g_retirados.clear(); g_hayCache = false;
     std::string data = leer(dir() + "/catalogo.json"), firma = leer(dir() + "/catalogo.json.firma");
     uint8_t sig[64];
@@ -188,6 +204,10 @@ void procesarBusqueda() {
         sys::writeDurable(dir() + "/catalogo.json", d);
         sys::writeDurable(dir() + "/catalogo.json.firma", f);
     } else if (!d.empty()) fprintf(stderr, "Source 2D: el catalogo de Source Play no viene firmado por " S2D_FIRMA_AUTOR ", se ignora\n");
+    // las cuentas (verificadas y admins) van aparte: si aun no hay archivo, nadie tiene insignia
+    std::string cd = leer(dir() + "/descarga/cuentas.json"), cf = leer(dir() + "/descarga/cuentas.json.firma");
+    json cj;
+    if (firmado(cd, cf, "cuentas", cj)) { sys::writeDurable(dir() + "/cuentas.json", cd); sys::writeDurable(dir() + "/cuentas.json.firma", cf); }
     std::error_code ec;
     fs::remove_all(fs::u8path(dir() + "/descarga"), ec);
     cargarCache();
@@ -242,7 +262,7 @@ void iniciar(bool buscar, bool pruebas) {
 void buscarAhora() {
     if (!g_on || !g_meta.empty()) return;
     g_ultima = time(nullptr);
-    for (const char *nm : {"catalogo.json", "catalogo.json.firma"}) {
+    for (const char *nm : {"catalogo.json", "catalogo.json.firma", "cuentas.json", "cuentas.json.firma"}) {
         Bajada b;
         b.dest = dir() + "/descarga/" + nm;
         if (!lanzar(b, sinCache(g_base + nm), {"--max-time", "30", "--max-filesize", "8000000"})) {
@@ -436,6 +456,15 @@ void darMeGusta(const Juego &j) {
     auto &c = g_cuenta[j.id];
     if (c.g >= 0) c.g++;
     sumar(j.contador, j.id, 'g');
+}
+int insignia(const std::string &login) {
+    auto it = g_insignias.find(minus(login));
+    return it == g_insignias.end() ? 0 : it->second;
+}
+std::vector<const Juego *> juegosDe(const std::string &login) {
+    std::vector<const Juego *> r;
+    for (auto &j : g_juegos) if (minus(j.autor) == minus(login)) r.push_back(&j);
+    return r;
 }
 std::string urlDenuncia(const Juego &j) {
     std::string t = "Denuncia: " + j.nombre + " (" + j.id + ")", e;

@@ -49,12 +49,14 @@ sed "s|PROYECTO|$T/sp.json|; s|PAQ|$T/paq|g" test/editor_sourceplay.txt > "$T/gu
 XDG_CONFIG_HOME="$T/spcfg" "$ED" --script "$T/guion_sp.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
 S2D_JUEGOS_DIR="$T/juegos" S2D_EDITOR="$ED" python3 tools/source_play.py anadir "$T/paq/abierto/"* --sin-subir | grep "Publicado\|OK"
 S2D_JUEGOS_DIR="$T/juegos" S2D_EDITOR="$ED" python3 tools/source_play.py anadir "$T/paq/cerrado/"* --autor Otro --sin-subir | grep "Publicado\|OK"
+S2D_JUEGOS_DIR="$T/juegos" python3 tools/source_cuentas.py verificar Floppa --sin-subir | grep -v Firmado
+S2D_JUEGOS_DIR="$T/juegos" python3 tools/source_cuentas.py admin Otro --sin-subir | grep -v Firmado
 sed "s|CAPTURA|$T/sourceplay.png|" test/editor_sourceplay2.txt > "$T/guion_sp2.txt"
 XDG_CONFIG_HOME="$T/spcfg" S2D_TIENDA_URL="file://$T/juegos/" S2D_FIRMA_PUBLICA="$PUB" "$ED" --script "$T/guion_sp2.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
-echo "== Publicar en Source Play con un GitHub de mentira (entrar con codigo, envio y revision)"
+echo "== Publicar en Source Play con un GitHub de mentira (entrar con codigo, envio, revision, registro, perfil y seguir)"
 python3 test/desktop/github_falso.py 47790 "$T/ghsub" 2>/dev/null & GHP=$!
-mkdir -p "$T/ghsub" "$T/ghcfg"; sleep 0.5
-sed "s|PROYECTO|$T/sp.json|" test/editor_envio.txt > "$T/guion_envio.txt"
+mkdir -p "$T/ghsub" "$T/ghcfg"; cp tools/maxwell_giro.png "$T/ghsub/avatar.png"; sleep 0.5
+sed "s|PROYECTO|$T/sp.json|; s|CAPTURA|$T/perfil.png|" test/editor_envio.txt > "$T/guion_envio.txt"
 XDG_CONFIG_HOME="$T/ghcfg" S2D_GITHUB_API=http://127.0.0.1:47790 S2D_GITHUB_WEB=http://127.0.0.1:47790 S2D_GITHUB_CLIENT_ID=cliente-de-prueba \
     "$ED" --script "$T/guion_envio.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
 kill $GHP 2>/dev/null || true

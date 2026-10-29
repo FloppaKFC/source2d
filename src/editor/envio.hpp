@@ -5,6 +5,9 @@
 // Enviar: copia (fork) de FloppaKFC/source2d-envios en su cuenta, una rama nueva con envios/<usuario>/<id>/ y un pull
 // request. Despues @floppa-1550 lo prueba con Controladores/Source-Play.sh y lo aprueba o lo rechaza con un comentario.
 // El token queda en <config>/github.json (solo lo puede leer este usuario del sistema); "Salir" lo borra.
+// Cuentas: entrar registra la cuenta en Source Play (pone una estrella en FloppaKFC/source2d-juegos: la lista de estrellas
+// es la lista de cuentas y su fecha, cuando se unio). Seguir es el de GitHub. Los permisos que se piden son public_repo y
+// user:follow.
 #pragma once
 #include <map>
 #include <string>
@@ -34,6 +37,24 @@ void enviar(const Paquete &p);
 bool enviando();
 std::string estadoEnvio();            // paso actual, o como acabo
 bool envioFallo();
+
+// perfiles (de GitHub): se piden al abrirlos y se guardan mientras el editor sigue abierto
+struct Perfil {
+    std::string login, nombre, bio, creado, avatar;          // avatar: archivo local ya descargado ("" si aun no)
+    int seguidores = -1, siguiendo = -1;
+    int sigo = -1;                                           // -1 no se sabe (o sin sesion), 0 no, 1 si
+    bool cargado = false, error = false;
+    std::vector<std::string> listaSeguidores, listaSiguiendo;
+    bool listas = false;                                      // ya llegaron las dos listas
+};
+void pedirPerfil(const std::string &login);
+const Perfil *perfil(const std::string &login);               // nullptr si no se pidio
+void pedirListas(const std::string &login);
+void seguir(const std::string &login, bool si);
+// cuentas registradas en Source Play (login, fecha AAAA-MM-DD en que se unio), de la mas nueva a la mas vieja
+void pedirRegistrados();
+const std::vector<std::pair<std::string, std::string>> &registrados();
+std::string unido(const std::string &login);                  // fecha en que se unio ("" si no esta o aun no se sabe)
 
 // los envios de esta cuenta y como van
 struct Mio { int numero = 0; std::string nombre, fecha, estado, motivo, url; };   // estado: revisando, aprobado, rechazado

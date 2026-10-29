@@ -1551,8 +1551,47 @@ struct SourcePlayUI {
     char fuenteClave[128] = "";
     std::future<std::string> abriendo;
     json fuenteDoc;
+    // cuentas: perfil abierto, ventana de la cuenta y comunidad
+    bool showPerfil = false, showCuenta = false, showComunidad = false;
+    std::string perfilLogin;
+    int perfilTab = 0;                                    // 0 juegos, 1 seguidores, 2 siguiendo
+    char buscarGente[64] = "";
 };
 static SourcePlayUI g_sp;
+
+// insignia junto a un nombre: circulo azul con palomita (verificada) o dorado (admin)
+static void drawBadge(int ins) {
+    if (!ins) return;
+    ImGui::SameLine(0, 6);
+    float h = ImGui::GetTextLineHeight(), r = h * 0.42f;
+    ImVec2 p = ImGui::GetCursorScreenPos(), c(p.x + r, p.y + h * 0.5f);
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    ImU32 col = ins == 2 ? IM_COL32(0xF2, 0xB1, 0x2D, 255) : IM_COL32(0x3B, 0x8B, 0xF6, 255);
+    if (ins == 2) dl->AddCircle(c, r + 2.0f, col, 20, 1.5f);   // admin: con aro
+    dl->AddCircleFilled(c, r, col, 20);
+    float t = std::max(1.5f, r * 0.28f);
+    dl->AddLine(ImVec2(c.x - r * 0.45f, c.y + r * 0.02f), ImVec2(c.x - r * 0.1f, c.y + r * 0.38f), IM_COL32_WHITE, t);
+    dl->AddLine(ImVec2(c.x - r * 0.1f, c.y + r * 0.38f), ImVec2(c.x + r * 0.5f, c.y - r * 0.35f), IM_COL32_WHITE, t);
+    ImGui::Dummy(ImVec2(r * 2 + (ins == 2 ? 2 : 0), h));
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", ins == 2 ? "Admin de Source 2D" : "Cuenta verificada");
+}
+static void openPerfil(const std::string &login) {
+    if (login.empty()) return;
+    g_sp.perfilLogin = login; g_sp.showPerfil = true; g_sp.perfilTab = 0;
+    envio::pedirPerfil(login);
+    envio::pedirRegistrados();
+}
+// nombre de una cuenta que abre su perfil, con su insignia detras
+static void authorLink(const std::string &login) {
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kSecondary), "%s", login.c_str());
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+        ImGui::GetWindowDrawList()->AddLine(ImVec2(a.x, b.y), b, ui::kSecondary);
+    }
+    if (ImGui::IsItemClicked()) openPerfil(login);
+    drawBadge(tienda::insignia(login));
+}
 
 static std::string slugOf(const std::string &s) {
     std::string o;
@@ -1620,7 +1659,10 @@ static void sourcePlayCard(const tienda::Juego &j, float w) {
     ImGui::PushFont(ui::boldFont(), 19);
     ImGui::TextUnformatted(j.nombre.c_str());
     ImGui::PopFont();
-    ImGui::TextDisabled("por %s · %s%s", j.autor.c_str(), j.categoria.c_str(), j.abierto ? "" : " · Cerrado");
+    ImGui::TextDisabled("por"); ImGui::SameLine(0, 4);
+    authorLink(j.autor);
+    ImGui::SameLine(0, 4);
+    ImGui::TextDisabled("· %s%s", j.categoria.c_str(), j.abierto ? "" : " · Cerrado");
     long long d = tienda::descargas(j.id), g = tienda::meGusta(j.id);
     std::string cifras = (d >= 0 ? std::to_string(d) : "-") + " descargas   " + (g >= 0 ? std::to_string(g) : "-") + " me gusta   · versión " + std::to_string(j.version);
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kText2), "%s", cifras.c_str());
@@ -1703,6 +1745,11 @@ static void drawSourcePlaySection() {
             snprintf(g_sp.nombre, sizeof g_sp.nombre, "%s", app.proj.name().c_str());
         }
     }
+    ImGui::SameLine();
+    if (envio::conectado()) { if (homeButton("Mi perfil", false, ImGui::GetFrameHeight())) openPerfil(envio::usuario()); }
+    else if (homeButton("Entrar con GitHub", false, ImGui::GetFrameHeight())) g_sp.showCuenta = true;
+    ImGui::SameLine();
+    if (homeButton("Comunidad", false, ImGui::GetFrameHeight())) { g_sp.showComunidad = true; envio::pedirRegistrados(); }
     std::string st = tienda::estado();
     if (!st.empty()) ImGui::TextDisabled("%s", st.c_str());
     ImGui::Dummy(ImVec2(0, 8));
@@ -1822,6 +1869,163 @@ static void startPackage(bool toFolder) {
     });
 }
 
+// entrar con GitHub: boton, codigo que hay que escribir en github.com y estado de la cuenta
+static void drawGithubLogin(const char *why) {
+    if (envio::conectado()) {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Cuenta de GitHub:"); ImGui::SameLine();
+        authorLink(envio::usuario());
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Salir")) envio::salir();
+    } else if (envio::entrando() && !envio::codigo().empty()) {
+        ImGui::TextUnformatted("Escribe este código en GitHub y pulsa Continue y Authorize:");
+        ImGui::PushFont(ui::boldFont(), 30);
+        ImGui::TextUnformatted(envio::codigo().c_str());
+        ImGui::PopFont();
+        if (ImGui::Button("Abrir GitHub")) { ImGui::SetClipboardText(envio::codigo().c_str()); OpenURL(envio::urlCodigo().c_str()); }
+        ImGui::SameLine();
+        if (ImGui::Button("Copiar el código")) ImGui::SetClipboardText(envio::codigo().c_str());
+        ImGui::SameLine();
+        ImGui::TextDisabled("Esperando a que aceptes en GitHub...");
+    } else {
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 570);
+        ImGui::TextUnformatted(why);
+        ImGui::PopTextWrapPos();
+        if (ImGui::Button(envio::entrando() ? "Conectando..." : "Entrar con GitHub") && !envio::entrando()) envio::entrar();
+    }
+    std::string ec = envio::errorCuenta();
+    if (!ec.empty()) ImGui::TextColored(ImVec4(1, 0.55f, 0.5f, 1), "%s", ec.c_str());
+}
+
+static void drawPerfil() {
+    if (g_sp.showPerfil) { ImGui::OpenPopup("Perfil"); g_sp.showPerfil = false; }
+    ImGui::SetNextWindowSize(ImVec2(640, 0), ImGuiCond_Always);
+    if (!ui::beginModal("Perfil", nullptr, ImGuiWindowFlags_NoResize)) return;
+    const std::string login = g_sp.perfilLogin;
+    envio::pedirPerfil(login);
+    const envio::Perfil *pf = envio::perfil(login);
+    int ins = tienda::insignia(login);
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    // foto, nombre, insignia y fechas
+    const float av = 96;
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    const Texture2D *tex = pf ? newsImage(pf->avatar) : nullptr;
+    if (tex) dl->AddImageRounded((ImTextureID)(intptr_t)tex->id, p, ImVec2(p.x + av, p.y + av), ImVec2(0, 0), ImVec2(1, 1), IM_COL32_WHITE, av / 2);
+    else {
+        dl->AddCircleFilled(ImVec2(p.x + av / 2, p.y + av / 2), av / 2, ui::kPanel3, 32);
+        char ini[2] = {login.empty() ? '?' : (char)toupper((unsigned char)login[0]), 0};
+        dl->AddText(ui::boldFont(), 40, ImVec2(p.x + av / 2 - 12, p.y + av / 2 - 22), ui::kText, ini);
+    }
+    ImGui::Dummy(ImVec2(av, av));
+    ImGui::SameLine(0, 18);
+    ImGui::BeginGroup();
+    ImGui::PushFont(ui::boldFont(), 24);
+    ImGui::TextUnformatted(pf && !pf->nombre.empty() ? pf->nombre.c_str() : login.c_str());
+    ImGui::PopFont();
+    drawBadge(ins);
+    ImGui::TextDisabled("@%s", login.c_str());
+    if (ins) ImGui::TextColored(ins == 2 ? ImVec4(0.95f, 0.69f, 0.18f, 1) : ImVec4(0.36f, 0.6f, 1, 1), "%s", ins == 2 ? "Admin de Source 2D" : "Cuenta verificada");
+    std::string un = envio::unido(login);
+    if (!un.empty()) ImGui::TextDisabled("Se unió a Source Play el %s", fechaBonita(un).c_str());
+    else if (pf && !pf->creado.empty()) ImGui::TextDisabled("En GitHub desde el %s", fechaBonita(pf->creado).c_str());
+    ImGui::EndGroup();
+    if (!pf || (!pf->cargado && !pf->error)) ImGui::TextDisabled("Cargando el perfil...");
+    else if (pf->error) ImGui::TextColored(ImVec4(1, 0.55f, 0.5f, 1), "No se pudo cargar el perfil (¿hay internet?)");
+    if (pf && !pf->bio.empty()) { ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 600); ImGui::TextUnformatted(pf->bio.c_str()); ImGui::PopTextWrapPos(); }
+    ImGui::Dummy(ImVec2(0, 4));
+    // seguir
+    if (envio::conectado() && login != envio::usuario()) {
+        bool sigo = pf && pf->sigo == 1;
+        if (pf && pf->sigo < 0) ImGui::BeginDisabled();
+        if (sigo ? ImGui::Button("Siguiendo", ImVec2(120, 0)) : ui::primaryButton("Seguir", ImVec2(120, 0))) envio::seguir(login, !sigo);
+        if (sigo && ImGui::IsItemHovered()) ImGui::SetTooltip("Dejar de seguir");
+        if (pf && pf->sigo < 0) ImGui::EndDisabled();
+    } else if (!envio::conectado()) {
+        if (ImGui::Button("Entra con GitHub para seguir")) { g_sp.showCuenta = true; ImGui::CloseCurrentPopup(); }
+    }
+    // pestanas: juegos, seguidores, siguiendo
+    auto juegos = tienda::juegosDe(login);
+    std::string tabs[3] = {std::to_string(juegos.size()) + (juegos.size() == 1 ? " juego" : " juegos"),
+                           (pf && pf->seguidores >= 0 ? std::to_string(pf->seguidores) : "-") + " seguidores",
+                           (pf && pf->siguiendo >= 0 ? std::to_string(pf->siguiendo) : "-") + " siguiendo"};
+    ImGui::Dummy(ImVec2(0, 4));
+    for (int t = 0; t < 3; t++) {
+        if (t) ImGui::SameLine(0, 18);
+        bool sel = g_sp.perfilTab == t;
+        ImGui::PushFont(sel ? ui::boldFont() : ImGui::GetFont(), 0);
+        if (ImGui::Selectable((tabs[t] + "##pt" + std::to_string(t)).c_str(), sel, 0, ImGui::CalcTextSize(tabs[t].c_str()))) g_sp.perfilTab = t;
+        ImGui::PopFont();
+    }
+    ImGui::Separator();
+    ImGui::BeginChild("##perfillista", ImVec2(0, 260));
+    if (g_sp.perfilTab == 0) {
+        if (juegos.empty()) ImGui::TextDisabled("Todavía no tiene juegos en Source Play.");
+        for (auto *j : juegos) {
+            ImGui::PushID(j->id.c_str());
+            ImVec2 q = ImGui::GetCursorScreenPos();
+            if (const Texture2D *t = newsImage(j->portadaLocal)) ImGui::Image((ImTextureID)(intptr_t)t->id, ImVec2(128, 72));
+            else { ImGui::GetWindowDrawList()->AddRectFilled(q, ImVec2(q.x + 128, q.y + 72), ui::kPanel2, 6); ImGui::Dummy(ImVec2(128, 72)); }
+            ImGui::SameLine(0, 12);
+            ImGui::BeginGroup();
+            ImGui::PushFont(ui::boldFont(), 0); ImGui::TextUnformatted(j->nombre.c_str()); ImGui::PopFont();
+            ImGui::TextDisabled("%s · versión %d%s", j->categoria.c_str(), j->version, j->abierto ? "" : " · Cerrado");
+            tienda::Estado st = tienda::estadoDe(*j);
+            if (st == tienda::Estado::Descargando) ImGui::ProgressBar(std::max(0.0f, tienda::progreso(j->id)), ImVec2(200, 0));
+            else if (st == tienda::Estado::NoInstalado) { if (ImGui::SmallButton("Descargar")) tienda::descargar(*j); }
+            else if (ImGui::SmallButton("Jugar")) playInstalled(j->id);
+            ImGui::EndGroup();
+            ImGui::PopID();
+        }
+    } else if (pf) {
+        envio::pedirListas(login);
+        const auto &lista = g_sp.perfilTab == 1 ? pf->listaSeguidores : pf->listaSiguiendo;
+        int total = g_sp.perfilTab == 1 ? pf->seguidores : pf->siguiendo;
+        if (lista.empty()) ImGui::TextDisabled("%s", total == 0 ? "Nadie todavía." : "Cargando...");
+        for (auto &l : lista) { ImGui::PushID(l.c_str()); authorLink(l); ImGui::PopID(); }
+        if (total > (int)lista.size() && !lista.empty()) ImGui::TextDisabled("y %d más (en GitHub)", total - (int)lista.size());
+    }
+    ImGui::EndChild();
+    if (ImGui::Button("Cerrar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
+    if (login == envio::usuario()) { ImGui::SameLine(); if (ImGui::Button("Ver en GitHub")) app.pendingLink = "https://github.com/" + login; }
+    ImGui::EndPopup();
+}
+
+static void drawCuentaYComunidad() {
+    if (g_sp.showCuenta) { ImGui::OpenPopup("Tu cuenta"); g_sp.showCuenta = false; }
+    ImGui::SetNextWindowSize(ImVec2(620, 0), ImGuiCond_Appearing);
+    if (ui::beginModal("Tu cuenta", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        drawGithubLogin("Entra con tu cuenta de GitHub (gratis) para seguir a otras personas, tener tu perfil y publicar tus juegos. "
+                        "Al entrar te registras en Source Play (se pone una estrella en el repositorio de juegos). Source 2D nunca ve tu contraseña.");
+        ImGui::Dummy(ImVec2(0, 4));
+        if (envio::conectado() && ImGui::Button("Ver mi perfil")) { ImGui::CloseCurrentPopup(); openPerfil(envio::usuario()); }
+        if (envio::conectado()) ImGui::SameLine();
+        if (ImGui::Button("Cerrar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+    if (g_sp.showComunidad) { ImGui::OpenPopup("Comunidad"); g_sp.showComunidad = false; }
+    ImGui::SetNextWindowSize(ImVec2(520, 520), ImGuiCond_Appearing);
+    if (ui::beginModal("Comunidad", nullptr, 0)) {
+        envio::pedirRegistrados();
+        const auto &rs = envio::registrados();
+        ImGui::Text("%zu %s en Source Play", rs.size(), rs.size() == 1 ? "cuenta" : "cuentas");
+        ImGui::SetNextItemWidth(-1);
+        ImGui::InputTextWithHint("##gente", "Buscar por nombre de usuario", g_sp.buscarGente, sizeof g_sp.buscarGente);
+        ImGui::BeginChild("##gentelista", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 4));
+        if (rs.empty()) ImGui::TextDisabled("Cargando (o todavía no se ha unido nadie)...");
+        for (auto &r : rs) {
+            if (!containsNoCase(r.first, g_sp.buscarGente)) continue;
+            ImGui::PushID(r.first.c_str());
+            authorLink(r.first);
+            ImGui::SameLine();
+            ImGui::TextDisabled("se unió el %s", fechaBonita(r.second).c_str());
+            ImGui::PopID();
+        }
+        ImGui::EndChild();
+        if (ImGui::Button("Cerrar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+}
+
 static void askLockedProject(const std::string &file) {
     g_sp.showFuente = true; g_sp.fuenteId.clear(); g_sp.fuenteArchivo = file; g_sp.fuenteErr.clear();
     fs::path fp = fs::u8path(file);
@@ -1846,30 +2050,7 @@ static void drawSourcePlayDialogs() {
     ImGui::SetNextWindowSize(ImVec2(620, 0), ImGuiCond_Appearing);
     if (ui::beginModal("Publicar en Source Play", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         bool busy = g_sp.armando.valid() || envio::enviando();
-        // cuenta de GitHub
-        if (envio::conectado()) {
-            ImGui::AlignTextToFramePadding();
-            ImGui::Text("Cuenta de GitHub: %s", envio::usuario().c_str());
-            ImGui::SameLine();
-            if (ImGui::SmallButton("Salir")) envio::salir();
-        } else if (envio::entrando() && !envio::codigo().empty()) {
-            ImGui::TextUnformatted("Escribe este código en GitHub y pulsa Authorize:");
-            ImGui::PushFont(ui::boldFont(), 30);
-            ImGui::TextUnformatted(envio::codigo().c_str());
-            ImGui::PopFont();
-            if (ImGui::Button("Abrir GitHub")) OpenURL(envio::urlCodigo().c_str());
-            ImGui::SameLine();
-            if (ImGui::Button("Copiar el código")) ImGui::SetClipboardText(envio::codigo().c_str());
-            ImGui::SameLine();
-            ImGui::TextDisabled("Esperando...");
-        } else {
-            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 570);
-            ImGui::TextUnformatted("Para enviar tu juego entra con tu cuenta de GitHub (gratis). Source 2D nunca ve tu contraseña.");
-            ImGui::PopTextWrapPos();
-            if (ImGui::Button(envio::entrando() ? "Conectando..." : "Entrar con GitHub") && !envio::entrando()) envio::entrar();
-        }
-        std::string ec = envio::errorCuenta();
-        if (!ec.empty()) ImGui::TextColored(ImVec4(1, 0.55f, 0.5f, 1), "%s", ec.c_str());
+        drawGithubLogin("Para enviar tu juego entra con tu cuenta de GitHub (gratis). Source 2D nunca ve tu contraseña.");
         ImGui::Separator();
         ImGui::BeginDisabled(busy);
         ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Nombre"); ImGui::SameLine(110);
@@ -3817,6 +3998,8 @@ static void drawCollabDialog() {
 static void drawModals() {
     drawCollabDialog();
     drawSourcePlayDialogs();
+    drawPerfil();
+    drawCuentaYComunidad();
     if (app.showNewSprite) { ImGui::OpenPopup("Nuevo sprite"); app.showNewSprite = false; }
     if (ui::beginModal("Nuevo sprite", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::InputText("Nombre", app.nsName, sizeof app.nsName);
@@ -4684,6 +4867,53 @@ static void runScriptStep() {
         bool ok = got == want;
         if (!ok) app.fails++;
         printf("S2DEDIT %s %s -> %s (%s)\n", ok ? "OK" : "FAIL", line.c_str(), got.c_str(), envio::mios().empty() ? "" : envio::mios().back().motivo.c_str());
+    }
+    else if (cmd == "sp.perfil") {   // sp.perfil <login> <nombre esperado>: abre su perfil y espera a que llegue
+        std::string l, want; in >> l; std::getline(in >> std::ws, want);
+        if (app.scriptRetry == 0) openPerfil(l);
+        const envio::Perfil *pf = envio::perfil(l);
+        bool listo = pf && (pf->cargado || pf->error) && (!pf->cargado || !pf->avatar.empty()) && (envio::conectado() ? pf->sigo >= 0 : true);
+        if (!listo && app.scriptRetry++ < 900) { app.scriptPos--; return; }
+        app.scriptRetry = 0;
+        bool ok = pf && pf->cargado && pf->nombre == want && !pf->avatar.empty();
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s -> nombre=[%s] seguidores=%d siguiendo=%d sigo=%d foto=%d unido=%s\n", ok ? "OK" : "FAIL", line.c_str(), pf ? pf->nombre.c_str() : "",
+               pf ? pf->seguidores : -9, pf ? pf->siguiendo : -9, pf ? pf->sigo : -9, pf && !pf->avatar.empty(), envio::unido(l).c_str());
+    }
+    else if (cmd == "sp.seguir") {   // sp.seguir <login> <1|0> <seguidores esperados>
+        std::string l; int si = 1, want = 0; in >> l >> si >> want;
+        if (app.scriptRetry == 0) envio::seguir(l, si != 0);
+        const envio::Perfil *pf = envio::perfil(l);
+        bool listo = pf && pf->sigo == si && pf->seguidores == want;
+        if (!listo && app.scriptRetry++ < 900) { app.scriptPos--; return; }
+        app.scriptRetry = 0;
+        if (!listo) app.fails++;
+        printf("S2DEDIT %s %s -> sigo=%d seguidores=%d\n", listo ? "OK" : "FAIL", line.c_str(), pf ? pf->sigo : -9, pf ? pf->seguidores : -9);
+    }
+    else if (cmd == "sp.listas") {   // sp.listas <login> <seguidores en la lista> <siguiendo en la lista>
+        std::string l; int a = 0, b = 0; in >> l >> a >> b;
+        envio::pedirListas(l);
+        const envio::Perfil *pf = envio::perfil(l);
+        bool ok = pf && (int)pf->listaSeguidores.size() == a && (int)pf->listaSiguiendo.size() == b;
+        if (!ok && app.scriptRetry++ < 900) { app.scriptPos--; return; }
+        app.scriptRetry = 0;
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s\n", ok ? "OK" : "FAIL", line.c_str());
+    }
+    else if (cmd == "sp.registrados") {   // sp.registrados <cuantos>: cuentas en Source Play (estrellas)
+        int n; in >> n;
+        envio::pedirRegistrados();
+        bool ok = (int)envio::registrados().size() == n;
+        if (!ok && app.scriptRetry++ < 900) { app.scriptPos--; return; }
+        app.scriptRetry = 0;
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s -> %zu\n", ok ? "OK" : "FAIL", line.c_str(), envio::registrados().size());
+    }
+    else if (cmd == "tienda.insignia") {   // tienda.insignia <login> <0|1|2>
+        std::string l; int want = 0; in >> l >> want;
+        bool ok = tienda::insignia(l) == want;
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s -> %d\n", ok ? "OK" : "FAIL", line.c_str(), tienda::insignia(l));
     }
     else if (cmd == "tienda.espera") { if (tienda::estado() == "Buscando juegos...") app.scriptPos--; }
     else if (cmd == "tienda.expect") {   // tienda.expect <juegos>

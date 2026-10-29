@@ -52,4 +52,9 @@ long long meGusta(const std::string &id);
 bool leGusta(const std::string &id);
 void darMeGusta(const Juego &j);
 std::string urlDenuncia(const Juego &j);    // nueva incidencia en source2d-envios con el titulo puesto
+
+// cuentas: cuentas.json (firmado como el catalogo, lo lleva Controladores/Source-Cuentas.sh) dice quien esta verificado y
+// quien es admin. 0 nada, 1 verificada, 2 admin
+int insignia(const std::string &login);
+std::vector<const Juego *> juegosDe(const std::string &login);
 }
