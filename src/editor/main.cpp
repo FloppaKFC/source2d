@@ -1174,6 +1174,11 @@ static void thumbImage(ImDrawList *dl, ui::PixTexture *tx, ImVec2 a, ImVec2 b, I
     else ui::drawIcon(dl, ui::Icon::Scene, ImVec2((a.x + b.x) / 2, (a.y + b.y) / 2), 28, ui::kText2);
 }
 
+static std::string portadaDeProyecto(const std::string &path) {
+    return path.empty() ? "" : (fs::u8path(path).parent_path() / "portada.png").u8string();
+}
+static const Texture2D *newsImage(const std::string &path);
+static void ponerPortadaProyecto(const std::string &path);
 static void projectCard(const std::string &path, bool current, const std::string &extra = "") {
     const float pad = 16, w = ImGui::GetContentRegionAvail().x;
     float tw = std::clamp(w / 4, 130.0f, 245.0f), th = tw * 9 / 16, h = th + pad * 2;
@@ -1186,7 +1191,18 @@ static void projectCard(const std::string &path, bool current, const std::string
     dl->AddRectFilled(p, e, hov ? IM_COL32(0x2B, 0x2B, 0x35, 255) : ui::kPanel, 8);
     dl->AddRect(p, e, current ? ui::kPrimaryLight : ui::kLine, 8, 0, current ? 2.0f : 1.0f);
     ui::PixTexture *tx = current ? docThumb("actual", app.proj.doc, app.proj.rev) : fileThumb(path);
-    thumbImage(dl, tx, ImVec2(p.x + pad, p.y + pad), ImVec2(p.x + pad + tw, p.y + pad + th));
+    std::string ruta = current ? app.proj.path : path;
+    std::string portada = portadaDeProyecto(ruta);
+    std::error_code pec;
+    if (!portada.empty() && fs::exists(fs::u8path(portada), pec) && newsImage(portada))
+        dl->AddImageRounded((ImTextureID)(intptr_t)newsImage(portada)->id, ImVec2(p.x + pad, p.y + pad), ImVec2(p.x + pad + tw, p.y + pad + th), ImVec2(0, 0), ImVec2(1, 1), IM_COL32_WHITE, 8);
+    else thumbImage(dl, tx, ImVec2(p.x + pad, p.y + pad), ImVec2(p.x + pad + tw, p.y + pad + th));
+    if (!ruta.empty()) {
+        ImVec2 guardado = ImGui::GetCursorScreenPos();
+        ImGui::SetCursorScreenPos(ImVec2(p.x + pad + 6, p.y + pad + th - ImGui::GetFrameHeight() - 6));
+        if (hov || ImGui::IsItemHovered()) { if (ImGui::SmallButton("Poner portada")) ponerPortadaProyecto(ruta); }
+        ImGui::SetCursorScreenPos(guardado);
+    }
     float x = p.x + pad + tw + pad, y = p.y + pad, fs = ImGui::GetFontSize();
     std::string when = current ? (app.proj.dirty ? "Proyecto abierto · cambios sin guardar" : "Proyecto abierto") : lastEdited(path);
     dl->AddText(ImVec2(x, y), ui::kText2, when.c_str());
@@ -1688,14 +1704,19 @@ static void sourcePlayCard(const tienda::Juego &j, float w) {
     if (tarjetaTienda(j.id, j.nombre, j.autor, cifrasTienda(tienda::meGusta(j.id), tienda::descargas(j.id)), j.portadaLocal, w, nullptr)) openFicha(0, j.id);
 }
 
+static bool loadPortada(const std::string &file, std::string &err);
+static bool g_elegirJuego = false;
 static void openPublish() {
-    if (!app.hasProject) { notify("Abre el proyecto de tu juego para publicarlo", true); return; }
+    if (!app.hasProject) { g_elegirJuego = true; return; }
     if (guestBlocked()) return;
     g_sp.showPublish = true; g_sp.msg.clear();
     if (!g_sp.nombre[0] || g_sp.proyecto != jstr(app.proj.doc, "id")) {
         snprintf(g_sp.nombre, sizeof g_sp.nombre, "%s", app.proj.name().c_str());
         g_sp.descripcion[0] = 0; g_sp.portada.clear(); g_sp.portadaArchivo.clear();
         g_sp.proyecto = jstr(app.proj.doc, "id");
+        std::string pp = portadaDeProyecto(app.proj.path), err;
+        std::error_code ec;
+        if (!pp.empty() && fs::exists(fs::u8path(pp), ec)) loadPortada(pp, err);
     }
 }
 static bool containsNoCase(const std::string &hay, const std::string &needle) {
@@ -3207,6 +3228,49 @@ static void publicarClave() {
     for (auto &[k, v] : pf->destacados) d[k] = v;
     campos["destacados"] = d;
     envio::guardarPerfil(campos);
+}
+
+static void ponerPortadaProyecto(const std::string &path) {
+    app.fileDlg.show(ui::FileDialog::Open, "Portada del proyecto", ".png|.jpg|.jpeg|.bmp", ui::homeDir(), "", [path](const std::string &f) {
+        std::string err, antes = g_sp.portada, antesF = g_sp.portadaArchivo;
+        if (!loadPortada(f, err)) { notify(err, true); return; }
+        std::string dest = portadaDeProyecto(path);
+        bool ok = sys::writeDurable(dest, g_sp.portada);
+        g_sp.portada = antes; g_sp.portadaArchivo = antesF;
+        notify(ok ? "Portada puesta" : "No se pudo guardar la portada", !ok);
+    });
+}
+static void drawElegirJuego() {
+    if (g_elegirJuego) { ImGui::OpenPopup("Elige tu juego"); g_elegirJuego = false; }
+    ImGui::SetNextWindowSize(ImVec2(860, 600), ImGuiCond_Appearing);
+    if (!ui::beginModal("Elige tu juego", nullptr, 0)) return;
+    ImGui::TextDisabled("Elige el proyecto que quieres publicar en Source Play. Ponle portada para reconocerlo de un vistazo.");
+    ImGui::BeginChild("##juegos", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 6));
+    float w = (ImGui::GetContentRegionAvail().x - 24) / 3;
+    int n = 0;
+    for (auto &r : std::vector<std::string>(projectList())) {
+        if (n++ % 3) ImGui::SameLine(0, 12);
+        ImGui::BeginGroup();
+        ImGui::PushID(r.c_str());
+        std::string pp = portadaDeProyecto(r);
+        std::error_code ec;
+        bool hay = fs::exists(fs::u8path(pp), ec);
+        ui::PixTexture *tx = hay ? nullptr : fileThumb(r);
+        std::function<void(ImDrawList *, ImVec2, ImVec2)> vista;
+        if (!hay) vista = [tx](ImDrawList *dl, ImVec2 q, ImVec2 tam) { thumbImage(dl, tx, ImVec2(q.x + 6, q.y + 6), ImVec2(q.x + tam.x - 6, q.y + tam.y - 6)); };
+        if (tarjetaTienda(r, fileProjectName(r), lastEdited(r), hay ? "Con portada" : "Sin portada", pp, w, vista)) {
+            ImGui::CloseCurrentPopup();
+            std::string ruta = r;
+            guardSwitch([ruta] { openProject(ruta); if (app.hasProject) openPublish(); });
+        }
+        if (ImGui::SmallButton(hay ? "Cambiar portada" : "Poner portada")) ponerPortadaProyecto(r);
+        ImGui::PopID();
+        ImGui::EndGroup();
+    }
+    if (!n) ImGui::TextDisabled("Todavía no tienes proyectos.");
+    ImGui::EndChild();
+    if (ImGui::Button("Cerrar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
 }
 
 static void drawDenuncia() {
@@ -5827,6 +5891,7 @@ static void drawModals() {
     drawNotificacionesModal();
     revisarNotificaciones();
     drawFicha();
+    drawElegirJuego();
     drawMensajes();
     publicarClave();
     drawSolicitud();
