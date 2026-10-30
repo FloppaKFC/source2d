@@ -83,6 +83,7 @@ struct Comentario { std::string id, autor, texto, fecha; };
 void pedirComentarios(const std::string &tipo, const std::string &id);
 const std::vector<Comentario> *comentarios(const std::string &tipo, const std::string &id);
 void comentar(const std::string &tipo, const std::string &id, const std::string &texto);
+void borrarComentario(const std::string &tipo, const std::string &id, const std::string &cid);
 void darFeedback(const std::string &tipo, const std::string &id, const std::string &texto);
 
 struct Feedback { std::string id, de, tipo, juego, nombre, texto, fecha; };

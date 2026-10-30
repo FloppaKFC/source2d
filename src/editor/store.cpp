@@ -30,7 +30,7 @@ struct Tienda {
     bool on = false;
     std::string base, estado;
     std::vector<Paquete> paquetes;
-    std::vector<Bajada> meta, portadas, bajadas, cuentas, hits;
+    std::vector<Bajada> meta, portadas, bajadas, cuentas, hits, vistas;
     std::map<std::string, std::string> errores;
     std::map<std::string, std::pair<long long, long long>> cuenta;
     std::set<std::string> gustan, contados;
@@ -227,6 +227,13 @@ void tick() {
         Tienda &T = g_t[t];
         if (!T.on) continue;
         sincronizarGustan(t);
+        for (auto it = T.vistas.begin(); it != T.vistas.end();) {
+            if (it->vivo && !sys::finished(it->p, &it->code)) { ++it; continue; }
+            std::string fin = it->dest.substr(0, it->dest.size() - 8);
+            if (huella(it->dest) == it->hash) fs::rename(fs::u8path(it->dest), fs::u8path(fin), ec);
+            else fs::remove(fs::u8path(it->dest), ec);
+            it = T.vistas.erase(it);
+        }
         if (!T.meta.empty()) {
             bool all = true;
             for (auto &b : T.meta) if (b.vivo && !sys::finished(b.p, &b.code)) all = false; else b.vivo = false;
@@ -431,4 +438,25 @@ int anadirAlProyecto(Project &proj, const json &pk) {
 }
 std::string pack(const json &pk) { return exporter::sourcePack(pk); }
 bool unpack(const std::string &bytes, json &pk, std::string &err) { return exporter::sourceUnpack(bytes, pk, err); }
+}
+
+namespace store {
+void pedirVista(Tipo t, const Paquete &p) {
+    Tienda &T = g_t[t];
+    if (!T.on || p.archivo.ruta.empty() || instalado(t, p.id)) return;
+    std::string fin = dir(t) + "/vistas/" + p.archivo.blake2b + ".dat";
+    std::error_code ec;
+    if (fs::exists(fs::u8path(fin), ec)) return;
+    for (auto &b : T.vistas) if (b.hash == p.archivo.blake2b) return;
+    if (T.vistas.size() >= 4) return;
+    Bajada b; b.dest = fin + ".parcial"; b.hash = p.archivo.blake2b; b.id = p.id;
+    if (lanzar(b, p.archivo.url, {"--max-time", "120", "--max-filesize", std::to_string(p.archivo.tam + 1)})) T.vistas.push_back(b);
+}
+bool vista(Tipo t, const Paquete &p, json &pk) {
+    std::string err;
+    if (instalado(t, p.id)) return leer(t, p.id, pk, err);
+    std::string f = dir(t) + "/vistas/" + p.archivo.blake2b + ".dat";
+    std::string data = leer(f);
+    return !data.empty() && unpack(data, pk, err) && valido(pk, t, err);
+}
 }

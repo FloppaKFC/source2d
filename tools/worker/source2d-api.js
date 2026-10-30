@@ -1,4 +1,4 @@
-const VERSION = 2;
+const VERSION = 3;
 const BETA = true;
 const MB = 1000000;
 const TIPOS = ["juegos", "sprites", "sonidos"];
@@ -516,6 +516,17 @@ async function comentar(env, u, tipo, id, request) {
   return responder(nuevo, 201);
 }
 
+async function borrarComentario(env, u, tipo, id, cid) {
+  if (!TIPOS.includes(tipo) || !CLAVE.test(id)) return fallo(404, "No existe");
+  const c = await cuentas(env);
+  if (!c.creadores.includes(u.clave) && !c.admins.includes(u.clave)) return fallo(403, "Solo el equipo de Source 2D puede borrar comentarios");
+  const k = `comentarios/${tipo}/${id}.json`;
+  const hilo = await leerJSON(env.R2, k, { comentarios: [] });
+  hilo.comentarios = (Array.isArray(hilo.comentarios) ? hilo.comentarios : []).filter((x) => x && x.id !== cid);
+  await guardarJSON(env.R2, k, hilo);
+  return responder({ borrado: cid });
+}
+
 async function darFeedback(env, u, tipo, id, request) {
   const e = await buscarEnCatalogo(env, tipo, id);
   if (!e || !LOGIN.test(String(e.autor))) return fallo(404, "No existe");
@@ -694,6 +705,7 @@ async function atender(request, env) {
   if (ruta === "megusta" && m === "GET" && n === 1) return misMeGusta(env, u, url);
   if (ruta === "megusta" && n === 2 && CLAVE.test(a) && (m === "POST" || m === "DELETE")) return meGusta(env, u, a, m === "POST");
   if (ruta === "comentarios" && m === "POST" && n === 3) return comentar(env, u, a, b, request);
+  if (ruta === "comentarios" && m === "DELETE" && n === 4) return borrarComentario(env, u, a, b, c);
   if (ruta === "feedback" && m === "GET" && n === 1) return feedbackRecibido(env, u);
   if (ruta === "feedback" && m === "POST" && n === 3) return darFeedback(env, u, a, b, request);
   if (ruta === "notificaciones" && m === "GET" && n === 1) return notificaciones(env, u);

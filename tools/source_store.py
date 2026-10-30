@@ -7,7 +7,7 @@ from source_play import ENVIOS, MAX_TAM, descargar_envio, editor, gh, insignia, 
 
 TIPOS = {
     "sprites": {"repo": "FloppaKFC/source2d-sprites", "env": "S2D_SPRITES_DIR", "titulo": "Sprites",
-                "categorias": ("Personaje", "Sprites sueltos", "Tiles", "Autotiles", "Mixto")},
+                "categorias": ("Personaje", "Sprites sueltos", "Tiles", "Autotiles", "Mixto", "Un sprite (arte)")},
     "sonidos": {"repo": "FloppaKFC/source2d-sonidos", "env": "S2D_SONIDOS_DIR", "titulo": "Sonidos",
                 "categorias": ("Música", "Efectos", "Mixto")},
 }

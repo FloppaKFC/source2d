@@ -703,6 +703,16 @@ void comentar(const std::string &tipo, const std::string &id, const std::string 
         accion("comentario", "", false);
     });
 }
+void borrarComentario(const std::string &tipo, const std::string &id, const std::string &cid) {
+    if (!conectado() || !tipoSeguro(tipo) || !claveSegura(id) || cid.empty() || cid.size() > 40) return;
+    std::string k = tipo + "/" + id;
+    pedirApi("DELETE", "/comentarios/" + k + "/" + urlEnc(cid), json(), [k, cid](int code, const json &b) {
+        if (code != 200) { accion("comentario", error(code, b, "No se pudo borrar el comentario"), true); return; }
+        auto &l = g_hilos[k].lista;
+        l.erase(std::remove_if(l.begin(), l.end(), [&](const Comentario &c) { return c.id == cid; }), l.end());
+        accion("comentario", "Comentario borrado.", false);
+    });
+}
 void darFeedback(const std::string &tipo, const std::string &id, const std::string &texto) {
     if (!conectado()) { accion("feedback", "Entra con GitHub para mandar feedback.", true); return; }
     if (!tipoSeguro(tipo) || !claveSegura(id)) return;

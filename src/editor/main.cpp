@@ -1602,92 +1602,90 @@ static void playInstalled(const std::string &id) {
 }
 
 static void openComentarios(const std::string &tipo, const std::string &id, const std::string &nombre, const std::string &autor);
-static void sourcePlayCard(const tienda::Juego &j, float w) {
-    ImGui::PushID(j.id.c_str());
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ui::kPanel);
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16, 14));
-    ImGui::BeginChild("##sp", ImVec2(w, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
-    float iw = w - 32, ih = iw * 9 / 16;
-    ImVec2 p = ImGui::GetCursorScreenPos();
+struct AnimSprite { Texture2D tex{}; int n = 1, w = 1, h = 1, total = 0; std::vector<int> dur; bool ok = false; };
+static std::map<std::string, AnimSprite> g_animSprites;
+static const AnimSprite *animSprite(const std::string &clave, const json &sp) {
+    auto it = g_animSprites.find(clave);
+    if (it != g_animSprites.end()) return it->second.ok ? &it->second : nullptr;
+    AnimSprite &a = g_animSprites[clave];
+    SpriteEditor se;
+    json x = sp;
+    x["format"] = "source2d-sprite";
+    std::string dir = ui::configDir() + "/cache-sprites", f = dir + "/" + slugOf(clave) + ".png", e;
+    std::error_code ec;
+    fs::create_directories(fs::u8path(dir), ec);
+    if (!se.load(x) || !se.exportFile(f, 1, false, e)) return nullptr;
+    a.tex = LoadTexture(f.c_str());
+    fs::remove(fs::u8path(f), ec);
+    if (!a.tex.id) return nullptr;
+    SetTextureFilter(a.tex, TEXTURE_FILTER_POINT);
+    a.w = std::max(1, (int)jnum(sp, "width", 1)); a.h = std::max(1, (int)jnum(sp, "height", 1));
+    a.n = std::max(1, a.tex.width / a.w);
+    if (sp.contains("durations") && sp["durations"].is_array()) for (auto &d : sp["durations"]) a.dur.push_back(d.is_number() ? std::max(20, d.get<int>()) : 100);
+    a.dur.resize(a.n, 100);
+    for (int d : a.dur) a.total += d;
+    a.ok = true;
+    return &a;
+}
+static void dibujarSprite(ImDrawList *dl, const AnimSprite *a, ImVec2 p, ImVec2 tam) {
+    if (!a) return;
+    float k = std::min(tam.x / a->w, tam.y / a->h);
+    if (k >= 1) k = std::floor(k);
+    ImVec2 t(a->w * k, a->h * k), o(p.x + (tam.x - t.x) / 2, p.y + (tam.y - t.y) / 2);
+    int f = 0;
+    if (a->n > 1 && a->total > 0) {
+        int ms = (int)(fmod(GetTime() * 1000.0, (double)a->total));
+        while (f < a->n - 1 && ms >= a->dur[f]) ms -= a->dur[f++];
+    }
+    dl->AddImage((ImTextureID)(intptr_t)a->tex.id, o, ImVec2(o.x + t.x, o.y + t.y), ImVec2((float)f / a->n, 0), ImVec2((float)(f + 1) / a->n, 1));
+}
+static void dibujarSpritesPaquete(ImDrawList *dl, const json &pk, const std::string &hash, ImVec2 p, ImVec2 tam, int maximo) {
+    if (!pk.contains("sprites") || !pk["sprites"].is_array() || pk["sprites"].empty()) return;
+    std::vector<int> idx;
+    if (maximo <= 6 && pk.contains("fijados") && pk["fijados"].is_array())
+        for (auto &v : pk["fijados"]) if (v.is_number_integer() && v.get<int>() < (int)pk["sprites"].size()) idx.push_back(v.get<int>());
+    for (int i = 0; idx.size() < (size_t)maximo && i < (int)pk["sprites"].size(); i++) if (std::find(idx.begin(), idx.end(), i) == idx.end()) idx.push_back(i);
+    int n = (int)idx.size(), cols = n == 1 ? 1 : n <= 2 ? 2 : n <= 4 ? 2 : 3, rows = (n + cols - 1) / cols;
+    ImVec2 c(tam.x / cols, tam.y / rows);
+    for (int k = 0; k < n; k++) {
+        ImVec2 q(p.x + (k % cols) * c.x + 6, p.y + (k / cols) * c.y + 6);
+        dibujarSprite(dl, animSprite(hash + "-" + std::to_string(idx[k]), pk["sprites"][idx[k]]), q, ImVec2(c.x - 12, c.y - 12));
+    }
+}
+static void openFicha(int tipo, const std::string &id);
+static bool tarjetaTienda(const std::string &id, const std::string &nombre, const std::string &autor, const std::string &sub, const std::string &portada, float w,
+                          std::function<void(ImDrawList *, ImVec2, ImVec2)> vista) {
+    ImGui::PushID(id.c_str());
     ImDrawList *dl = ImGui::GetWindowDrawList();
-    if (const Texture2D *t = newsImage(j.portadaLocal)) ImGui::Image((ImTextureID)(intptr_t)t->id, ImVec2(iw, ih));
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    float ih = w * 9 / 16, h = ih + 70;
+    bool clic = ImGui::InvisibleButton("##ficha", ImVec2(w, h));
+    float a = ui::animTo(ImGui::GetID("##hovf"), ImGui::IsItemHovered() ? 1.0f : 0.0f, 14.0f);
+    if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+    float lift = 3 * a;
+    ImVec2 q(p.x, p.y - lift);
+    dl->AddRectFilled(ImVec2(q.x, q.y + 4), ImVec2(q.x + w, q.y + h + 4), IM_COL32(0, 0, 0, (int)(40 + 50 * a)), 14);
+    dl->AddRectFilled(q, ImVec2(q.x + w, q.y + h), a > 0.01f ? ui::kHover : ui::kPanel2, 14);
+    if (const Texture2D *t = vista ? nullptr : newsImage(portada))
+        dl->AddImageRounded((ImTextureID)(intptr_t)t->id, q, ImVec2(q.x + w, q.y + ih), ImVec2(0, 0), ImVec2(1, 1), IM_COL32_WHITE, 14, ImDrawFlags_RoundCornersTop);
     else {
-        dl->AddRectFilled(p, ImVec2(p.x + iw, p.y + ih), ui::kPanel2, 8);
-        ui::drawIcon(dl, ui::Icon::Gamepad, ImVec2(p.x + iw / 2, p.y + ih / 2), 40, ui::kDim);
-        ImGui::Dummy(ImVec2(iw, ih));
+        dl->AddRectFilled(q, ImVec2(q.x + w, q.y + ih), ui::kPanel3, 14, ImDrawFlags_RoundCornersTop);
+        if (vista) vista(dl, q, ImVec2(w, ih));
+        else ui::drawIcon(dl, ui::Icon::Image, ImVec2(q.x + w / 2, q.y + ih / 2), 28, ui::kDim);
     }
-    float tx = p.x + 8;
-    for (int e = 0; e < 2; e++) {
-        bool on = e == 0 ? j.destacado : tienda::favorito(j.id);
-        if (!on) continue;
-        const char *lbl = e == 0 ? "Destacado" : "Favorito";
-        ImVec2 ts = ImGui::CalcTextSize(lbl);
-        dl->AddRectFilled(ImVec2(tx, p.y + 8), ImVec2(tx + ts.x + 14, p.y + 12 + ts.y), e == 0 ? IM_COL32(0xF2, 0xB1, 0x2D, 235) : ui::kPrimary, 6);
-        dl->AddText(ImVec2(tx + 7, p.y + 10), e == 0 ? IM_COL32(30, 22, 0, 255) : ui::kText, lbl);
-        tx += ts.x + 20;
-    }
-    ImGui::PushFont(ui::boldFont(), 19);
-    ImGui::TextUnformatted(j.nombre.c_str());
-    ImGui::PopFont();
-    ImGui::TextDisabled("por"); ImGui::SameLine(0, 4);
-    authorLink(j.autor);
-    ImGui::SameLine(0, 4);
-    ImGui::TextDisabled("· %s%s", j.categoria.c_str(), j.abierto ? "" : " · Cerrado");
-    long long d = tienda::descargas(j.id), g = tienda::meGusta(j.id);
-    std::string cifras = (d >= 0 ? std::to_string(d) : "-") + " descargas   " + (g >= 0 ? std::to_string(g) : "-") + " me gusta   · versión " + std::to_string(j.version);
-    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kText2), "%s", cifras.c_str());
-    if (!j.descripcion.empty()) {
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + iw);
-        ImGui::TextUnformatted(j.descripcion.c_str());
-        ImGui::PopTextWrapPos();
-    }
-    ImGui::Dummy(ImVec2(0, 2));
-    tienda::Estado st = tienda::estadoDe(j);
-    if (st == tienda::Estado::Descargando) {
-        float pr = std::max(0.0f, tienda::progreso(j.id));
-        ImGui::ProgressBar(pr, ImVec2(iw, 0), (std::to_string((int)(pr * 100)) + " %").c_str());
-    } else {
-        if (st == tienda::Estado::NoInstalado) { if (homeButton("Descargar", true, 32)) tienda::descargar(j); }
-        else {
-            if (homeButton("Jugar", true, 32)) playInstalled(j.id);
-            if (st == tienda::Estado::Actualizable) { ImGui::SameLine(); if (homeButton("Actualizar", false, 32)) tienda::descargar(j); }
-        }
-        ImGui::SameLine();
-        bool gusta = tienda::leGusta(j.id);
-        if (homeButton(gusta ? "Te gusta" : "Me gusta", false, 32) && !tienda::darMeGusta(j, !gusta)) g_sp.showCuenta = true;
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip(gusta ? "Quitar el me gusta" : envio::conectado() ? "Dar me gusta" : "Entra con GitHub para dar me gusta");
-        ImGui::SameLine();
-        if (homeButton("Comentarios", false, 32)) openComentarios("juegos", j.id, j.nombre, j.autor);
-        ImGui::SameLine();
-        if (homeButton("...", false, 32)) ImGui::OpenPopup("##mas");
-        if (ImGui::BeginPopup("##mas")) {
-            bool inst = st != tienda::Estado::NoInstalado;
-            if (j.abierto) {
-                if (ImGui::MenuItem("Ver por dentro", nullptr, false, inst)) {
-                    json doc; std::string err;
-                    if (tienda::leer(j.id, doc, err)) openDocCopy(doc, j.nombre); else notify(err, true);
-                }
-                if (!inst && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("Descárgalo primero");
-            } else if (ImGui::MenuItem("Ver por dentro (con la clave del creador)")) {
-                g_sp.showFuente = true; g_sp.fuenteId = j.id; g_sp.fuenteNombre = j.nombre; g_sp.fuenteErr.clear(); g_sp.fuenteArchivo.clear();
-                tienda::pedirFuente(j);
-            }
-            if (ImGui::MenuItem("Favorito", nullptr, tienda::favorito(j.id))) tienda::setFavorito(j.id, !tienda::favorito(j.id));
-            if (ImGui::MenuItem("Borrar de este equipo", nullptr, false, inst)) { tienda::borrar(j.id); notify(j.nombre + " borrado"); }
-            if (ImGui::MenuItem("Denunciar...")) {
-                g_sp.showDenuncia = true; g_sp.denunciaCuenta = false; g_sp.denunciaId = j.id; g_sp.denunciaNombre = j.nombre; g_sp.denunciaTipo = "juego";
-                g_sp.denunciaMotivo = 0; g_sp.denunciaTexto[0] = 0; g_sp.denunciaMsgs.clear();
-            }
-            ImGui::EndPopup();
-        }
-    }
-    std::string err = tienda::error(j.id);
-    if (!err.empty()) ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.5f, 1.0f), "%s", err.c_str());
-    ImGui::EndChild();
-    ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor();
+    dl->PushClipRect(ImVec2(q.x + 12, q.y + ih), ImVec2(q.x + w - 12, q.y + h), true);
+    dl->AddText(ui::boldFont(), ImGui::GetFontSize() + 1, ImVec2(q.x + 12, q.y + ih + 9), ui::kText, nombre.c_str());
+    dl->AddText(ImVec2(q.x + 12, q.y + ih + 30), ui::kSecondary, autor.c_str());
+    dl->AddText(ImVec2(q.x + 12, q.y + ih + 48), ui::kDim, sub.c_str());
+    dl->PopClipRect();
     ImGui::PopID();
+    return clic;
+}
+static std::string cifrasTienda(long long g, long long d) {
+    return (g >= 0 ? std::to_string(g) : "-") + " me gusta  ·  " + (d >= 0 ? std::to_string(d) : "-") + " descargas";
+}
+static void sourcePlayCard(const tienda::Juego &j, float w) {
+    if (tarjetaTienda(j.id, j.nombre, j.autor, cifrasTienda(tienda::meGusta(j.id), tienda::descargas(j.id)), j.portadaLocal, w, nullptr)) openFicha(0, j.id);
 }
 
 static void openPublish() {
@@ -2544,8 +2542,10 @@ struct ComentariosUI {
     char texto[501] = "", feedback[1001] = "";
 };
 static ComentariosUI g_com;
+static void openFicha(int tipo, const std::string &id);
 static void openComentarios(const std::string &tipo, const std::string &id, const std::string &nombre, const std::string &autor) {
-    g_com.show = true; g_com.tipo = tipo; g_com.id = id; g_com.nombre = nombre; g_com.autor = autor;
+    openFicha(tipo == "sprites" ? 1 : tipo == "sonidos" ? 2 : 0, id);
+    g_com.tipo = tipo; g_com.id = id; g_com.nombre = nombre; g_com.autor = autor;
     g_com.texto[0] = 0; g_com.feedback[0] = 0;
     envio::limpiarAccion("comentario"); envio::limpiarAccion("feedback");
     envio::pedirComentarios(tipo, id);
@@ -2641,6 +2641,218 @@ static void drawComentarios() {
     if (ImGui::Button("Cerrar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
     ImGui::EndPopup();
 }
+static int storeToCreations(store::Tipo t, const json &pk);
+static void storeAddToProject(store::Tipo t, const std::string &id);
+struct FichaUI { bool show = false; int tipo = 0; std::string id; char texto[501] = "", feedback[1001] = ""; };
+static FichaUI g_ficha;
+static void openFicha(int tipo, const std::string &id) {
+    g_ficha.show = true; g_ficha.tipo = tipo; g_ficha.id = id; g_ficha.texto[0] = 0; g_ficha.feedback[0] = 0;
+    static const char *tipos[3] = {"juegos", "sprites", "sonidos"};
+    g_com.tipo = tipos[std::clamp(tipo, 0, 2)]; g_com.id = id;
+    envio::limpiarAccion("comentario"); envio::limpiarAccion("feedback");
+    envio::pedirComentarios(g_com.tipo, id);
+}
+static bool soyModerador() {
+    if (!envio::conectado()) return false;
+    for (int v : tienda::insignias(envio::usuario())) if (v == 2 || v == 3) return true;
+    return false;
+}
+static void listaComentarios(const std::string &tipo, const std::string &id, const std::string &nombre) {
+    const auto *lista = envio::comentarios(tipo, id);
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    if (!lista) { ImGui::TextDisabled("Cargando comentarios..."); return; }
+    if (lista->empty()) ImGui::TextDisabled("Todavía no hay comentarios. ¡Sé la primera persona en comentar!");
+    for (size_t i = lista->size(); i-- > 0;) {
+        const envio::Comentario &c = (*lista)[i];
+        ImGui::PushID(c.id.c_str());
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        float w = ImGui::GetContentRegionAvail().x - 6;
+        float h = ImGui::CalcTextSize(c.texto.c_str(), nullptr, false, w - 90).y + 46;
+        dl->AddRectFilled(p, ImVec2(p.x + w, p.y + h), ui::kPanel2, 12);
+        envio::pedirPerfil(c.autor);
+        drawAvatar(dl, ImVec2(p.x + 10, p.y + 10), 32, c.autor, envio::perfil(c.autor));
+        ImGui::SetCursorScreenPos(ImVec2(p.x + 52, p.y + 8));
+        ImGui::BeginGroup();
+        authorLink(c.autor);
+        ImGui::SameLine(); ImGui::TextDisabled("· %s", fechaBonita(c.fecha.substr(0, 10)).c_str());
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + w - 90);
+        ImGui::TextUnformatted(c.texto.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::EndGroup();
+        bool ajeno = envio::conectado() && c.autor != envio::usuario(), mod = soyModerador();
+        if (ajeno || mod) {
+            ImGui::SetCursorScreenPos(ImVec2(p.x + w - 36, p.y + 6));
+            if (ImGui::Button("...", ImVec2(28, 0))) ImGui::OpenPopup("##cmenu");
+            if (ImGui::BeginPopup("##cmenu")) {
+                if (ajeno && ImGui::MenuItem("Denunciar comentario...")) {
+                    g_sp.showDenuncia = true; g_sp.denunciaCuenta = false; g_sp.denunciaTipo = "comentario";
+                    g_sp.denunciaId = c.autor; g_sp.denunciaNombre = "@" + c.autor + " en " + nombre;
+                    g_sp.denunciaMotivo = 0; g_sp.denunciaTexto[0] = 0; g_sp.denunciaMsgs.clear();
+                    g_sp.denunciaMsgs.push_back({c.id, c.autor, c.texto, c.fecha, true});
+                }
+                if (mod && ImGui::MenuItem("Borrar comentario")) envio::borrarComentario(tipo, id, c.id);
+                ImGui::EndPopup();
+            }
+        }
+        ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + h + 8));
+        ImGui::Dummy(ImVec2(0, 0));
+        ImGui::PopID();
+    }
+}
+static void drawFicha() {
+    if (g_ficha.show) { ImGui::OpenPopup("Ficha"); g_ficha.show = false; }
+    ImGui::SetNextWindowSize(ImVec2(1000, 640), ImGuiCond_Appearing);
+    if (!ui::beginModal("Ficha", nullptr, ImGuiWindowFlags_NoTitleBar)) return;
+    static const char *tipos[3] = {"juegos", "sprites", "sonidos"};
+    int T = std::clamp(g_ficha.tipo, 0, 2);
+    std::string tipo = tipos[T];
+    const tienda::Juego *jg = nullptr;
+    const store::Paquete *pq = nullptr;
+    store::Tipo st = T == 2 ? store::Sonidos : store::Sprites;
+    if (T == 0) { for (auto &j : tienda::juegos()) if (j.id == g_ficha.id) jg = &j; }
+    else for (auto &p : store::paquetes(st)) if (p.id == g_ficha.id) pq = &p;
+    if (!jg && !pq) { ImGui::TextDisabled("Ya no está publicado."); if (ImGui::Button("Cerrar")) ImGui::CloseCurrentPopup(); ImGui::EndPopup(); return; }
+    std::string nombre = jg ? jg->nombre : pq->nombre, autor = jg ? jg->autor : pq->autor, desc = jg ? jg->descripcion : pq->descripcion;
+    std::string cat = jg ? jg->categoria : pq->categoria;
+    envio::pedirComentarios(tipo, g_ficha.id);
+    float alto = ImGui::GetContentRegionAvail().y;
+    ImGui::BeginChild("##izq", ImVec2(400, alto), ImGuiChildFlags_None);
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    json pk;
+    bool hayPk = pq && store::vista(st, *pq, pk);
+    if (pq) store::pedirVista(st, *pq);
+    if (T == 1) {
+        float lado = 400;
+        dl->AddRectFilled(p, ImVec2(p.x + lado, p.y + 300), ui::kPanel3, 14);
+        if (hayPk) dibujarSpritesPaquete(dl, pk, pq->archivo.blake2b, ImVec2(p.x + 8, p.y + 8), ImVec2(lado - 16, 284), 60);
+        else ImGui::GetWindowDrawList()->AddText(ImVec2(p.x + 20, p.y + 20), ui::kDim, "Cargando los sprites...");
+        ImGui::Dummy(ImVec2(lado, 304));
+        if (hayPk) ImGui::TextDisabled("%zu sprite(s)%s", pk.contains("sprites") ? pk["sprites"].size() : 0, pk.contains("tilesets") ? " · con tiles" : "");
+    } else {
+        std::string port = jg ? jg->portadaLocal : pq->portadaLocal;
+        if (const Texture2D *t = newsImage(port)) dl->AddImageRounded((ImTextureID)(intptr_t)t->id, p, ImVec2(p.x + 400, p.y + 225), ImVec2(0, 0), ImVec2(1, 1), IM_COL32_WHITE, 14);
+        else { dl->AddRectFilled(p, ImVec2(p.x + 400, p.y + 225), ui::kPanel3, 14); ui::drawIcon(dl, T == 2 ? ui::Icon::Bell : ui::Icon::Gamepad, ImVec2(p.x + 200, p.y + 112), 40, ui::kDim); }
+        ImGui::Dummy(ImVec2(400, 229));
+        if (T == 2 && hayPk && pk.contains("sonidos")) {
+            ImGui::BeginChild("##sonidos", ImVec2(400, 120), ImGuiChildFlags_Borders);
+            int k = 0;
+            for (auto &so : pk["sonidos"]) {
+                ImGui::PushID(k++);
+                if (ImGui::SmallButton("Escuchar")) { sound::stopAll(); sound::clipPlay("ficha-" + std::to_string(k), so); }
+                ImGui::SameLine(); ImGui::TextUnformatted(jstr(so, "name").c_str());
+                ImGui::PopID();
+            }
+            ImGui::EndChild();
+            if (ImGui::SmallButton("Parar")) sound::stopAll();
+        }
+    }
+    ImGui::Dummy(ImVec2(0, 6));
+    if (jg) {
+        tienda::Estado e = tienda::estadoDe(*jg);
+        if (e == tienda::Estado::Descargando) ImGui::ProgressBar(std::max(0.0f, tienda::progreso(jg->id)), ImVec2(400, 0));
+        else if (e == tienda::Estado::NoInstalado) { if (ui::primaryButton("Descargar", ImVec2(400, 40))) tienda::descargar(*jg); }
+        else {
+            if (ui::primaryButton("Jugar", ImVec2(e == tienda::Estado::Actualizable ? 196 : 400, 40))) playInstalled(jg->id);
+            if (e == tienda::Estado::Actualizable) { ImGui::SameLine(0, 8); if (ImGui::Button("Actualizar", ImVec2(196, 40))) tienda::descargar(*jg); }
+        }
+        std::string err = tienda::error(jg->id);
+        if (!err.empty()) ImGui::TextColored(ImVec4(1, 0.55f, 0.5f, 1), "%s", err.c_str());
+    } else {
+        bool inst = store::instalado(st, pq->id);
+        if (store::descargando(st, pq->id)) ImGui::TextDisabled("Descargando...");
+        else if (!inst) { if (ui::primaryButton("Descargar", ImVec2(400, 40))) store::descargar(st, *pq); }
+        else {
+            if (ui::primaryButton("Añadir al proyecto", ImVec2(196, 40))) storeAddToProject(st, pq->id);
+            ImGui::SameLine(0, 8);
+            if (ImGui::Button("Guardar en mis creaciones", ImVec2(196, 40))) {
+                json pk2; std::string err;
+                if (store::leer(st, pq->id, pk2, err)) notify(std::to_string(storeToCreations(st, pk2)) + " guardado(s) en " + (st == store::Sprites ? "Source Sprite" : "Source Sound"));
+            }
+        }
+        ImGui::TextDisabled("Licencia: %s", pq->licencia.c_str());
+    }
+    ImGui::EndChild();
+    ImGui::SameLine(0, 20);
+    ImGui::BeginChild("##der", ImVec2(0, alto));
+    ImGui::PushFont(ui::boldFont(), 28); ImGui::TextUnformatted(nombre.c_str()); ImGui::PopFont();
+    ImGui::SameLine(ImGui::GetContentRegionMax().x - 34);
+    if (ImGui::Button("X", ImVec2(30, 30))) ImGui::CloseCurrentPopup();
+    ImGui::TextDisabled("por"); ImGui::SameLine(0, 4); authorLink(autor);
+    ImGui::SameLine(); ImGui::TextDisabled("· %s%s", cat.c_str(), jg ? (" · versión " + std::to_string(jg->version)).c_str() : "");
+    long long g = jg ? tienda::meGusta(jg->id) : store::meGusta(st, pq->id), d = jg ? tienda::descargas(jg->id) : store::descargas(st, pq->id);
+    const auto *cms = envio::comentarios(tipo, g_ficha.id);
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kText2), "%s  ·  %zu comentarios", cifrasTienda(g, d).c_str(), cms ? cms->size() : (size_t)0);
+    ImGui::Dummy(ImVec2(0, 4));
+    ImGui::PushTextWrapPos(ImGui::GetContentRegionMax().x - 10);
+    ImGui::PushFont(ImGui::GetFont(), 17);
+    ImGui::TextUnformatted(desc.empty() ? "Sin descripción." : desc.c_str());
+    ImGui::PopFont();
+    ImGui::PopTextWrapPos();
+    ImGui::Dummy(ImVec2(0, 6));
+    bool gusta = jg ? tienda::leGusta(jg->id) : store::leGusta(st, pq->id);
+    if (gusta ? ImGui::Button("Te gusta", ImVec2(120, 34)) : ui::primaryButton("Me gusta", ImVec2(120, 34))) {
+        bool ok = jg ? tienda::darMeGusta(*jg, !gusta) : store::darMeGusta(st, *pq, !gusta);
+        if (!ok) g_sp.showCuenta = true;
+    }
+    if (jg) {
+        ImGui::SameLine();
+        bool fav = tienda::favorito(jg->id);
+        if (ImGui::Button(fav ? "En favoritos" : "Favorito", ImVec2(120, 34))) tienda::setFavorito(jg->id, !fav);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("...", ImVec2(40, 34))) ImGui::OpenPopup("##fmas");
+    if (ImGui::BeginPopup("##fmas")) {
+        if (jg && jg->abierto && tienda::estadoDe(*jg) != tienda::Estado::NoInstalado && ImGui::MenuItem("Ver por dentro")) {
+            json doc; std::string err;
+            if (tienda::leer(jg->id, doc, err)) { ImGui::CloseCurrentPopup(); openDocCopy(doc, jg->nombre); } else notify(err, true);
+        }
+        if (jg && !jg->abierto && ImGui::MenuItem("Ver por dentro (con la clave del creador)")) {
+            g_sp.showFuente = true; g_sp.fuenteId = jg->id; g_sp.fuenteNombre = jg->nombre; g_sp.fuenteErr.clear(); g_sp.fuenteArchivo.clear();
+            tienda::pedirFuente(*jg);
+        }
+        bool inst = jg ? tienda::estadoDe(*jg) != tienda::Estado::NoInstalado : store::instalado(st, pq->id);
+        if (ImGui::MenuItem("Borrar de este equipo", nullptr, false, inst)) { if (jg) tienda::borrar(jg->id); else store::borrar(st, pq->id); notify(nombre + " borrado"); }
+        if (ImGui::MenuItem("Denunciar...")) {
+            g_sp.showDenuncia = true; g_sp.denunciaCuenta = false; g_sp.denunciaId = g_ficha.id; g_sp.denunciaNombre = nombre; g_sp.denunciaTipo = jg ? "juego" : tipo;
+            g_sp.denunciaMotivo = 0; g_sp.denunciaTexto[0] = 0; g_sp.denunciaMsgs.clear();
+        }
+        ImGui::EndPopup();
+    }
+    ImGui::SeparatorText("Comentarios");
+    bool puede = envio::conectado() && !envio::yo().baneado;
+    if (!envio::conectado()) { if (ImGui::Button("Entra con GitHub para comentar")) g_sp.showCuenta = true; }
+    else {
+        ImGui::BeginDisabled(!puede);
+        ImGui::SetNextItemWidth(-110);
+        bool enter = ImGui::InputTextWithHint("##comentar", "Escribe un comentario", g_ficha.texto, sizeof g_ficha.texto, ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::SameLine();
+        bool vacio = !g_ficha.texto[0] || envio::estadoAccion("comentario") == "Publicando...";
+        if ((ui::primaryButton("Publicar", ImVec2(100, 0)) || enter) && !vacio) { envio::comentar(tipo, g_ficha.id, g_ficha.texto); g_ficha.texto[0] = 0; }
+        ImGui::EndDisabled();
+        std::string stc = envio::estadoAccion("comentario");
+        if (!stc.empty() && stc != "Publicando...") ImGui::TextColored(envio::falloAccion("comentario") ? ImVec4(1, 0.55f, 0.5f, 1) : ImVec4(0.6f, 0.9f, 0.7f, 1), "%s", stc.c_str());
+    }
+    float pie = jg ? 96 : 0;
+    ImGui::BeginChild("##coms", ImVec2(0, -pie));
+    listaComentarios(tipo, g_ficha.id, nombre);
+    ImGui::EndChild();
+    if (jg) {
+        ImGui::PushFont(ui::boldFont(), 0); ImGui::TextUnformatted("Feedback para el creador"); ImGui::PopFont();
+        ImGui::SameLine(); ImGui::TextDisabled("solo lo ve %s", autor.c_str());
+        ImGui::BeginDisabled(!puede || envio::usuario() == autor);
+        ImGui::SetNextItemWidth(-110);
+        ImGui::InputTextWithHint("##feedback", "Qué mejorarías, qué te gustó, un fallo que encontraste...", g_ficha.feedback, sizeof g_ficha.feedback);
+        ImGui::SameLine();
+        if (ImGui::Button("Enviar", ImVec2(100, 0)) && g_ficha.feedback[0]) { envio::darFeedback(tipo, g_ficha.id, g_ficha.feedback); g_ficha.feedback[0] = 0; }
+        ImGui::EndDisabled();
+        std::string sf = envio::estadoAccion("feedback");
+        if (!sf.empty()) ImGui::TextColored(envio::falloAccion("feedback") ? ImVec4(1, 0.55f, 0.5f, 1) : ImVec4(0.6f, 0.9f, 0.7f, 1), "%s", sf.c_str());
+    }
+    ImGui::EndChild();
+    ImGui::EndPopup();
+}
+
 static void drawFeedbackRecibido(bool *abrir) {
     if (*abrir) { ImGui::OpenPopup("Feedback recibido"); *abrir = false; }
     ImGui::SetNextWindowSize(ImVec2(620, 540), ImGuiCond_Appearing);
@@ -3690,10 +3902,10 @@ static void openSpriteFile(const std::string &f) {
     if (studioLoad(f)) g_studio.on = true;
 }
 
-static const char *const kCatSprites[] = {"Personaje", "Sprites sueltos", "Tiles", "Autotiles", "Mixto"};
+static const char *const kCatSprites[] = {"Personaje", "Sprites sueltos", "Tiles", "Autotiles", "Mixto", "Un sprite (arte)"};
 static const char *const kCatSonidos[] = {"Música", "Efectos", "Mixto"};
 static const char *const kLicencias[] = {"Libre", "Libre dando crédito", "Solo juegos no comerciales"};
-struct StoreItem { std::string label, kind, ref; bool on = false; };
+struct StoreItem { std::string label, kind, ref; bool on = false, fijado = false; };
 struct StoreUI {
     int tab[2] = {0, 0};
     char buscar[2][64] = {"", ""};
@@ -3740,68 +3952,17 @@ static void storeAddToProject(store::Tipo t, const std::string &id) {
 }
 
 static void storeCard(store::Tipo t, const store::Paquete &p, float w) {
-    ImGui::PushID(p.id.c_str());
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ui::kPanel);
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14, 12));
-    ImGui::BeginChild("##pk", ImVec2(w, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
-    float iw = w - 28, ih = iw * 9 / 16;
-    ImVec2 q = ImGui::GetCursorScreenPos();
-    ImDrawList *dl = ImGui::GetWindowDrawList();
-    if (const Texture2D *tx = newsImage(p.portadaLocal)) ImGui::Image((ImTextureID)(intptr_t)tx->id, ImVec2(iw, ih));
-    else {
-        dl->AddRectFilled(q, ImVec2(q.x + iw, q.y + ih), ui::kPanel2, 8);
-        ui::drawIcon(dl, t == store::Sprites ? ui::Icon::Image : ui::Icon::Bell, ImVec2(q.x + iw / 2, q.y + ih / 2), 36, ui::kDim);
-        ImGui::Dummy(ImVec2(iw, ih));
-    }
-    if (p.destacado) {
-        ImVec2 ts = ImGui::CalcTextSize("Destacado");
-        dl->AddRectFilled(ImVec2(q.x + 8, q.y + 8), ImVec2(q.x + 22 + ts.x, q.y + 12 + ts.y), IM_COL32(0xF2, 0xB1, 0x2D, 235), 6);
-        dl->AddText(ImVec2(q.x + 15, q.y + 10), IM_COL32(30, 22, 0, 255), "Destacado");
-    }
-    ImGui::PushFont(ui::boldFont(), 18); ImGui::TextUnformatted(p.nombre.c_str()); ImGui::PopFont();
-    ImGui::TextDisabled("por"); ImGui::SameLine(0, 4); authorLink(p.autor); ImGui::SameLine(0, 4);
-    ImGui::TextDisabled("· %s", p.categoria.c_str());
-    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kText2), "%s", storeContenido(p).c_str());
-    ImGui::TextDisabled("Licencia: %s", p.licencia.c_str());
-    long long d = store::descargas(t, p.id), g = store::meGusta(t, p.id);
-    ImGui::TextDisabled("%s descargas · %s me gusta", d >= 0 ? std::to_string(d).c_str() : "-", g >= 0 ? std::to_string(g).c_str() : "-");
-    if (!p.descripcion.empty()) { ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + iw); ImGui::TextUnformatted(p.descripcion.c_str()); ImGui::PopTextWrapPos(); }
-    if (store::descargando(t, p.id)) ImGui::TextDisabled("Descargando...");
-    else if (!store::instalado(t, p.id)) { if (homeButton("Descargar", true, 30)) store::descargar(t, p); }
-    else {
-        if (homeButton("Añadir al proyecto", true, 30)) storeAddToProject(t, p.id);
-        if (ImGui::IsItemHovered() && !app.hasProject) ImGui::SetTooltip("Abre un proyecto primero");
-        if (t == store::Sonidos) { ImGui::SameLine(); if (homeButton("Escuchar", false, 30)) { g_st.showEscuchar = true; g_st.escucharId = p.id; } }
-    }
-    ImGui::SameLine();
-    bool gusta = store::leGusta(t, p.id);
-    if (homeButton(gusta ? "Te gusta" : "Me gusta", false, 30) && !store::darMeGusta(t, p, !gusta)) g_sp.showCuenta = true;
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip(gusta ? "Quitar el me gusta" : envio::conectado() ? "Dar me gusta" : "Entra con GitHub para dar me gusta");
-    ImGui::SameLine();
-    if (homeButton("...", false, 30)) ImGui::OpenPopup("##pkmas");
-    if (ImGui::BeginPopup("##pkmas")) {
-        bool inst = store::instalado(t, p.id);
-        if (ImGui::MenuItem("Guardar en mis creaciones", nullptr, false, inst)) {
-            json pk; std::string err;
-            if (store::leer(t, p.id, pk, err)) notify(std::to_string(storeToCreations(t, pk)) + " guardado(s) en " + (t == store::Sprites ? "Source Sprite" : "Source Sound"));
-            else notify(err, true);
-        }
-        if (ImGui::MenuItem("Comentarios y feedback")) openComentarios(t == store::Sprites ? "sprites" : "sonidos", p.id, p.nombre, p.autor);
-        if (ImGui::MenuItem("Borrar de este equipo", nullptr, false, inst)) store::borrar(t, p.id);
-        if (ImGui::MenuItem("Denunciar...")) {
-            g_sp.showDenuncia = true; g_sp.denunciaCuenta = false; g_sp.denunciaId = p.id;
-            g_sp.denunciaNombre = p.nombre; g_sp.denunciaTipo = t == store::Sprites ? "sprites" : "sonidos";
-            g_sp.denunciaMotivo = 0; g_sp.denunciaTexto[0] = 0; g_sp.denunciaMsgs.clear();
-        }
-        ImGui::EndPopup();
-    }
-    std::string err = store::error(t, p.id);
-    if (!err.empty()) ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.5f, 1.0f), "%s", err.c_str());
-    ImGui::EndChild();
-    ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor();
-    ImGui::PopID();
+    std::function<void(ImDrawList *, ImVec2, ImVec2)> vista;
+    if (t == store::Sprites) {
+        store::pedirVista(t, p);
+        vista = [t, &p](ImDrawList *dl, ImVec2 q, ImVec2 tam) {
+            json pk;
+            if (store::vista(t, p, pk)) dibujarSpritesPaquete(dl, pk, p.archivo.blake2b, q, tam, 6);
+            else ui::drawIcon(dl, ui::Icon::Image, ImVec2(q.x + tam.x / 2, q.y + tam.y / 2), 28, ui::kDim);
+        };
+    } else if (p.portadaLocal.empty())
+        vista = [](ImDrawList *dl, ImVec2 q, ImVec2 tam) { ui::drawIcon(dl, ui::Icon::Bell, ImVec2(q.x + tam.x / 2, q.y + tam.y / 2), 30, ui::kDim); };
+    if (tarjetaTienda(p.id, p.nombre, p.autor, cifrasTienda(store::meGusta(t, p.id), store::descargas(t, p.id)), p.portadaLocal, w, vista)) openFicha(t == store::Sprites ? 1 : 2, p.id);
 }
 
 static bool storeTabs(store::Tipo t) {
@@ -3877,8 +4038,11 @@ static std::string buildStorePackage(json &pk) {
     store::Tipo t = (store::Tipo)g_st.tipo;
     pk = {{"formato", "source2d-paquete"}, {"tipo", t == store::Sprites ? "sprites" : "sonidos"}};
     std::set<std::string> tsIds;
+    json fijados = json::array();
     for (auto &it : g_st.items) {
         if (!it.on) continue;
+        if (it.fijado && (it.kind == "sprite" || it.kind == "sprite-archivo") && fijados.size() < 6)
+            fijados.push_back(pk.contains("sprites") ? pk["sprites"].size() : 0);
         if (it.kind == "sprite") { if (json *x = app.proj.spriteById(it.ref)) pk["sprites"].push_back(*x); }
         else if (it.kind == "tileset") tsIds.insert(it.ref);
         else if (it.kind == "autotile") {
@@ -3893,6 +4057,12 @@ static std::string buildStorePackage(json &pk) {
         }
     }
     for (auto &id : tsIds) if (json *x = findById(app.proj.doc["tilesets"], id)) pk["tilesets"].push_back(*x);
+    if (!fijados.empty()) pk["fijados"] = fijados;
+    if (t == store::Sprites && g_st.cat == 5) {
+        size_t ns = pk.contains("sprites") ? pk["sprites"].size() : 0;
+        if (ns != 1 || pk.contains("tilesets") || pk.contains("autotiles")) return "\"Un sprite (arte)\" lleva exactamente un sprite, animado o no";
+        pk["fijados"] = json::array({0});
+    }
     std::string err;
     if (!store::valido(pk, t, err)) return err == "El paquete está vacío" ? "Marca al menos una cosa para el paquete" : err;
     return "";
@@ -3909,7 +4079,7 @@ static void startStorePackage(bool toFolder) {
     char fecha[16]; time_t now = time(nullptr); tm lt; sys::localTime(now, lt); strftime(fecha, sizeof fecha, "%Y-%m-%d", &lt);
     json info = {{"formato", "source2d-envio-paquete"}, {"tipo", t == store::Sprites ? "sprites" : "sonidos"}, {"id", slugOf(autor + "-" + nombre)},
                  {"nombre", nombre}, {"descripcion", std::string(g_st.desc)}, {"autor", autor}, {"motor", S2D_VERSION}, {"fecha", fecha},
-                 {"categoria", t == store::Sprites ? kCatSprites[std::clamp(g_st.cat, 0, 4)] : kCatSonidos[std::clamp(g_st.cat, 0, 2)]},
+                 {"categoria", t == store::Sprites ? kCatSprites[std::clamp(g_st.cat, 0, 5)] : kCatSonidos[std::clamp(g_st.cat, 0, 2)]},
                  {"licencia", kLicencias[std::clamp(g_st.lic, 0, 2)]}};
     g_st.aCarpeta = toFolder;
     g_st.paquete = envio::Paquete{};
@@ -3953,7 +4123,7 @@ static void drawStoreDialogs() {
         ImGui::SetNextItemWidth(300); ImGui::InputText("##pkn", g_st.nombre, sizeof g_st.nombre);
         ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Tipo"); ImGui::SameLine(110);
         ImGui::SetNextItemWidth(200);
-        if (t == store::Sprites) ImGui::Combo("##pkc", &g_st.cat, kCatSprites, 5); else ImGui::Combo("##pkc", &g_st.cat, kCatSonidos, 3);
+        if (t == store::Sprites) ImGui::Combo("##pkc", &g_st.cat, kCatSprites, 6); else ImGui::Combo("##pkc", &g_st.cat, kCatSonidos, 3);
         ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Licencia"); ImGui::SameLine(110);
         ImGui::SetNextItemWidth(260); ImGui::Combo("##pkl", &g_st.lic, kLicencias, 3);
         ImGui::SameLine(); ImGui::TextDisabled("(?)");
@@ -3964,7 +4134,21 @@ static void drawStoreDialogs() {
         ImGui::BeginChild("##pkitems", ImVec2(600, 160), ImGuiChildFlags_Borders);
         if (g_st.items.empty()) ImGui::TextDisabled(t == store::Sprites ? "No hay sprites: abre un proyecto o guarda alguno en Source Sprite." :
                                                                           "No hay sonidos: crea alguno en Source Sound o añádelo a tu proyecto.");
-        for (size_t i = 0; i < g_st.items.size(); i++) { ImGui::PushID((int)i); ImGui::Checkbox(g_st.items[i].label.c_str(), &g_st.items[i].on); ImGui::PopID(); }
+        int nFijados = 0;
+        for (auto &it : g_st.items) if (it.on && it.fijado) nFijados++;
+        for (size_t i = 0; i < g_st.items.size(); i++) {
+            auto &it = g_st.items[i];
+            ImGui::PushID((int)i);
+            ImGui::Checkbox(it.label.c_str(), &it.on);
+            if (it.on && (it.kind == "sprite" || it.kind == "sprite-archivo") && g_st.tipo == 0 && g_st.cat != 5) {
+                ImGui::SameLine();
+                ImGui::BeginDisabled(!it.fijado && nFijados >= 6);
+                if (ImGui::SmallButton(it.fijado ? "Fijado" : "Fijar")) it.fijado = !it.fijado;
+                ImGui::EndDisabled();
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("Los sprites fijados (hasta 6) son los que se ven en la tienda sin abrir el paquete");
+            }
+            ImGui::PopID();
+        }
         ImGui::EndChild();
         ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted(g_st.portada.empty() ? "Miniatura: ninguna" : "Miniatura: tu imagen (16:9)");
@@ -5642,7 +5826,7 @@ static void drawModals() {
     drawDenuncia();
     drawNotificacionesModal();
     revisarNotificaciones();
-    drawComentarios();
+    drawFicha();
     drawMensajes();
     publicarClave();
     drawSolicitud();

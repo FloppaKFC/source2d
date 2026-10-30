@@ -101,7 +101,7 @@ function ok(nombre, cond, extra) {
 const notifs = async (tok) => (await q("GET", "/notificaciones", { tok })).j.notificaciones;
 const json = (s) => JSON.stringify(s);
 
-let r = await q("GET", "/"); ok("raiz", r.s === 200 && r.j.version === 2);
+let r = await q("GET", "/"); ok("raiz", r.s === 200 && r.j.version === 3);
 r = await q("POST", "/registro"); ok("sin cuenta 401", r.s === 401);
 r = await q("GET", "/yo", { tok: "tok_falsofalsofalsofalsofalso" }); ok("token falso 401", r.s === 401);
 r = await q("GET", "/yo", { tok: A }); ok("yo sin registro", r.s === 200 && !r.j.registrado && r.j.sinLeer === 0, r);
@@ -179,13 +179,19 @@ r = await q("POST", "/comentarios/juegos/no-existe", { tok: B, body: { texto: "h
 r = await q("POST", "/comentarios/juegos/floppa-juego", { tok: B, body: { texto: "   " } }); ok("comentario vacio", r.s === 400);
 const com = JSON.parse(new TextDecoder().decode(env.R2.m.get("comentarios/juegos/floppa-juego.json").data));
 ok("comentario publico", com.comentarios.length === 1 && com.comentarios[0].autor === "Otra-Persona");
+const cid = com.comentarios[0].id;
+r = await q("DELETE", `/comentarios/juegos/floppa-juego/${cid}`, { tok: B }); ok("borrar comentario sin ser del equipo", r.s === 403, r);
+r = await q("POST", "/comentarios/juegos/floppa-juego", { tok: D, body: { texto: "otro" } });
+r = await q("DELETE", `/comentarios/juegos/floppa-juego/${cid}`, { tok: A }); ok("el Creador borra un comentario", r.s === 200, r);
+const com2 = JSON.parse(new TextDecoder().decode(env.R2.m.get("comentarios/juegos/floppa-juego.json").data));
+ok("comentario borrado, el otro sigue", com2.comentarios.length === 1 && com2.comentarios[0].texto === "otro", com2);
 r = await q("POST", "/feedback/juegos/floppa-juego", { tok: B, body: { texto: "El salto es muy alto" } }); ok("feedback", r.s === 201);
 ok("feedback privado", ![...env.R2.m.keys()].some((k) => k.startsWith("feedback/")));
 r = await q("GET", "/feedback", { tok: A }); ok("creador lee su feedback", r.j.feedback.length === 1 && r.j.feedback[0].de === "Otra-Persona", r);
 r = await q("GET", "/feedback", { tok: B }); ok("otro no ve ese feedback", r.j.feedback.length === 0);
 let ns = await notifs(A);
 ok("notificaciones de comentario y feedback", ns.some((n) => n.tipo === "comentario") && ns.some((n) => n.tipo === "feedback"), ns);
-r = await q("GET", "/yo", { tok: A }); ok("sin leer", r.j.sinLeer === 2, r);
+r = await q("GET", "/yo", { tok: A }); ok("sin leer", r.j.sinLeer === 3, r);
 await q("POST", "/notificaciones/leidas", { tok: A });
 r = await q("GET", "/yo", { tok: A }); ok("leidas", r.j.sinLeer === 0, r);
 
