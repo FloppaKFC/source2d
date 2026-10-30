@@ -17,10 +17,17 @@ done
 
 NOTAS="{lista:Los tiles ahora son objetos (se colocan y editan como cualquier otro), Autotiles, Luces y oscuridad por capa con la nueva ventana Capas, Source Sound para hacer sonidos y música (con la canción Test de ejemplo), Colisiones por animación y en los tiles (rampas y escalones), Escuela nueva con Floppa: Conoce el editor y Monedas y puntos con el botón Hazlo por mí, Archivos .source2d mucho más pequeños, Exportar a una carpeta (motor + datos), Encuestas en Noticias, Source Play y Source Store: juegos, sprites y sonidos gratis (con comentarios, feedback y me gusta), Perfiles nuevos con insignias y destacados, Notificaciones y mensajes cifrados, Proyectos en la nube, Trabajar juntos más seguro (el invitado no se queda el proyecto), Los juegos con funciones de eventos van mucho más rápido, El editor gasta menos cuando no lo usas} Versión de prueba: puede tener fallos."
 
-EXTRA=()
+BASE="$(mktemp -d)"
+trap 'rm -rf "$BASE"' EXIT
+for f in LEEME.txt LICENCIAS-TERCEROS.txt; do
+    [ -f "$RAIZ/Release/$f" ] || { echo "Falta Release/$f: ejecuta tools/release.sh primero."; exit 1; }
+done
+(cd "$RAIZ/Release" && python3 -c "import shutil; shutil.make_archive('$BASE/Idiomas', 'zip', '.', 'Idiomas')")
+EXTRA=(--extra "$RAIZ/Release/LEEME.txt" --extra "$RAIZ/Release/LICENCIAS-TERCEROS.txt" --extra "$BASE/Idiomas.zip")
 [ "${S2D_SIN_SUBIR:-}" = "1" ] && EXTRA+=(--sin-subir)
 
-echo "Se publicará $NOM (número $NUM) en el canal $CANAL."
+echo "Se publicará $NOM (número $NUM) en el canal $CANAL, en Releases de FloppaKFC/source2d:"
+echo "  Source2D.exe  Source2D.x86_64  Source2D.AppImage  LEEME.txt  LICENCIAS-TERCEROS.txt  Idiomas.zip"
 read -r -p "¿Seguir? [S/n]: " r
 [[ "${r:-s}" =~ ^[sSyY] ]] || { echo "Cancelado."; exit 0; }
 python3 "$RAIZ/tools/publicar_version.py" "$NOM" "$NUM" --canal "$CANAL" --notas "$NOTAS" \

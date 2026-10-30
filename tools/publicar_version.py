@@ -19,6 +19,7 @@ def main():
     ap.add_argument("--linux")
     ap.add_argument("--windows")
     ap.add_argument("--appimage")
+    ap.add_argument("--extra", action="append", default=[], help="archivo que solo va a la Release (LEEME, licencias...)")
     ap.add_argument("--canal", choices=["estable", "experimental"], default="estable")
     ap.add_argument("--notas", default="")
     ap.add_argument("--sin-noticia", action="store_true")
@@ -52,6 +53,10 @@ def main():
         archivos[sistema] = {"url": f"https://github.com/{REPO}/releases/download/{etiqueta}/{NOMBRES[sistema]}",
                              "blake2b": huella(dest), "tam": os.path.getsize(dest)}
 
+    for e in a.extra:
+        if not os.path.isfile(e):
+            sys.exit(f"No existe {e}")
+        subidas.append(e)
     if not a.sin_subir:
         subprocess.run([gh(), "release", "create", etiqueta, *subidas, "--repo", REPO, "--title", f"Source 2D {a.nombre}",
                         "--notes", a.notas or f"Source 2D {a.nombre}"] + (["--prerelease"] if a.canal != "estable" else []),
