@@ -1300,6 +1300,7 @@ static void openNewProjectDialog() {
     app.askNew = true;
 }
 
+static void abrirNube();
 static void drawCreateSection() {
     sectionTitle("Crear", 30);
     if (ImGui::SmallButton("Carpeta de proyectos"))
@@ -1309,6 +1310,9 @@ static void drawCreateSection() {
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", prefs().projectsDir.c_str());
     ImGui::SameLine(0, 10);
     if (ImGui::SmallButton("Opciones")) app.showOptions = true;
+    ImGui::SameLine(0, 10);
+    if (ImGui::SmallButton("Tu nube")) abrirNube();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Tus proyectos guardados en el servidor de Source 2D");
     ImGui::Dummy(ImVec2(0, 10));
 
     float avail = ImGui::GetContentRegionAvail().x, y0 = ImGui::GetCursorPosY();
@@ -1461,7 +1465,7 @@ struct SourcePlayUI {
     std::string perfilLogin;
     int perfilTab = 0;
     ImVec2 tabPos[6];
-    bool showConfig = false;
+    bool showConfig = false, verFeedback = false;
     char cfgFrase[160] = "";
     int cfgColor = 0, cfgInsignia = 0, cfgEmpezar = 0;
     ImVec4 cfgColorPropio = ImVec4(0.55f, 0.36f, 0.96f, 1);
@@ -1469,6 +1473,8 @@ struct SourcePlayUI {
     char buscarGente[64] = "";
     bool showDenuncia = false, denunciaCuenta = false;
     std::string denunciaId, denunciaNombre, denunciaTipo = "juego";
+    struct MsgDenuncia { std::string id, de, texto, fecha; bool sel = false; };
+    std::vector<MsgDenuncia> denunciaMsgs;
     int denunciaMotivo = 0;
     char denunciaTexto[800] = "";
 };
@@ -1593,6 +1599,7 @@ static void playInstalled(const std::string &id) {
     playDoc(doc, id);
 }
 
+static void openComentarios(const std::string &tipo, const std::string &id, const std::string &nombre, const std::string &autor);
 static void sourcePlayCard(const tienda::Juego &j, float w) {
     ImGui::PushID(j.id.c_str());
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ui::kPanel);
@@ -1646,7 +1653,10 @@ static void sourcePlayCard(const tienda::Juego &j, float w) {
         }
         ImGui::SameLine();
         bool gusta = tienda::leGusta(j.id);
-        if (homeButton(gusta ? "Te gusta" : "Me gusta", false, 32) && !gusta) tienda::darMeGusta(j);
+        if (homeButton(gusta ? "Te gusta" : "Me gusta", false, 32) && !tienda::darMeGusta(j, !gusta)) g_sp.showCuenta = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip(gusta ? "Quitar el me gusta" : envio::conectado() ? "Dar me gusta" : "Entra con GitHub para dar me gusta");
+        ImGui::SameLine();
+        if (homeButton("Comentarios", false, 32)) openComentarios("juegos", j.id, j.nombre, j.autor);
         ImGui::SameLine();
         if (homeButton("...", false, 32)) ImGui::OpenPopup("##mas");
         if (ImGui::BeginPopup("##mas")) {
@@ -1665,7 +1675,7 @@ static void sourcePlayCard(const tienda::Juego &j, float w) {
             if (ImGui::MenuItem("Borrar de este equipo", nullptr, false, inst)) { tienda::borrar(j.id); notify(j.nombre + " borrado"); }
             if (ImGui::MenuItem("Denunciar...")) {
                 g_sp.showDenuncia = true; g_sp.denunciaCuenta = false; g_sp.denunciaId = j.id; g_sp.denunciaNombre = j.nombre; g_sp.denunciaTipo = "juego";
-                g_sp.denunciaMotivo = 0; g_sp.denunciaTexto[0] = 0;
+                g_sp.denunciaMotivo = 0; g_sp.denunciaTexto[0] = 0; g_sp.denunciaMsgs.clear();
             }
             ImGui::EndPopup();
         }
@@ -1696,6 +1706,7 @@ static bool containsNoCase(const std::string &hay, const std::string &needle) {
     return a.find(b) != std::string::npos;
 }
 
+static void openComentarios(const std::string &tipo, const std::string &id, const std::string &nombre, const std::string &autor);
 static void drawBaneo();
 static void drawSourcePlaySection() {
     sectionTitle("Source Play", 30);
@@ -2303,7 +2314,7 @@ static void drawPerfil() {
     if (mio) { if (ImGui::Button("Ver en GitHub")) app.pendingLink = "https://github.com/" + login; }
     else if (ImGui::Button("Denunciar cuenta...")) {
         g_sp.showDenuncia = true; g_sp.denunciaCuenta = true; g_sp.denunciaId = login; g_sp.denunciaNombre = "@" + login;
-        g_sp.denunciaMotivo = 0; g_sp.denunciaTexto[0] = 0;
+        g_sp.denunciaMotivo = 0; g_sp.denunciaTexto[0] = 0; g_sp.denunciaMsgs.clear();
         ImGui::CloseCurrentPopup();
     }
     ImGui::Dummy(ImVec2(0, 14));
@@ -2505,6 +2516,286 @@ static void drawCuentaMenu() {
     dl->AddText(ImVec2(q.x + av + 10, q.y + (ImGui::GetFrameHeight() - ImGui::GetTextLineHeight()) / 2), ui::kText, txt);
 }
 
+struct ComentariosUI {
+    bool show = false;
+    std::string tipo, id, nombre, autor;
+    char texto[501] = "", feedback[1001] = "";
+};
+static ComentariosUI g_com;
+static void openComentarios(const std::string &tipo, const std::string &id, const std::string &nombre, const std::string &autor) {
+    g_com.show = true; g_com.tipo = tipo; g_com.id = id; g_com.nombre = nombre; g_com.autor = autor;
+    g_com.texto[0] = 0; g_com.feedback[0] = 0;
+    envio::limpiarAccion("comentario"); envio::limpiarAccion("feedback");
+    envio::pedirComentarios(tipo, id);
+}
+static void drawComentarios() {
+    if (g_com.show) { ImGui::OpenPopup("Comentarios"); g_com.show = false; }
+    ImGui::SetNextWindowSize(ImVec2(680, 640), ImGuiCond_Appearing);
+    if (!ui::beginModal("Comentarios", nullptr, 0)) return;
+    envio::pedirComentarios(g_com.tipo, g_com.id);
+    ImGui::PushFont(ui::boldFont(), 22); ImGui::TextUnformatted(g_com.nombre.c_str()); ImGui::PopFont();
+    ImGui::TextDisabled("por"); ImGui::SameLine(0, 4); authorLink(g_com.autor);
+    drawBaneo();
+    ImGui::Dummy(ImVec2(0, 4));
+    const auto *lista = envio::comentarios(g_com.tipo, g_com.id);
+    float pie = ImGui::GetFrameHeightWithSpacing() * 4 + 150;
+    ImGui::BeginChild("##coms", ImVec2(0, -pie));
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    if (!lista) ImGui::TextDisabled("Cargando comentarios...");
+    else if (lista->empty()) ImGui::TextDisabled("Todavía no hay comentarios. ¡Sé la primera persona en comentar!");
+    if (lista) for (size_t i = lista->size(); i-- > 0;) {
+        const envio::Comentario &c = (*lista)[i];
+        ImGui::PushID((int)i);
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        float w = ImGui::GetContentRegionAvail().x - 6;
+        float th = ImGui::CalcTextSize(c.texto.c_str(), nullptr, false, w - 70).y;
+        float h = th + 46;
+        dl->AddRectFilled(p, ImVec2(p.x + w, p.y + h), ui::kPanel2, 12);
+        envio::pedirPerfil(c.autor);
+        drawAvatar(dl, ImVec2(p.x + 10, p.y + 10), 32, c.autor, envio::perfil(c.autor));
+        ImGui::SetCursorScreenPos(ImVec2(p.x + 52, p.y + 8));
+        ImGui::BeginGroup();
+        authorLink(c.autor);
+        ImGui::SameLine(); ImGui::TextDisabled("· %s", fechaBonita(c.fecha.substr(0, 10)).c_str());
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + w - 70);
+        ImGui::TextUnformatted(c.texto.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::EndGroup();
+        if (envio::conectado() && c.autor != envio::usuario()) {
+            ImGui::SetCursorScreenPos(ImVec2(p.x + w - 76, p.y + 6));
+            if (ImGui::SmallButton("Reportar")) {
+                g_sp.showDenuncia = true; g_sp.denunciaCuenta = false; g_sp.denunciaTipo = "comentario";
+                g_sp.denunciaId = c.autor; g_sp.denunciaNombre = "@" + c.autor + " en " + g_com.nombre;
+                g_sp.denunciaMotivo = 0; g_sp.denunciaTexto[0] = 0; g_sp.denunciaMsgs.clear();
+                g_sp.denunciaMsgs.push_back({c.id, c.autor, c.texto, c.fecha, true});
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + h + 8));
+        ImGui::Dummy(ImVec2(0, 0));
+        ImGui::PopID();
+    }
+    ImGui::EndChild();
+    bool puede = envio::conectado() && !envio::yo().baneado;
+    ImGui::SeparatorText("Comentar");
+    if (!envio::conectado()) { if (ui::primaryButton("Entra con GitHub para comentar")) { g_sp.showCuenta = true; ImGui::CloseCurrentPopup(); } }
+    else {
+        ImGui::BeginDisabled(!puede);
+        ImGui::SetNextItemWidth(-130);
+        bool enter = ImGui::InputTextWithHint("##comentar", "Escribe un comentario (todo el mundo lo verá)", g_com.texto, sizeof g_com.texto, ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::SameLine();
+        bool vacio = !g_com.texto[0] || envio::estadoAccion("comentario") == "Publicando...";
+        ImGui::BeginDisabled(vacio);
+        if ((ui::primaryButton("Publicar", ImVec2(120, 0)) || enter) && !vacio) { envio::comentar(g_com.tipo, g_com.id, g_com.texto); g_com.texto[0] = 0; }
+        ImGui::EndDisabled();
+        ImGui::EndDisabled();
+        std::string st = envio::estadoAccion("comentario");
+        if (!st.empty() && st != "Publicando...") ImGui::TextColored(envio::falloAccion("comentario") ? ImVec4(1, 0.55f, 0.5f, 1) : ImVec4(0.6f, 0.9f, 0.7f, 1), "%s", st.c_str());
+    }
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    float w = ImGui::GetContentRegionAvail().x;
+    ImGui::Dummy(ImVec2(0, 6));
+    p = ImGui::GetCursorScreenPos();
+    ImGui::GetWindowDrawList()->AddRectFilled(p, ImVec2(p.x + w, p.y + 92), IM_COL32(0x3B, 0x82, 0xF6, 40), 12);
+    ImGui::SetCursorScreenPos(ImVec2(p.x + 12, p.y + 10));
+    ImGui::BeginGroup();
+    ImGui::PushFont(ui::boldFont(), 0); ImGui::TextUnformatted("Feedback para el creador"); ImGui::PopFont();
+    ImGui::SameLine(); ImGui::TextDisabled("solo lo ve %s", g_com.autor.c_str());
+    if (envio::conectado()) {
+        ImGui::BeginDisabled(!puede || envio::usuario() == g_com.autor);
+        ImGui::SetNextItemWidth(w - 160);
+        ImGui::InputTextWithHint("##feedback", "Qué mejorarías, qué te gustó, un fallo que encontraste...", g_com.feedback, sizeof g_com.feedback);
+        ImGui::SameLine();
+        bool vacio = !g_com.feedback[0] || envio::estadoAccion("feedback") == "Enviando...";
+        ImGui::BeginDisabled(vacio);
+        if (ImGui::Button("Enviar", ImVec2(120, 0)) && !vacio) { envio::darFeedback(g_com.tipo, g_com.id, g_com.feedback); g_com.feedback[0] = 0; }
+        ImGui::EndDisabled();
+        ImGui::EndDisabled();
+        std::string st = envio::estadoAccion("feedback");
+        if (!st.empty()) ImGui::TextColored(envio::falloAccion("feedback") ? ImVec4(1, 0.55f, 0.5f, 1) : ImVec4(0.6f, 0.9f, 0.7f, 1), "%s", st.c_str());
+    } else ImGui::TextDisabled("Entra con GitHub para mandar feedback.");
+    ImGui::EndGroup();
+    ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + 100));
+    if (ImGui::Button("Cerrar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
+}
+static void drawFeedbackRecibido(bool *abrir) {
+    if (*abrir) { ImGui::OpenPopup("Feedback recibido"); *abrir = false; }
+    ImGui::SetNextWindowSize(ImVec2(620, 540), ImGuiCond_Appearing);
+    if (!ui::beginModal("Feedback recibido", nullptr, 0)) return;
+    envio::pedirFeedback();
+    ImGui::TextDisabled("Lo que la gente te mandó en privado sobre tus juegos y paquetes.");
+    ImGui::BeginChild("##fb", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 6));
+    const auto &fb = envio::feedbackRecibido();
+    if (fb.empty()) ImGui::TextDisabled("Todavía no tienes feedback.");
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    for (size_t i = 0; i < fb.size(); i++) {
+        ImGui::PushID((int)i);
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        float w = ImGui::GetContentRegionAvail().x - 6;
+        float h = ImGui::CalcTextSize(fb[i].texto.c_str(), nullptr, false, w - 30).y + 46;
+        dl->AddRectFilled(p, ImVec2(p.x + w, p.y + h), ui::kPanel2, 12);
+        ImGui::SetCursorScreenPos(ImVec2(p.x + 14, p.y + 8));
+        ImGui::BeginGroup();
+        authorLink(fb[i].de);
+        ImGui::SameLine(); ImGui::TextDisabled("sobre %s · %s", fb[i].nombre.c_str(), fechaBonita(fb[i].fecha.substr(0, 10)).c_str());
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + w - 30);
+        ImGui::TextUnformatted(fb[i].texto.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::EndGroup();
+        ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + h + 8));
+        ImGui::Dummy(ImVec2(0, 0));
+        ImGui::PopID();
+    }
+    ImGui::EndChild();
+    if (ImGui::Button("Cerrar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
+}
+
+struct NubeUI {
+    bool showSolicitud = false, showNube = false;
+    int tipo = 0, mb = 100;
+    char motivo[1501] = "";
+    std::string proyecto;
+    std::future<std::string> empaquetando;
+    std::string subiendoNombre;
+};
+static NubeUI g_nube;
+static void openSolicitud(int tipo, int mb, const std::string &proyecto) {
+    g_nube.showSolicitud = true; g_nube.tipo = tipo; g_nube.mb = mb; g_nube.proyecto = proyecto; g_nube.motivo[0] = 0;
+    envio::limpiarAccion("solicitud");
+    envio::pedirSolicitudes();
+}
+static std::string mbTexto(long long b) {
+    char t[32];
+    snprintf(t, sizeof t, b >= 1000000 ? "%.1f MB" : "%.0f KB", b >= 1000000 ? b / 1e6 : b / 1e3);
+    return t;
+}
+static void drawSolicitud() {
+    if (g_nube.showSolicitud) { ImGui::OpenPopup("Pedir permiso"); g_nube.showSolicitud = false; }
+    ImGui::SetNextWindowSize(ImVec2(600, 0), ImGuiCond_Appearing);
+    if (!ui::beginModal("Pedir permiso", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
+    envio::pedirSolicitudes();
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 560);
+    ImGui::RadioButton("Subir un proyecto de más de 100 MB", &g_nube.tipo, 0);
+    ImGui::RadioButton("Espacio para guardar mis proyectos en la nube", &g_nube.tipo, 1);
+    ImGui::TextDisabled("%s", g_nube.tipo == 0 ? "La primera norma de Source Play es que un juego no pase de 100 MB. Si tu proyecto lo necesita, explícalo: el equipo de Source 2D lo mira y te dice que sí o por qué no."
+                                                : "Tus proyectos se guardan en el servidor de Source 2D para abrirlos desde otra PC o no perderlos. El equipo decide cuánto espacio darte (50, 100, 500 MB...) según lo que cuentes.");
+    ImGui::PopTextWrapPos();
+    ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Cuánto necesitas"); ImGui::SameLine(160);
+    ImGui::SetNextItemWidth(160);
+    ImGui::InputInt("MB##mb", &g_nube.mb, 10, 100);
+    g_nube.mb = std::clamp(g_nube.mb, 1, 100000);
+    ImGui::TextUnformatted(g_nube.tipo == 0 ? "¿Por qué lo necesita tu proyecto?" : "¿Para qué lo quieres? Cuéntanos tu proyecto");
+    ImGui::InputTextMultiline("##motivo", g_nube.motivo, sizeof g_nube.motivo, ImVec2(560, 110));
+    bool ocupado = envio::estadoAccion("solicitud") == "Enviando la solicitud...";
+    ImGui::BeginDisabled(ocupado || !g_nube.motivo[0] || !envio::conectado() || envio::yo().baneado);
+    if (ui::primaryButton("Enviar solicitud", ImVec2(170, 0))) envio::solicitar(g_nube.tipo == 0 ? "grande" : "nube", g_nube.mb, g_nube.motivo, g_nube.proyecto);
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (ImGui::Button("Cerrar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
+    std::string st = envio::estadoAccion("solicitud");
+    if (!st.empty()) ImGui::TextColored(envio::falloAccion("solicitud") ? ImVec4(1, 0.55f, 0.5f, 1) : ImVec4(0.6f, 0.9f, 0.7f, 1), "%s", st.c_str());
+    if (!envio::conectado()) ImGui::TextDisabled("Entra con GitHub para pedir permisos.");
+    const auto &ss = envio::solicitudes();
+    if (!ss.empty()) {
+        ImGui::SeparatorText("Tus solicitudes");
+        for (auto &x : ss) {
+            ImVec4 c = x.estado == "aceptada" ? ImVec4(0.5f, 0.9f, 0.6f, 1) : x.estado == "rechazada" ? ImVec4(1, 0.55f, 0.5f, 1) : ImVec4(0.8f, 0.8f, 0.85f, 1);
+            ImGui::TextColored(c, "%s", x.estado == "aceptada" ? "Aceptada" : x.estado == "rechazada" ? "Rechazada" : "Esperando");
+            ImGui::SameLine();
+            ImGui::Text("%s · %d MB · %s", x.tipo == "nube" ? "Nube" : "Más de 100 MB", x.mb, fechaBonita(x.fecha).c_str());
+            if (!x.respuesta.empty()) { ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 560); ImGui::TextDisabled("%s", x.respuesta.c_str()); ImGui::PopTextWrapPos(); }
+        }
+    }
+    ImGui::EndPopup();
+}
+static void subirProyectoANube() {
+    if (!app.hasProject || g_nube.empaquetando.valid()) return;
+    if (!envio::conectado()) { g_sp.showCuenta = true; return; }
+    if (!envio::yo().nubeMb) { openSolicitud(1, 100, app.proj.name()); return; }
+    syncEditors();
+    json d = app.proj.doc;
+    d["engine"] = S2D_VERSION;
+    d["engineNum"] = S2D_VERSION_NUM;
+    g_nube.subiendoNombre = app.proj.name();
+    notify("Preparando " + g_nube.subiendoNombre + " para la nube...");
+    g_nube.empaquetando = std::async(std::launch::async, [d]() { return exporter::sourcePack(d); });
+}
+static void tickNube() {
+    if (g_nube.empaquetando.valid() && g_nube.empaquetando.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+        std::string bytes = g_nube.empaquetando.get();
+        if (bytes.empty()) notify("No se pudo comprimir el proyecto", true);
+        else envio::subirNube(g_nube.subiendoNombre, bytes);
+    }
+    static std::string antes;
+    std::string st = envio::estadoAccion("nube");
+    if (st != antes && (st == "Proyecto guardado en la nube." || envio::falloAccion("nube"))) notify(st, envio::falloAccion("nube"));
+    antes = st;
+}
+static void abrirNube() { g_nube.showNube = true; }
+static void drawNube() {
+    tickNube();
+    if (g_nube.showNube) { ImGui::OpenPopup("Tu nube"); g_nube.showNube = false; envio::pedirNube(); }
+    ImGui::SetNextWindowSize(ImVec2(620, 520), ImGuiCond_Appearing);
+    if (!ui::beginModal("Tu nube", nullptr, 0)) return;
+    envio::pedirNube();
+    if (!envio::conectado()) {
+        ImGui::TextWrapped("Entra con tu cuenta de GitHub para guardar tus proyectos en la nube de Source 2D.");
+        if (ui::primaryButton("Entrar")) { g_sp.showCuenta = true; ImGui::CloseCurrentPopup(); }
+    } else if (!envio::nubeCupo() && envio::nubeLista()) {
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 580);
+        ImGui::TextUnformatted("Todavía no tienes espacio en la nube. Pídelo y cuenta tu proyecto: el equipo de Source 2D te da 50, 100, 500 MB... o te dice por qué no.");
+        ImGui::PopTextWrapPos();
+        if (ui::primaryButton("Pedir espacio")) { ImGui::CloseCurrentPopup(); openSolicitud(1, 100, app.hasProject ? app.proj.name() : ""); }
+    } else {
+        float usado = envio::nubeCupo() ? (float)((double)envio::nubeUsado() / (double)envio::nubeCupo()) : 0;
+        ImGui::Text("Usas %s de %s", mbTexto(envio::nubeUsado()).c_str(), mbTexto(envio::nubeCupo()).c_str());
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        float w = ImGui::GetContentRegionAvail().x;
+        ImGui::Dummy(ImVec2(w, 10));
+        ImDrawList *dl = ImGui::GetWindowDrawList();
+        dl->AddRectFilled(p, ImVec2(p.x + w, p.y + 10), ui::kPanel3, 5);
+        dl->AddRectFilled(p, ImVec2(p.x + w * std::clamp(usado, 0.0f, 1.0f), p.y + 10), usado > 0.9f ? IM_COL32(0xEF, 0x44, 0x44, 255) : ui::kAccent, 5);
+        ImGui::Dummy(ImVec2(0, 4));
+        ImGui::BeginDisabled(!app.hasProject || envio::nubeOcupada() || g_nube.empaquetando.valid() || envio::yo().baneado);
+        if (ui::primaryButton(app.hasProject ? ("Subir " + app.proj.name()).c_str() : "Abre un proyecto para subirlo")) subirProyectoANube();
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Pedir más espacio")) { ImGui::CloseCurrentPopup(); openSolicitud(1, (int)(envio::nubeCupo() / 1000000) * 2, ""); }
+        std::string st = envio::estadoAccion("nube");
+        if (!st.empty()) ImGui::TextColored(envio::falloAccion("nube") ? ImVec4(1, 0.55f, 0.5f, 1) : ImVec4(0.6f, 0.9f, 0.7f, 1), "%s", st.c_str());
+        ImGui::BeginChild("##nube", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 6));
+        if (envio::nube().empty()) ImGui::TextDisabled("Todavía no hay proyectos en tu nube.");
+        for (auto &pr : envio::nube()) {
+            ImGui::PushID(pr.nombre.c_str());
+            ImVec2 q = ImGui::GetCursorScreenPos();
+            float cw = ImGui::GetContentRegionAvail().x - 6;
+            dl = ImGui::GetWindowDrawList();
+            dl->AddRectFilled(q, ImVec2(q.x + cw, q.y + 54), ui::kPanel2, 12);
+            ui::drawIcon(dl, ui::Icon::Folder, ImVec2(q.x + 26, q.y + 27), 20, ui::kSecondary);
+            dl->AddText(ui::boldFont(), ImGui::GetFontSize(), ImVec2(q.x + 50, q.y + 9), ui::kText, pr.nombre.c_str());
+            dl->AddText(ImVec2(q.x + 50, q.y + 30), ui::kDim, (mbTexto(pr.tam) + " · " + fechaBonita(pr.fecha)).c_str());
+            ImGui::SetCursorScreenPos(ImVec2(q.x + cw - 196, q.y + (54 - ImGui::GetFrameHeight()) / 2));
+            ImGui::BeginDisabled(envio::nubeOcupada());
+            if (ImGui::Button("Abrir", ImVec2(90, 0))) {
+                std::string dest = projectsDir() + "/" + safeFileName(pr.nombre) + " (nube).source2d";
+                envio::bajarNube(pr.nombre, dest, [dest](bool ok) { if (ok) openProject(dest); });
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Borrar", ImVec2(90, 0))) envio::borrarNube(pr.nombre);
+            ImGui::EndDisabled();
+            ImGui::SetCursorScreenPos(ImVec2(q.x, q.y + 62));
+            ImGui::Dummy(ImVec2(0, 0));
+            ImGui::PopID();
+        }
+        ImGui::EndChild();
+    }
+    if (ImGui::Button("Cerrar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
+}
+
 static void drawDenuncia() {
     static const char *const motivosJuego[] = {"Copia el trabajo de otra persona", "Contenido inapropiado", "Hace cosas raras en mi PC",
                                                "No funciona o engaña", "Otro motivo"};
@@ -2512,13 +2803,16 @@ static void drawDenuncia() {
                                                 "Contenido inapropiado", "Otro motivo"};
     static const char *const motivosPaquete[] = {"Copia el trabajo de otra persona", "Contenido inapropiado", "La licencia no es verdad",
                                                  "No funciona o está vacío", "Otro motivo"};
-    bool paquete = !g_sp.denunciaCuenta && g_sp.denunciaTipo != "juego";
+    static const char *const motivosChat[] = {"Insultos o acoso", "Contenido inapropiado", "Spam", "Amenazas", "Otro motivo"};
+    bool charla = !g_sp.denunciaCuenta && (g_sp.denunciaTipo == "comentario" || g_sp.denunciaTipo == "chat");
+    bool paquete = !g_sp.denunciaCuenta && !charla && g_sp.denunciaTipo != "juego";
     if (g_sp.showDenuncia) { ImGui::OpenPopup("Denunciar"); g_sp.showDenuncia = false; envio::limpiarDenuncia(); }
     ImGui::SetNextWindowSize(ImVec2(560, 0), ImGuiCond_Appearing);
     if (!ui::beginModal("Denunciar", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
-    const char *const *motivos = g_sp.denunciaCuenta ? motivosCuenta : paquete ? motivosPaquete : motivosJuego;
+    const char *const *motivos = g_sp.denunciaCuenta ? motivosCuenta : charla ? motivosChat : paquete ? motivosPaquete : motivosJuego;
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 520);
-    ImGui::Text("Denunciar %s %s", g_sp.denunciaCuenta ? "la cuenta" : paquete ? "el paquete" : "el juego", g_sp.denunciaNombre.c_str());
+    if (charla) ImGui::Text("Reportar %s %s", g_sp.denunciaTipo == "chat" ? "el chat de" : "el comentario de", g_sp.denunciaNombre.c_str());
+    else ImGui::Text("Denunciar %s %s", g_sp.denunciaCuenta ? "la cuenta" : paquete ? "el paquete" : "el juego", g_sp.denunciaNombre.c_str());
     ImGui::TextDisabled("La denuncia le llega al equipo de Source 2D, que la revisa. La otra persona no ve quién la hizo desde el editor.");
     ImGui::PopTextWrapPos();
     if (!envio::conectado()) {
@@ -2526,11 +2820,40 @@ static void drawDenuncia() {
     } else {
         ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Motivo"); ImGui::SameLine(90);
         ImGui::SetNextItemWidth(330); ImGui::Combo("##motivo", &g_sp.denunciaMotivo, motivos, 5);
+        if (!g_sp.denunciaMsgs.empty()) {
+            ImGui::TextUnformatted(g_sp.denunciaTipo == "chat" ? "Elige los mensajes que reportas" : "Comentario que reportas");
+            ImGui::BeginChild("##dmsgs", ImVec2(520, std::min(200.0f, 34.0f * g_sp.denunciaMsgs.size() + 10)), ImGuiChildFlags_Borders);
+            for (size_t i = 0; i < g_sp.denunciaMsgs.size(); i++) {
+                auto &m = g_sp.denunciaMsgs[i];
+                ImGui::PushID((int)i);
+                if (g_sp.denunciaTipo == "chat") ImGui::Checkbox("##sel", &m.sel);
+                else m.sel = true;
+                ImGui::SameLine();
+                ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kSecondary), "%s:", m.de.c_str());
+                ImGui::SameLine();
+                ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 380);
+                ImGui::TextUnformatted(m.texto.c_str());
+                ImGui::PopTextWrapPos();
+                ImGui::PopID();
+            }
+            ImGui::EndChild();
+            ImGui::TextDisabled("Los mensajes no se pueden borrar: el equipo de Source 2D ve exactamente lo que se escribió.");
+        }
         ImGui::TextUnformatted("Cuéntanos qué pasa");
         ImGui::InputTextMultiline("##dtexto", g_sp.denunciaTexto, sizeof g_sp.denunciaTexto, ImVec2(520, 90));
         bool busy = envio::estadoDenuncia() == "Enviando la denuncia...";
-        ImGui::BeginDisabled(busy);
-        if (ui::primaryButton("Enviar denuncia", ImVec2(160, 0))) {
+        bool algunoSel = g_sp.denunciaMsgs.empty();
+        for (auto &m : g_sp.denunciaMsgs) algunoSel = algunoSel || m.sel;
+        ImGui::BeginDisabled(busy || !algunoSel);
+        if (charla && ui::primaryButton("Enviar reporte", ImVec2(160, 0))) {
+            envio::Denuncia d;
+            d.tipo = g_sp.denunciaTipo; d.objetivo = g_sp.denunciaId;
+            d.titulo = std::string(g_sp.denunciaTipo == "chat" ? "Reporte: chat" : "Reporte: comentario") + " de " + g_sp.denunciaNombre;
+            d.cuerpo = std::string("**Motivo:** ") + motivos[std::clamp(g_sp.denunciaMotivo, 0, 4)] + "\n\n" + g_sp.denunciaTexto;
+            for (auto &m : g_sp.denunciaMsgs) if (m.sel) d.mensajes.push_back({{"id", m.id}, {"de", m.de}, {"texto", m.texto}, {"fecha", m.fecha}});
+            envio::denunciar(d);
+        }
+        if (!charla && ui::primaryButton("Enviar denuncia", ImVec2(160, 0))) {
             std::string titulo = g_sp.denunciaCuenta ? "Denuncia: cuenta @" + g_sp.denunciaId :
                                  paquete ? "Denuncia: paquete " + g_sp.denunciaNombre + " (" + g_sp.denunciaTipo + ", " + g_sp.denunciaId + ")" :
                                            "Denuncia: juego " + g_sp.denunciaNombre + " (" + g_sp.denunciaId + ")";
@@ -2571,7 +2894,7 @@ static void drawCuentaYComunidad() {
             ImGui::TextDisabled("@%s%s", yo.c_str(), envio::yo().unido.empty() ? "" : (" · en Source 2D desde el " + fechaBonita(envio::yo().unido)).c_str());
             ImGui::EndGroup();
             ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + 96));
-            float bw = (w - 16) / 3;
+            float bw = (w - 24) / 4;
             auto acceso = [&](const char *t, const char *sub, ui::Icon ic) {
                 ImVec2 q = ImGui::GetCursorScreenPos();
                 bool c = ImGui::InvisibleButton(t, ImVec2(bw, 64));
@@ -2587,6 +2910,8 @@ static void drawCuentaYComunidad() {
             if (acceso("Notificaciones", n.c_str(), ui::Icon::Bell)) { ImGui::CloseCurrentPopup(); g_noti.showModal = true; }
             ImGui::SameLine(0, 8);
             if (acceso("Configurar", "Perfil y destacados", ui::Icon::Settings)) { ImGui::CloseCurrentPopup(); openConfigPerfil(); }
+            ImGui::SameLine(0, 8);
+            if (acceso("Feedback", "Lo que te mandan", ui::Icon::Book)) { ImGui::CloseCurrentPopup(); g_sp.verFeedback = true; }
             ImGui::Dummy(ImVec2(0, 6));
         }
         if (ImGui::Button("Cerrar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
@@ -2617,6 +2942,8 @@ static void askLockedProject(const std::string &file) {
     fs::path fp = fs::u8path(file);
     g_sp.fuenteNombre = fp.stem().u8string() == "original" && fp.has_parent_path() ? fp.parent_path().filename().u8string() : fp.stem().u8string();
 }
+static std::string mbTexto(long long b);
+static void openSolicitud(int tipo, int mb, const std::string &proyecto);
 static void drawSourcePlayDialogs() {
     if (g_sp.armando.valid() && g_sp.armando.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
         std::string err = g_sp.armando.get();
@@ -2629,7 +2956,16 @@ static void drawSourcePlayDialogs() {
             for (auto &kv : g_sp.paquete.archivos) { std::ofstream o(fs::u8path(d + "/" + kv.first), std::ios::binary); ok = ok && (o << kv.second); }
             g_sp.msg = ok ? "Guardado en " + d : "No se pudo escribir en " + d;
             g_sp.msgErr = !ok;
-        } else envio::enviar(g_sp.paquete);
+        } else {
+            long long tam = 0;
+            for (auto &kv : g_sp.paquete.archivos) tam += (long long)kv.second.size();
+            long long max = std::max(100000000LL, (long long)envio::yo().grandeMb * 1000000LL);
+            if (tam > max) {
+                g_sp.msg = "Tu juego pesa " + mbTexto(tam) + " y la norma es que no pase de " + mbTexto(max) + ". Pide permiso para subirlo.";
+                g_sp.msgErr = true;
+                openSolicitud(0, (int)(tam / 1000000) + 10, g_sp.paquete.nombre);
+            } else envio::enviar(g_sp.paquete);
+        }
     }
     if (g_sp.showPublish) { ImGui::OpenPopup("Publicar en Source Play"); g_sp.showPublish = false; }
     ImGui::SetNextWindowSize(ImVec2(620, 0), ImGuiCond_Appearing);
@@ -3235,7 +3571,8 @@ static void storeCard(store::Tipo t, const store::Paquete &p, float w) {
     }
     ImGui::SameLine();
     bool gusta = store::leGusta(t, p.id);
-    if (homeButton(gusta ? "Te gusta" : "Me gusta", false, 30) && !gusta) store::darMeGusta(t, p);
+    if (homeButton(gusta ? "Te gusta" : "Me gusta", false, 30) && !store::darMeGusta(t, p, !gusta)) g_sp.showCuenta = true;
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip(gusta ? "Quitar el me gusta" : envio::conectado() ? "Dar me gusta" : "Entra con GitHub para dar me gusta");
     ImGui::SameLine();
     if (homeButton("...", false, 30)) ImGui::OpenPopup("##pkmas");
     if (ImGui::BeginPopup("##pkmas")) {
@@ -3245,11 +3582,12 @@ static void storeCard(store::Tipo t, const store::Paquete &p, float w) {
             if (store::leer(t, p.id, pk, err)) notify(std::to_string(storeToCreations(t, pk)) + " guardado(s) en " + (t == store::Sprites ? "Source Sprite" : "Source Sound"));
             else notify(err, true);
         }
+        if (ImGui::MenuItem("Comentarios y feedback")) openComentarios(t == store::Sprites ? "sprites" : "sonidos", p.id, p.nombre, p.autor);
         if (ImGui::MenuItem("Borrar de este equipo", nullptr, false, inst)) store::borrar(t, p.id);
         if (ImGui::MenuItem("Denunciar...")) {
             g_sp.showDenuncia = true; g_sp.denunciaCuenta = false; g_sp.denunciaId = p.id;
             g_sp.denunciaNombre = p.nombre; g_sp.denunciaTipo = t == store::Sprites ? "sprites" : "sonidos";
-            g_sp.denunciaMotivo = 0; g_sp.denunciaTexto[0] = 0;
+            g_sp.denunciaMotivo = 0; g_sp.denunciaTexto[0] = 0; g_sp.denunciaMsgs.clear();
         }
         ImGui::EndPopup();
     }
@@ -4462,6 +4800,8 @@ static void drawMenus() {
         if (ImGui::MenuItem("Guardar", "Ctrl+S", false, p)) save();
         if (ImGui::MenuItem("Guardar como...", "Ctrl+Mayús+S", false, p)) saveAs();
         if (ImGui::MenuItem("Versiones del proyecto...", nullptr, false, p && !app.proj.path.empty())) app.showVersions = true;
+        if (ImGui::MenuItem("Guardar en la nube", nullptr, false, p)) subirProyectoANube();
+        if (ImGui::MenuItem("Tu nube...")) g_nube.showNube = true;
         ImGui::Separator();
         if (ImGui::MenuItem("Opciones...")) app.showOptions = true;
         ImGui::Separator();
@@ -4867,6 +5207,10 @@ static void collabModeHelp(int mode, bool hosting) {
     ImGui::PopTextWrapPos();
 }
 
+static std::string nombreColab() {
+    std::string n = prefs().name.empty() ? collab::defaultName() : prefs().name;
+    return envio::conectado() ? n + " (@" + envio::usuario() + ")" : n;
+}
 static void drawSessionChat() {
     static char buf[320];
     g_chatVisible = true;
@@ -4894,6 +5238,25 @@ static void drawSessionChat() {
         buf[0] = 0;
         ImGui::SetKeyboardFocusHere(-1);
     }
+    bool hayAjenos = false;
+    for (auto &m : msgs) if (m.name != nombreColab()) hayAjenos = true;
+    ImGui::BeginDisabled(!hayAjenos);
+    if (ImGui::SmallButton("Reportar chat...")) {
+        g_sp.showDenuncia = true; g_sp.denunciaCuenta = false; g_sp.denunciaTipo = "chat";
+        g_sp.denunciaMotivo = 0; g_sp.denunciaTexto[0] = 0; g_sp.denunciaMsgs.clear();
+        std::string quien;
+        for (auto &m : msgs) {
+            if (m.name == nombreColab()) continue;
+            if (quien.empty()) quien = m.name;
+            char f[32]; snprintf(f, sizeof f, "%.0f", m.t);
+            g_sp.denunciaMsgs.push_back({std::to_string(m.id), m.name, m.text, f, false});
+        }
+        size_t a = quien.find("(@"), b = quien.rfind(')');
+        g_sp.denunciaId = a != std::string::npos && b != std::string::npos && b > a ? quien.substr(a + 2, b - a - 2) : quien;
+        g_sp.denunciaNombre = "la sesión de Trabajar juntos";
+    }
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("Elige los mensajes y el motivo. Llega al equipo de Source 2D, que puede banear la cuenta.");
 }
 
 static uint32_t miColorColab() { return prefs().color == 8 ? (prefs().colorPropio | 0xFF000000u) : collab::colorFor(prefs().color); }
@@ -4903,6 +5266,12 @@ static void drawCollabDialog() {
     if (!ui::beginModal("Trabajar juntos", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) { collab::discover(false); return; }
     collab::Role role = collab::role();
     if (app.collabMode < 0 || app.collabMode >= kCollabModeCount) app.collabMode = 0;
+    if (envio::yo().baneado && role == collab::Role::None) {
+        drawBaneo();
+        if (ImGui::Button("Cerrar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+        return;
+    }
     auto peerList = [] {
         for (auto &p : collab::peers()) {
             ImVec2 c = ImGui::GetCursorScreenPos();
@@ -4961,7 +5330,7 @@ static void drawCollabDialog() {
                     ImGui::Dummy(ImVec2(0, 6));
                     if (ui::primaryButton("Empezar a compartir", ImVec2(190, 0))) {
                         std::string err;
-                        if (collab::host(app.proj, prefs().name, miColorColab(), err)) { app.collabMsg.clear(); notify("Compartiendo el proyecto. Código: " + collab::code()); }
+                        if (collab::host(app.proj, nombreColab(), miColorColab(), err)) { app.collabMsg.clear(); notify("Compartiendo el proyecto. Código: " + collab::code()); }
                         else { app.collabMsg = "No se pudo compartir: " + err; app.collabMsgErr = true; }
                     }
                 }
@@ -4994,7 +5363,7 @@ static void drawCollabDialog() {
                     std::string addr = app.joinAddr, cd = app.joinCode;
                     guardSwitch([addr, cd] {
                         std::string err;
-                        if (collab::join(addr, cd, prefs().name, miColorColab(), err)) { app.collabMsg.clear(); }
+                        if (collab::join(addr, cd, nombreColab(), miColorColab(), err)) { app.collabMsg.clear(); }
                         else { app.collabMsg = err; app.collabMsgErr = true; app.showCollab = true; }
                     });
                 }
@@ -5066,6 +5435,12 @@ static void drawModals() {
     drawDenuncia();
     drawNotificacionesModal();
     revisarNotificaciones();
+    drawComentarios();
+    drawSolicitud();
+    drawNube();
+    static bool fbAbrir = false;
+    if (g_sp.verFeedback) { fbAbrir = true; g_sp.verFeedback = false; }
+    drawFeedbackRecibido(&fbAbrir);
     if (app.showNewSprite) { ImGui::OpenPopup("Nuevo sprite"); app.showNewSprite = false; }
     if (ui::beginModal("Nuevo sprite", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::InputText("Nombre", app.nsName, sizeof app.nsName);
@@ -5908,6 +6283,37 @@ static void runScriptStep() {
     else if (cmd == "cuenta.configurar") openConfigPerfil();
     else if (cmd == "cuenta.notis") g_noti.showModal = true;
     else if (cmd == "cuenta.tu") g_sp.showCuenta = true;
+    else if (cmd == "comentarios.abrir") {
+        std::string id; in >> id;
+        const tienda::Juego *jj = nullptr;
+        for (auto &j : tienda::juegos()) if (j.id == id) jj = &j;
+        static double desde = 0;
+        if (app.scriptRetry == 0) desde = GetTime();
+        if (!jj && GetTime() - desde < 30) { app.scriptRetry++; app.scriptPos--; return; }
+        app.scriptRetry = 0;
+        if (jj) openComentarios("juegos", jj->id, jj->nombre, jj->autor);
+        else { app.fails++; printf("S2DEDIT FAIL %s -> no esta en el catalogo\n", line.c_str()); }
+    }
+    else if (cmd == "comentarios.publicar") {
+        std::string t; std::getline(in >> std::ws, t);
+        if (app.scriptRetry == 0) envio::comentar(g_com.tipo, g_com.id, t);
+        if (envio::estadoAccion("comentario") == "Publicando..." && app.scriptRetry++ < 100000) { app.scriptPos--; return; }
+        app.scriptRetry = 0;
+        bool ok = !envio::falloAccion("comentario");
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s -> %s\n", ok ? "OK" : "FAIL", line.c_str(), envio::estadoAccion("comentario").c_str());
+    }
+    else if (cmd == "nube.abrir") abrirNube();
+    else if (cmd == "nube.subir") {
+        if (app.scriptRetry == 0) subirProyectoANube();
+        std::string st = envio::estadoAccion("nube");
+        bool fin = !g_nube.empaquetando.valid() && !envio::nubeOcupada() && (st == "Proyecto guardado en la nube." || envio::falloAccion("nube"));
+        if (!fin && app.scriptRetry++ < 100000) { app.scriptPos--; return; }
+        app.scriptRetry = 0;
+        bool ok = st == "Proyecto guardado en la nube.";
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s -> %s\n", ok ? "OK" : "FAIL", line.c_str(), st.c_str());
+    }
     else if (cmd == "trabajar.dialogo") { app.collabTab = 0; app.showCollab = true; }
     else if (cmd == "cuenta.comunidad") { g_sp.showComunidad = true; envio::pedirRegistrados(); }
     else if (cmd == "cuenta.cerrar") ImGui::CloseCurrentPopup();
