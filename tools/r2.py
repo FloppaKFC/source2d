@@ -60,12 +60,28 @@ def pedir(metodo, bucket, ruta="", datos=b"", consulta=None, tipo=None):
         return e.code, e.read()
 
 
+LOCAL = os.environ.get("S2D_R2_LOCAL")
+
+
+def ruta_local(ruta, privado):
+    base = os.path.join(LOCAL, "privado" if privado else "publico")
+    p = os.path.normpath(os.path.join(base, ruta))
+    if not p.startswith(os.path.normpath(base)):
+        sys.exit("Ruta no válida")
+    return p
+
+
 def bucket(privado=False):
     c = config()
     return c["R2_BUCKET_PRIVADO"] if privado else c["R2_BUCKET"]
 
 
 def subir(ruta, datos, privado=False, tipo="application/octet-stream"):
+    if LOCAL:
+        p = ruta_local(ruta, privado)
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        open(p, "wb").write(datos)
+        return
     s, r = pedir("PUT", bucket(privado), ruta, datos, tipo=tipo)
     if s != 200:
         sys.exit(f"No se pudo subir {ruta} a R2 ({s}): {r[:300].decode(errors='replace')}")
@@ -77,6 +93,9 @@ def subir_archivo(ruta, archivo, privado=False, tipo="application/octet-stream")
 
 
 def leer(ruta, privado=False):
+    if LOCAL:
+        p = ruta_local(ruta, privado)
+        return open(p, "rb").read() if os.path.isfile(p) else None
     s, r = pedir("GET", bucket(privado), ruta)
     if s == 404:
         return None
@@ -86,12 +105,26 @@ def leer(ruta, privado=False):
 
 
 def borrar(ruta, privado=False):
+    if LOCAL:
+        p = ruta_local(ruta, privado)
+        if os.path.isfile(p):
+            os.remove(p)
+        return
     s, r = pedir("DELETE", bucket(privado), ruta)
     if s not in (200, 204, 404):
         sys.exit(f"No se pudo borrar {ruta} de R2 ({s})")
 
 
 def listar(prefijo="", privado=False, delimitador=None):
+    if LOCAL:
+        base = ruta_local("", privado)
+        claves = []
+        for raiz, _, archivos in os.walk(base):
+            for f in archivos:
+                k = os.path.relpath(os.path.join(raiz, f), base).replace(os.sep, "/")
+                if k.startswith(prefijo):
+                    claves.append((k, os.path.getsize(os.path.join(raiz, f))))
+        return sorted(claves), []
     claves, carpetas, token = [], [], None
     while True:
         q = {"list-type": "2", "prefix": prefijo}

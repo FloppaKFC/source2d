@@ -1,44 +1,30 @@
 # Controladores de Source 2D
 
-Programas para llevar lo que se publica (se abren desde la terminal, desde cualquier carpeta):
+Todo se lleva desde un solo programa: **`Controladores/admin.sh`** (se abre desde la terminal, desde cualquier carpeta).
 
-| Programa | Para qué |
+| Opción | Para qué |
 |---|---|
-| `Controladores/Noticias.sh` | Noticias de Inicio > Noticias (con encuestas) y publicar versiones nuevas del editor |
-| `Controladores/Source-Play.sh` | Source Play: revisar envíos, aprobarlos o rechazarlos, publicar tus juegos, retirar, denuncias |
-| `Controladores/Source-Sprite.sh` | Source Store de sprites (sprites, tiles y autotiles): envíos, publicar, retirar, destacados, denuncias |
-| `Controladores/Source-Sound.sh` | Source Store de sonidos (música y efectos de Source Sound): lo mismo que Source-Sprite.sh |
-| `Controladores/Source-Cuentas.sh` | Cuentas registradas en Source Play e insignias: verificada (azul), admin (dorada) o creador (morada con estrella) |
+| Envíos | Probar, aprobar o rechazar juegos, sprites y sonidos. Los juegos se abren **aislados** con bubblewrap (sin internet ni acceso a tus archivos); los paquetes se sacan a una carpeta para ver las imágenes y escuchar los sonidos con el editor |
+| Publicar uno mío | Un paquete guardado con "Guardar en una carpeta" |
+| Lo publicado | Lista, retirar y destacados |
+| Denuncias | Juegos, cuentas, comentarios, chats de Trabajar juntos y mensajes privados (comprobados con su llave) |
+| Cuentas | Insignias (verificada, admin, creador, contribuidor) y contribuciones |
+| Baneos | 30 días, para siempre o los días que quieras; se levantan solos |
+| Solicitudes | Proyectos de más de 100 MB y espacio en la nube (50, 100, 500 MB...) |
+| Noticias | Salen en Inicio > Noticias |
 
-Los dos firman con tu clave (piden la contraseña). Con `S2D_SIN_SUBIR=1` delante firman pero no suben nada (para probar).
+Al aprobar, rechazar, banear o dar algo le llega una notificación a la persona.
 
-## Preparar Source Play (una vez)
+## Lo que necesita
 
-1. **Repositorios** (ya creados): `FloppaKFC/source2d-envios` (llegan los envíos y las denuncias) y
-   `FloppaKFC/source2d-juegos` (catálogo y cuentas firmados), clonado en `../source2d-juegos`.
-   **Los juegos van como archivos de Releases** de `source2d-juegos` (una por juego y versión): son gratis, cada archivo
-   puede pesar hasta 2 GB y no cuentan para el tamaño del repositorio, que solo guarda el catálogo (unos KB).
-2. **Normas:** sube `Controladores/NORMAS.md` a la raíz de `source2d-envios` (el editor enlaza a
-   `https://github.com/FloppaKFC/source2d-envios/blob/main/NORMAS.md`).
-3. **Entrar con GitHub desde el editor:** la aplicación *Source 2D* de GitHub ya está puesta (Client ID
-   `Ov23lipmhcQcBtNRYcEX` en `src/editor/envio.cpp`, con Device Flow). Pide los permisos `public_repo` (enviar juegos)
-   y `user:follow` (seguir cuentas).
+- `~/.config/source2d-r2.env` con las claves de R2 (los dos buckets: `source2d` público y `source2d-privado`).
+- La clave de firma (pide la contraseña al firmar catálogos y cuentas).
+- `build/source2d` compilado (`make`) para comprobar juegos y paquetes.
+- `bubblewrap` (`sudo pacman -S bubblewrap`) para jugar los juegos de otros sin riesgo.
 
-## Cuentas
+## Dónde está cada cosa
 
-- **Registrarse:** al entrar con GitHub desde el editor, la cuenta pone una estrella en `FloppaKFC/source2d-juegos`.
-  Esa lista de estrellas es la lista de cuentas de Source Play, y la fecha de la estrella es "se unió".
-- **Seguir** usa el de GitHub, pero el perfil solo cuenta y muestra las cuentas de Source Play.
-- **Denuncias** de juegos y cuentas: llegan como incidencias a `source2d-envios` y se ven en Source-Play.sh > Denuncias
-  (con la insignia de quien denuncia y de la cuenta denunciada).
-- **Destacados:** Source-Play.sh > Destacados. Salen arriba del todo en Source Play; debajo, los favoritos de cada persona.
-- **Insignias:** `cuentas.json` en `source2d-juegos`, firmado con tu clave. Lo cambia `Source-Cuentas.sh`.
-
-## Source Store (sprites y sonidos)
-
-- **Repositorios** (ya creados): `FloppaKFC/source2d-sprites` y `FloppaKFC/source2d-sonidos`, clonados en
-  `../source2d-sprites` y `../source2d-sonidos`. Igual que Source Play: catálogo firmado en el repositorio y los paquetes
-  (`.s2dpaquete`, comprimidos) como archivos de sus Releases.
-- **Envíos:** llegan a `source2d-envios` con el título `Sprites: ...` o `Sonidos: ...`. Se revisan con `Source-Sprite.sh`
-  y `Source-Sound.sh`; "probar" saca el contenido a una carpeta para abrirlo en el editor.
-- En sonidos solo se aceptan creaciones de Source Sound (notas, no audio grabado): el editor rechaza lo demás.
+- **R2 público** (`https://pub-45b3e9e445dc4ba8bc581524cfc68bf0.r2.dev`): catálogos firmados (`juegos/`, `sprites/`, `sonidos/`), archivos publicados, `cuentas.json` firmado, perfiles, comentarios, contadores y `novedades/`.
+- **R2 privado**: envíos, denuncias, baneos, permisos, solicitudes, notificaciones, feedback, mensajes cifrados y la nube de cada cuenta.
+- **Worker** (`tools/worker/source2d-api.js`, en `https://source2d-api.acontrerasvalensia.workers.dev`): lo que hacen los editores con su cuenta de GitHub. Si cambia, se vuelve a pegar en Cloudflare.
+- **GitHub**: solo para entrar y seguir cuentas, y las versiones del editor en Releases de `FloppaKFC/source2d`.

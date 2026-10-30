@@ -545,9 +545,9 @@ int insignia(const std::string &login) {
         auto n = nombres.find(p->insignia);
         if (n != nombres.end() && std::find(ins.begin(), ins.end(), n->second) != ins.end()) return n->second;
     }
-    int mejor = 0;
-    for (int v : ins) if (v != 5 && v > mejor) mejor = v;
-    return mejor ? mejor : ins.front();
+    for (int v : {3, 2, 4, 1, 5})
+        if (std::find(ins.begin(), ins.end(), v) != ins.end()) return v;
+    return ins.front();
 }
 std::vector<std::string> contribuciones(const std::string &login) {
     auto it = g_contribuciones.find(minus(login));

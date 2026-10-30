@@ -84,6 +84,25 @@ ls "$T/wpriv/denuncias/"*.json >/dev/null 2>&1 && echo "denuncia guardada en el 
 [ -s "$T/wr2/cuentas/creador.json" ] && echo "cuenta registrada en R2" || echo "S2DEDIT FAIL registro"
 kill $GHP $WKP $RVP 2>/dev/null || true
 else echo "(sin Node: no se prueban el Worker ni los envios; S2D_NODE elige uno)"; fi
+echo "== admin.py: aprobar un envío, insignias, contribución, baneo y solicitudes (R2 local)"
+A="$T/adm"; EID=mvaaaaaa-0a1b2c3d
+mkdir -p "$A/privado/envios/floppa/$EID"
+cp "$T/paq/abierto/"*/* "$A/privado/envios/floppa/$EID/"
+python3 -c "import json,os,sys; d=sys.argv[1]; json.dump({'id':sys.argv[2],'tipo':'juegos','nombre':'Juego de prueba','autor':'Floppa','fecha':'2026-10-29T10:00:00Z','estado':'pendiente','archivos':{f:os.path.getsize(os.path.join(d,f)) for f in os.listdir(d)}},open(os.path.join(d,'estado.json'),'w'))" "$A/privado/envios/floppa/$EID" $EID
+export S2D_R2_LOCAL="$A" S2D_EDITOR="$ED"
+python3 tools/admin.py envios | grep -q "floppa/$EID" && echo "envío pendiente listado" || echo "S2DEDIT FAIL admin envios"
+python3 tools/admin.py aprobar "floppa/$EID" | grep "Publicado"
+python3 tools/admin.py insignia Floppa verificada | grep -v "firma\|Firmado"
+python3 tools/admin.py contribucion Floppa "Propuso la prueba de admin" | grep -v "firma\|Firmado"
+python3 tools/admin.py banear Floppa 3 "Prueba"
+python3 -c "import json,sys; e=json.load(open(sys.argv[1])); print('envío aprobado' if e['estado']=='aprobado' else 'S2DEDIT FAIL estado '+e['estado'])" "$A/privado/envios/floppa/$EID/estado.json"
+ls "$A/privado/notificaciones/floppa/" | wc -l | grep -q "^4$" && echo "4 notificaciones (aprobado, insignia, contribución, baneo)" || echo "S2DEDIT FAIL notificaciones"
+[ -s "$A/privado/baneos/floppa.json" ] && echo "baneo guardado" || echo "S2DEDIT FAIL baneo"
+python3 tools/admin.py desbanear Floppa
+cp "$A/publico/cuentas.json" "$A/publico/cuentas.json.firma" "$A/publico/juegos/"
+printf 'home.section 1\nwait 20\ntienda.espera\ntienda.expect 1\ntienda.insignia Floppa 4\nquit\n' > "$T/guion_adm.txt"
+XDG_CONFIG_HOME="$T/admcfg" S2D_TIENDA_URL="file://$A/publico/juegos/" S2D_FIRMA_PUBLICA="$PUB" "$ED" --script "$T/guion_adm.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
+unset S2D_R2_LOCAL S2D_EDITOR
 unset S2D_FIRMA_DIR S2D_FIRMA_CONTRASENA
 echo "== extension Steam (se anade y aparecen sus condiciones y acciones; sin Steam el juego sigue)"
 sed "s|PROYECTO|$T/proj.json|" test/editor_steam.txt > "$T/guion_steam.txt"

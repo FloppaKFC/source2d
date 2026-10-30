@@ -26,7 +26,7 @@ const long long kParte = 95000000;
 bool g_pruebas = false, g_apiOn = true;
 std::string g_api = "https://api.github.com", g_web = "https://github.com", g_clientId = kClientId;
 std::string g_token, g_user, g_errCuenta, g_codigo, g_urlCodigo, g_deviceCode, g_estado;
-bool g_entrando = false, g_enviando = false, g_fallo = false;
+bool g_entrando = false, g_enviando = false, g_fallo = false, g_sondeando = false;
 double g_intervalo = 5, g_proximoSondeo = 0, g_caduca = 0, g_yoAt = -1e9;
 bool g_yoPedido = false;
 std::vector<Mio> g_mios;
@@ -209,7 +209,9 @@ void pedirUsuario() {
 void sondearToken() {
     std::string cuerpo = "client_id=" + urlEnc(g_clientId) + "&device_code=" + urlEnc(g_deviceCode) +
                          "&grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code";
+    g_sondeando = true;
     Pet p{"POST", g_web + "/login/oauth/access_token", cuerpo, Tipo::GitHubForm, [](int code, const json &b) {
+        g_sondeando = false;
         if (!g_entrando) return;
         std::string err = str(b, "error");
         if (code == 200 && b.is_object() && b.contains("access_token")) {
@@ -534,9 +536,9 @@ void tick() {
     tickAvatares();
     if (g_activa && sys::finished(g_proc)) terminarPeticion();
     lanzarSiguiente();
-    if (g_entrando && !g_activa && g_cola.empty() && reloj() >= g_proximoSondeo) {
+    if (g_entrando && !g_sondeando && !g_deviceCode.empty() && reloj() >= g_proximoSondeo) {
         if (reloj() > g_caduca) { g_entrando = false; g_codigo.clear(); g_errCuenta = "El código caducó: vuelve a pulsar Entrar."; }
-        else { g_proximoSondeo = reloj() + 1e9; sondearToken(); }
+        else sondearToken();
     }
     if (conectado() && reloj() - g_yoAt > cada(60)) pedirYo();
 }
@@ -547,7 +549,7 @@ void entrar() {
     if (g_entrando) return;
     g_errCuenta.clear();
     if (g_clientId.empty()) { g_errCuenta = "Falta registrar la aplicación de Source 2D en GitHub (pon su Client ID en src/editor/envio.cpp)."; return; }
-    g_entrando = true; g_codigo.clear();
+    g_entrando = true; g_codigo.clear(); g_deviceCode.clear(); g_sondeando = false;
     Pet p{"POST", g_web + "/login/device/code", "client_id=" + urlEnc(g_clientId) + "&scope=user%3Afollow", Tipo::GitHubForm, [](int code, const json &b) {
         if (code != 200 || !b.is_object() || !b.contains("user_code") || !b.contains("device_code")) {
             g_entrando = false;
