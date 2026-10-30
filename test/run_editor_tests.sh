@@ -125,8 +125,12 @@ echo "== exportar (normal y ligera, Linux y Windows; la ligera de un juego peque
 sed "s|SALIDA_NADA|$T/nada|; s|SALIDA_NORMAL|$T/juego_normal|; s|SALIDA_LIGERO|$T/juego_ligero|; s|SALIDA_WIN|$T/juego_ligero.exe|; s|SALIDA_HTML|$T/juego.html|; s|SALIDA_ZIP|$T/juego.zip|; s|SALIDA_CARPETA|$T/Carpeta|" test/editor_export.txt > "$T/guion10.txt"
 "$ED" --script "$T/guion10.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
 [ -e "$T/nada" ] && echo "S2DEDIT FAIL exporto sin proyecto abierto"
-for f in "$T/juego_ligero" "$T/juego_ligero.exe"; do
+for f in "$T/juego_ligero"; do
     n=$(wc -c < "$f"); [ "$n" -le 1048576 ] && echo "$(basename "$f"): $n bytes (<= 1 MB)" || echo "S2DEDIT FAIL $(basename "$f") ocupa $n bytes"
+done
+for f in "$T/juego_ligero.exe"; do
+    n=$(wc -c < "$f")
+    if tail -c 8 "$f" | grep -q S2DPAYLD && [ "$n" -le 2621440 ]; then echo "$(basename "$f"): $n bytes, sin lanzador"; else echo "S2DEDIT FAIL $(basename "$f") ($n bytes) lleva lanzador o es demasiado grande"; fi
 done
 grep -q 'id="s2d-proyecto"' "$T/juego.html" && echo "juego.html con el proyecto dentro" || echo "S2DEDIT FAIL juego.html"
 unzip -tq "$T/juego.zip" >/dev/null && unzip -l "$T/juego.zip" | grep -q " index.html" && echo "juego.zip con index.html" || echo "S2DEDIT FAIL juego.zip"

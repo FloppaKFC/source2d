@@ -247,8 +247,8 @@ bool sourceUnpack(const std::string &b, json &doc, std::string &err) {
 
 unsigned long playerSize(const std::string &os) { return binFor(os, "full").raw; }
 
-bool unpackPlayer(const std::string &os, std::vector<unsigned char> &out) {
-    Bin b = binFor(os, "full");
+bool unpackPlayer(const std::string &os, std::vector<unsigned char> &out, const char *what) {
+    Bin b = binFor(os, what);
     if (!b.len) return false;
     out.resize(b.raw);
     if (lz_decode(out.data(), b.raw, b.data, b.len, (unsigned)(b.props & 255)) != 0) { out.clear(); return false; }
@@ -330,18 +330,20 @@ bool exportGame(const json &doc, const std::string &out, const std::string &os, 
     if (!pk.soft.empty() || !pk.hard.empty()) { pj += '\0'; pj += pk.soft; }
     FILE *f = nullptr;
     bool ok = false;
-    if (!lite) {
+    std::string why;
+    bool liteDirect = lite && win;
+    bool liteFull = lite && (needsFull(doc, why) || !binFor(os, "lite").len);
+    if (!lite || liteDirect) {
         std::vector<unsigned char> pl;
-        if (!unpackPlayer(os, pl)) { err = "No se pudo preparar el motor"; return false; }
+        if (!unpackPlayer(os, pl, liteDirect && !liteFull ? "lite" : "full")) { err = "No se pudo preparar el motor"; return false; }
         unsigned char tr[16];
         wr64(tr, pj.size() + pk.hard.size()); memcpy(tr + 8, "S2DPAYLD", 8);
         f = fopen(out.c_str(), "wb");
         ok = f && fwrite(pl.data(), 1, pl.size(), f) == pl.size() && fwrite(pj.data(), 1, pj.size(), f) == pj.size() &&
              fwrite(pk.hard.data(), 1, pk.hard.size(), f) == pk.hard.size() && fwrite(tr, 1, 16, f) == 16;
-        info = "motor completo";
+        info = !liteDirect ? "motor completo" : liteFull ? "motor completo, porque el juego usa " + (why.empty() ? std::string("lo que el ligero no tiene") : why) : "motor ligero";
     } else {
-        std::string why;
-        bool full = needsFull(doc, why) || !binFor(os, "lite").len;
+        bool full = liteFull;
         Bin stub = binFor(os, "stub"), pl = binFor(os, full ? "full" : "lite");
         bool lz = false;
         std::vector<unsigned char> z = pack(pj.data(), pj.size(), lz);

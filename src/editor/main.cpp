@@ -3593,7 +3593,7 @@ static void drawStartDialogs() {
         }
         ImGui::SeparatorText("Tipo");
         static const char *kinds[][2] = {
-            {"Ligera", "Motor y juego comprimidos sin perder calidad: ocupa muy poco (un juego pequeño, ~600 KB)."},
+            {"Ligera", "Motor y juego comprimidos sin perder calidad: ocupa muy poco (un juego pequeño, ~600 KB). En Windows va sin comprimir, con el motor ligero (~1,7 MB), para que los antivirus no lo bloqueen."},
             {"Pesada", "Sin comprimir: ocupa más, pero abre al instante."},
             {"Optimizada", "Ligera y además quita los sprites, audios y fuentes que el juego no usa."}};
         for (int i = 0; i < 3; i++) {

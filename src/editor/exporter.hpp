@@ -8,7 +8,7 @@ bool available(const std::string &os, bool lite);
 bool needsFull(const json &doc, std::string &why);
 bool exportGame(const json &doc, const std::string &out, const std::string &os, bool lite, std::string &err, std::string &info);
 bool exportFolder(const json &doc, const std::string &dir, const std::string &os, const std::string &name, std::string &err, std::string &info);
-bool unpackPlayer(const std::string &os, std::vector<unsigned char> &out);
+bool unpackPlayer(const std::string &os, std::vector<unsigned char> &out, const char *what = "full");
 unsigned long playerSize(const std::string &os);
 struct Packed { std::string json, soft, hard; };
 Packed packed(const json &doc, bool pixels = true);
