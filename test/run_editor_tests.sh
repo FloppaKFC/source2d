@@ -30,6 +30,8 @@ cp test/proyecto_prueba.source2d.json "$T/snd.json"
 sed "s|PROYECTO|$T/snd.json|; s|SALIDA_WAV|$T/m.wav|; s|SALIDA_MP3|$T/m.mp3|; s|SALIDA_PROY|$T/snd_out.json|; s|CAPTURA_\([A-Z]*\)|$T/snd_\1.png|" test/editor_sound.txt > "$T/guion_snd.txt"
 if ! command -v lame >/dev/null && ! command -v ffmpeg >/dev/null; then sed -i '/SALIDA_MP3\|m.mp3/d' "$T/guion_snd.txt"; fi
 "$ED" --script "$T/guion_snd.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
+echo "== mensajes cifrados de extremo a extremo (X25519 + XChaCha20-Poly1305)"
+XDG_CONFIG_HOME="$T/cifra" "$ED" --prueba-cifrado | grep CIFRADO
 echo "== Noticias con encuesta y Source Play (clave de firma, repositorios y contador de prueba, sin internet)"
 make -s build/firma
 export S2D_FIRMA_DIR="$T/clave" S2D_FIRMA_CONTRASENA=contrasena-de-prueba

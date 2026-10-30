@@ -33,6 +33,7 @@
 #include "envio.hpp"
 #include "cerrado.hpp"
 #include "store.hpp"
+#include "cifra.hpp"
 #include "fonts.hpp"
 #include "project_docs.hpp"
 #include "assets.hpp"
@@ -1473,8 +1474,9 @@ struct SourcePlayUI {
     char buscarGente[64] = "";
     bool showDenuncia = false, denunciaCuenta = false;
     std::string denunciaId, denunciaNombre, denunciaTipo = "juego";
-    struct MsgDenuncia { std::string id, de, texto, fecha; bool sel = false; };
+    struct MsgDenuncia { std::string id, de, texto, fecha; bool sel = false; std::string llave; };
     std::vector<MsgDenuncia> denunciaMsgs;
+    std::string denunciaConv;
     int denunciaMotivo = 0;
     char denunciaTexto[800] = "";
 };
@@ -2132,6 +2134,7 @@ static void personRow(const std::string &login, const std::string &dato = "") {
     ImGui::PopID();
 }
 
+static void openMensajes(const std::string &con, const std::string &conv = "");
 static void drawPerfil() {
     drawConfigPerfil();
     if (g_sp.showPerfil) { ImGui::OpenPopup("Perfil"); g_sp.showPerfil = false; }
@@ -2175,6 +2178,8 @@ static void drawPerfil() {
         if (botonDerecha(sigo ? "Siguiendo" : "Seguir", !sigo, 120)) envio::seguir(login, !sigo);
         if (sigo && ImGui::IsItemHovered()) ImGui::SetTooltip("Dejar de seguir");
         if (pf && pf->sigo < 0) ImGui::EndDisabled();
+        if (botonDerecha("Mensaje", false, 110)) { ImGui::CloseCurrentPopup(); openMensajes(login); }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Solo entre cuentas que se siguen mutuamente. El primer mensaje es una solicitud.");
     } else if (botonDerecha("Entra para seguir", false, 150)) { g_sp.showCuenta = true; ImGui::CloseCurrentPopup(); }
     ImGui::SetCursorScreenPos(ImVec2(w0.x + 28, w0.y + 50 + av + 12));
     ImGui::BeginGroup();
@@ -2408,6 +2413,7 @@ static void irAEnlace(const std::string &enlace) {
     } else if (tipo == "sprites" || tipo == "sonidos") {
         if (!app.hasProject) app.homeSection = tipo == "sprites" ? 4 : 6;
     } else if (tipo == "perfil") openPerfil(id);
+    else if (tipo == "mensajes") openMensajes("", id);
 }
 static void iconoNoti(ImDrawList *dl, ImVec2 c, const std::string &tipo) {
     ImU32 col = tipo == "aprobado" ? IM_COL32(0x22, 0xC5, 0x5E, 255) : tipo == "rechazado" || tipo == "baneo" ? IM_COL32(0xEF, 0x44, 0x44, 255) :
@@ -2489,7 +2495,7 @@ static void drawNotificacionesModal() {
 static void drawCuentaMenu() {
     const char *txt = envio::conectado() ? envio::usuario().c_str() : "Entrar";
     float tw = ImGui::CalcTextSize(txt).x, av = ImGui::GetFrameHeight() - 4;
-    float total = 34 + 10 + av + 8 + tw + 14;
+    float total = 34 + 34 + 10 + av + 8 + tw + 14;
     ImGui::SameLine(ImGui::GetWindowWidth() - total);
     ImDrawList *dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
@@ -2502,6 +2508,17 @@ static void drawCuentaMenu() {
         dl->AddCircleFilled(ImVec2(p.x + 23, p.y + 6), 7.5f, IM_COL32(0xEF, 0x44, 0x44, 255), 16);
         ImVec2 ts = ImGui::CalcTextSize(c.c_str());
         dl->AddText(ui::boldFont(), 11, ImVec2(p.x + 23 - ts.x * 0.35f, p.y + 0.5f), IM_COL32_WHITE, c.c_str());
+    }
+    ImGui::SameLine(0, 4);
+    ImVec2 pm = ImGui::GetCursorScreenPos();
+    if (ImGui::InvisibleButton("##mensajes", ImVec2(30, ImGui::GetFrameHeight()))) openMensajes("");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Mensajes");
+    {
+        ImU32 mc = ImGui::IsItemHovered() ? ui::kText : ui::kText2;
+        float cy = pm.y + ImGui::GetFrameHeight() / 2;
+        dl->AddRect(ImVec2(pm.x + 7, cy - 6), ImVec2(pm.x + 23, cy + 6), mc, 2.5f, 0, 1.6f);
+        dl->AddLine(ImVec2(pm.x + 8, cy - 5), ImVec2(pm.x + 15, cy + 1), mc, 1.6f);
+        dl->AddLine(ImVec2(pm.x + 22, cy - 5), ImVec2(pm.x + 15, cy + 1), mc, 1.6f);
     }
     ImGui::SameLine(0, 10);
     ImVec2 q = ImGui::GetCursorScreenPos();
@@ -2796,6 +2813,185 @@ static void drawNube() {
     ImGui::EndPopup();
 }
 
+struct MensajesUI {
+    bool show = false;
+    std::string conv, con;
+    char texto[2001] = "";
+    std::map<std::string, std::pair<std::string, std::string>> claros;
+    size_t ultimos = 0;
+};
+static MensajesUI g_msg;
+static std::string convDe(const std::string &a, const std::string &b) {
+    std::string x = a, y = b;
+    for (auto &c : x) c = (char)tolower((unsigned char)c);
+    for (auto &c : y) c = (char)tolower((unsigned char)c);
+    return x < y ? x + "__" + y : y + "__" + x;
+}
+static void openMensajes(const std::string &con, const std::string &conv) {
+    if (!envio::conectado()) { g_sp.showCuenta = true; return; }
+    g_msg.show = true;
+    g_msg.con = con;
+    g_msg.conv = !conv.empty() ? conv : con.empty() ? "" : convDe(envio::usuario(), con);
+    if (g_msg.con.empty() && !g_msg.conv.empty()) {
+        size_t s = g_msg.conv.find("__");
+        std::string a = g_msg.conv.substr(0, s), b = g_msg.conv.substr(s + 2), yo = envio::usuario();
+        for (auto &c : yo) c = (char)tolower((unsigned char)c);
+        g_msg.con = a == yo ? b : a;
+        for (auto &cv : envio::bandeja()) if (cv.id == g_msg.conv) g_msg.con = cv.con;
+    }
+    g_msg.texto[0] = 0;
+    envio::limpiarAccion("mensaje");
+    envio::pedirBandeja();
+    if (!g_msg.conv.empty()) { envio::pedirConversacion(g_msg.conv); envio::pedirPerfil(g_msg.con); }
+}
+static const std::pair<std::string, std::string> *textoClaro(const envio::Mensaje &m, const std::string &con) {
+    auto it = g_msg.claros.find(m.id);
+    if (it != g_msg.claros.end()) return &it->second;
+    const envio::Perfil *pf = envio::perfil(con);
+    if (!pf || !pf->spCargado) return nullptr;
+    std::string t, ll;
+    if (!cifra::descifrar(envio::usuario(), pf->clavePublica, m.cifrado, t, ll)) t = "\x01";
+    return &(g_msg.claros[m.id] = {t, ll});
+}
+static void drawMensajes() {
+    if (g_msg.show) { ImGui::OpenPopup("Mensajes"); g_msg.show = false; }
+    ImGui::SetNextWindowSize(ImVec2(880, 620), ImGuiCond_Appearing);
+    if (!ui::beginModal("Mensajes", nullptr, 0)) return;
+    envio::pedirBandeja();
+    drawBaneo();
+    float alto = ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing() - 6;
+    ImGui::BeginChild("##convs", ImVec2(250, alto), ImGuiChildFlags_Borders);
+    const auto &bj = envio::bandeja();
+    if (bj.empty()) { ImGui::PushTextWrapPos(230); ImGui::TextDisabled("Todavía no tienes conversaciones. Escribe desde el perfil de una cuenta que te siga y a la que sigas."); ImGui::PopTextWrapPos(); }
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    for (auto &cv : bj) {
+        ImGui::PushID(cv.id.c_str());
+        envio::pedirPerfil(cv.con);
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        float w = ImGui::GetContentRegionAvail().x;
+        if (ImGui::InvisibleButton("##c", ImVec2(w, 52))) { g_msg.conv = cv.id; g_msg.con = cv.con; envio::pedirConversacion(cv.id); }
+        bool sel = g_msg.conv == cv.id;
+        if (sel || ImGui::IsItemHovered()) dl->AddRectFilled(p, ImVec2(p.x + w, p.y + 52), sel ? ui::kPanel3 : ui::kHover, 10);
+        drawAvatar(dl, ImVec2(p.x + 8, p.y + 8), 36, cv.con, envio::perfil(cv.con));
+        dl->AddText(ui::boldFont(), ImGui::GetFontSize(), ImVec2(p.x + 52, p.y + 9), ui::kText, cv.con.c_str());
+        std::string sub = cv.estado == "solicitud" ? (cv.solicitante == envio::usuario() ? "Esperando respuesta" : "Quiere hablar contigo") : cv.estado == "bloqueada" ? "Bloqueada" : cv.aviso ? "Aviso del equipo" : fechaBonita(cv.ultimo.substr(0, 10));
+        dl->AddText(ImVec2(p.x + 52, p.y + 29), cv.estado == "solicitud" && cv.solicitante != envio::usuario() ? ui::kAccent : ui::kDim, sub.c_str());
+        ImGui::PopID();
+    }
+    ImGui::EndChild();
+    ImGui::SameLine();
+    ImGui::BeginChild("##charla", ImVec2(0, alto), ImGuiChildFlags_Borders);
+    if (g_msg.con.empty()) ImGui::TextDisabled("Elige una conversación.");
+    else {
+        envio::pedirPerfil(g_msg.con);
+        envio::pedirConversacion(g_msg.conv);
+        const envio::Perfil *pf = envio::perfil(g_msg.con);
+        const envio::Conversacion *cv = nullptr;
+        for (auto &c : bj) if (c.id == g_msg.conv) cv = &c;
+        ImGui::AlignTextToFramePadding();
+        authorLink(g_msg.con);
+        const auto *ms = envio::mensajes(g_msg.conv);
+        bool ajenos = false;
+        if (ms) for (auto &m : *ms) if (m.de != envio::usuario()) ajenos = true;
+        if (ajenos && envio::conectado()) {
+            ImGui::SameLine(ImGui::GetContentRegionMax().x - 90);
+            if (ImGui::SmallButton("Reportar...")) {
+                g_sp.showDenuncia = true; g_sp.denunciaCuenta = false; g_sp.denunciaTipo = "mensaje";
+                g_sp.denunciaId = g_msg.con; g_sp.denunciaNombre = "@" + g_msg.con; g_sp.denunciaConv = g_msg.conv;
+                g_sp.denunciaMotivo = 0; g_sp.denunciaTexto[0] = 0; g_sp.denunciaMsgs.clear();
+                for (auto &m : *ms) {
+                    if (m.de == envio::usuario()) continue;
+                    const auto *t = textoClaro(m, g_msg.con);
+                    if (t && t->first != "\x01") g_sp.denunciaMsgs.push_back({m.id, m.de, t->first, m.fecha, false, t->second});
+                }
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::Separator();
+        if (cv && cv->estado == "solicitud" && cv->solicitante != envio::usuario()) {
+            ImGui::TextWrapped("%s quiere hablar contigo. Si aceptas, podréis escribiros. Si bloqueas, no podrá escribirte más.", g_msg.con.c_str());
+            if (ui::primaryButton("Aceptar")) envio::responderSolicitud(g_msg.conv, true);
+            ImGui::SameLine();
+            if (ImGui::Button("Bloquear")) envio::responderSolicitud(g_msg.conv, false);
+            ImGui::Separator();
+        }
+        float pie = ImGui::GetFrameHeightWithSpacing() + 26;
+        ImGui::BeginChild("##burbujas", ImVec2(0, -pie));
+        dl = ImGui::GetWindowDrawList();
+        if (!ms) ImGui::TextDisabled("%s", cv ? "Cargando..." : "Todavía no os habéis escrito.");
+        else for (auto &m : *ms) {
+            bool mio = m.de == envio::usuario();
+            const auto *t = textoClaro(m, g_msg.con);
+            std::string txt = !t ? "..." : t->first == "\x01" ? (mio ? "(cifrado en otro equipo)" : "No se puede leer en este equipo") : t->first;
+            float w = ImGui::GetContentRegionAvail().x, maxw = w * 0.7f;
+            ImVec2 ts = ImGui::CalcTextSize(txt.c_str(), nullptr, false, maxw - 24);
+            float bw = ts.x + 24, bh = ts.y + 30;
+            ImVec2 p = ImGui::GetCursorScreenPos();
+            float x = mio ? p.x + w - bw - 4 : p.x + 4;
+            dl->AddRectFilled(ImVec2(x, p.y), ImVec2(x + bw, p.y + bh), mio ? ui::kAccent : ui::kPanel3, 14);
+            dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(x + 12, p.y + 8), mio ? IM_COL32_WHITE : ui::kText, txt.c_str(), nullptr, maxw - 24);
+            std::string f;
+            if (m.fecha.size() >= 19) {
+                tm u = {};
+                u.tm_year = atoi(m.fecha.c_str()) - 1900; u.tm_mon = atoi(m.fecha.c_str() + 5) - 1; u.tm_mday = atoi(m.fecha.c_str() + 8);
+                u.tm_hour = atoi(m.fecha.c_str() + 11); u.tm_min = atoi(m.fecha.c_str() + 14); u.tm_sec = atoi(m.fecha.c_str() + 17);
+#ifdef _WIN32
+                time_t tt = _mkgmtime(&u);
+#else
+                time_t tt = timegm(&u);
+#endif
+                tm l; sys::localTime(tt, l);
+                char hh[16]; strftime(hh, sizeof hh, "%H:%M", &l);
+                f = hh;
+            }
+            dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.8f, ImVec2(x + 12, p.y + bh - 16), mio ? IM_COL32(255, 255, 255, 170) : ui::kDim, f.c_str());
+            ImGui::Dummy(ImVec2(w, bh + 6));
+        }
+        if (ms && ms->size() != g_msg.ultimos) { ImGui::SetScrollHereY(1.0f); g_msg.ultimos = ms->size(); }
+        ImGui::EndChild();
+        bool sinClave = pf && pf->spCargado && pf->clavePublica.empty();
+        bool bloqueada = cv && cv->estado == "bloqueada";
+        bool esperando = cv && cv->estado == "solicitud" && cv->solicitante == envio::usuario();
+        ImGui::BeginDisabled(sinClave || bloqueada || esperando || envio::yo().baneado || !pf || !pf->spCargado);
+        ImGui::SetNextItemWidth(-110);
+        bool enter = ImGui::InputTextWithHint("##msg", "Escribe un mensaje (cifrado de extremo a extremo)", g_msg.texto, sizeof g_msg.texto, ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::SameLine();
+        bool vacio = !g_msg.texto[0] || envio::estadoAccion("mensaje") == "Enviando...";
+        if ((ui::primaryButton("Enviar", ImVec2(100, 0)) || enter) && !vacio) {
+            std::string ll, c = cifra::cifrar(envio::usuario(), pf->clavePublica, g_msg.texto, ll);
+            if (c.empty()) notify("No se pudo cifrar el mensaje", true);
+            else envio::enviarMensaje(g_msg.con, c);
+            g_msg.texto[0] = 0;
+            ImGui::SetKeyboardFocusHere(-1);
+        }
+        ImGui::EndDisabled();
+        std::string st = envio::estadoAccion("mensaje");
+        if (sinClave) ImGui::TextDisabled("Esta cuenta todavía no puede recibir mensajes: tiene que abrir Source 2D con esta versión.");
+        else if (bloqueada) ImGui::TextDisabled("Esta conversación está bloqueada.");
+        else if (esperando) ImGui::TextDisabled("Esperando a que acepte tu solicitud. Hasta entonces no puedes mandar más.");
+        else if (!st.empty() && st != "Enviando...") ImGui::TextColored(envio::falloAccion("mensaje") ? ImVec4(1, 0.55f, 0.5f, 1) : ImVec4(0.6f, 0.9f, 0.7f, 1), "%s", st.c_str());
+        else ImGui::TextDisabled("Solo tú y %s podéis leer estos mensajes. No se pueden borrar.", g_msg.con.c_str());
+    }
+    ImGui::EndChild();
+    if (ImGui::Button("Cerrar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
+}
+static void publicarClave() {
+    static double at = -1e9;
+    if (!envio::conectado() || envio::yo().baneado || GetTime() - at < 2) return;
+    at = GetTime();
+    const envio::Perfil *pf = envio::perfil(envio::usuario());
+    if (!pf || !pf->spCargado) return;
+    std::string mia = cifra::publica64(envio::usuario());
+    if (mia.empty() || pf->clavePublica == mia || envio::estadoAccion("perfil") == "Guardando...") return;
+    json campos = {{"frase", pf->frase}, {"empezar", pf->empezar}, {"insignia", pf->insignia}, {"clavePublica", mia}};
+    if (!pf->color.empty()) campos["color"] = pf->color;
+    json d = json::object();
+    for (auto &[k, v] : pf->destacados) d[k] = v;
+    campos["destacados"] = d;
+    envio::guardarPerfil(campos);
+}
+
 static void drawDenuncia() {
     static const char *const motivosJuego[] = {"Copia el trabajo de otra persona", "Contenido inapropiado", "Hace cosas raras en mi PC",
                                                "No funciona o engaña", "Otro motivo"};
@@ -2804,14 +3000,14 @@ static void drawDenuncia() {
     static const char *const motivosPaquete[] = {"Copia el trabajo de otra persona", "Contenido inapropiado", "La licencia no es verdad",
                                                  "No funciona o está vacío", "Otro motivo"};
     static const char *const motivosChat[] = {"Insultos o acoso", "Contenido inapropiado", "Spam", "Amenazas", "Otro motivo"};
-    bool charla = !g_sp.denunciaCuenta && (g_sp.denunciaTipo == "comentario" || g_sp.denunciaTipo == "chat");
+    bool charla = !g_sp.denunciaCuenta && (g_sp.denunciaTipo == "comentario" || g_sp.denunciaTipo == "chat" || g_sp.denunciaTipo == "mensaje");
     bool paquete = !g_sp.denunciaCuenta && !charla && g_sp.denunciaTipo != "juego";
     if (g_sp.showDenuncia) { ImGui::OpenPopup("Denunciar"); g_sp.showDenuncia = false; envio::limpiarDenuncia(); }
     ImGui::SetNextWindowSize(ImVec2(560, 0), ImGuiCond_Appearing);
     if (!ui::beginModal("Denunciar", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
     const char *const *motivos = g_sp.denunciaCuenta ? motivosCuenta : charla ? motivosChat : paquete ? motivosPaquete : motivosJuego;
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 520);
-    if (charla) ImGui::Text("Reportar %s %s", g_sp.denunciaTipo == "chat" ? "el chat de" : "el comentario de", g_sp.denunciaNombre.c_str());
+    if (charla) ImGui::Text("Reportar %s %s", g_sp.denunciaTipo == "chat" ? "el chat de" : g_sp.denunciaTipo == "mensaje" ? "los mensajes de" : "el comentario de", g_sp.denunciaNombre.c_str());
     else ImGui::Text("Denunciar %s %s", g_sp.denunciaCuenta ? "la cuenta" : paquete ? "el paquete" : "el juego", g_sp.denunciaNombre.c_str());
     ImGui::TextDisabled("La denuncia le llega al equipo de Source 2D, que la revisa. La otra persona no ve quién la hizo desde el editor.");
     ImGui::PopTextWrapPos();
@@ -2821,12 +3017,12 @@ static void drawDenuncia() {
         ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Motivo"); ImGui::SameLine(90);
         ImGui::SetNextItemWidth(330); ImGui::Combo("##motivo", &g_sp.denunciaMotivo, motivos, 5);
         if (!g_sp.denunciaMsgs.empty()) {
-            ImGui::TextUnformatted(g_sp.denunciaTipo == "chat" ? "Elige los mensajes que reportas" : "Comentario que reportas");
+            ImGui::TextUnformatted(g_sp.denunciaTipo != "comentario" ? "Elige los mensajes que reportas" : "Comentario que reportas");
             ImGui::BeginChild("##dmsgs", ImVec2(520, std::min(200.0f, 34.0f * g_sp.denunciaMsgs.size() + 10)), ImGuiChildFlags_Borders);
             for (size_t i = 0; i < g_sp.denunciaMsgs.size(); i++) {
                 auto &m = g_sp.denunciaMsgs[i];
                 ImGui::PushID((int)i);
-                if (g_sp.denunciaTipo == "chat") ImGui::Checkbox("##sel", &m.sel);
+                if (g_sp.denunciaTipo != "comentario") ImGui::Checkbox("##sel", &m.sel);
                 else m.sel = true;
                 ImGui::SameLine();
                 ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kSecondary), "%s:", m.de.c_str());
@@ -2837,7 +3033,10 @@ static void drawDenuncia() {
                 ImGui::PopID();
             }
             ImGui::EndChild();
-            ImGui::TextDisabled("Los mensajes no se pueden borrar: el equipo de Source 2D ve exactamente lo que se escribió.");
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 520);
+            ImGui::TextDisabled("%s", g_sp.denunciaTipo == "mensaje" ? "Los mensajes no se pueden borrar. Solo se abren para el equipo de Source 2D los que marques: el resto de la conversación sigue cifrado."
+                                                                       : "Los mensajes no se pueden borrar: el equipo de Source 2D ve exactamente lo que se escribió.");
+            ImGui::PopTextWrapPos();
         }
         ImGui::TextUnformatted("Cuéntanos qué pasa");
         ImGui::InputTextMultiline("##dtexto", g_sp.denunciaTexto, sizeof g_sp.denunciaTexto, ImVec2(520, 90));
@@ -2848,9 +3047,10 @@ static void drawDenuncia() {
         if (charla && ui::primaryButton("Enviar reporte", ImVec2(160, 0))) {
             envio::Denuncia d;
             d.tipo = g_sp.denunciaTipo; d.objetivo = g_sp.denunciaId;
-            d.titulo = std::string(g_sp.denunciaTipo == "chat" ? "Reporte: chat" : "Reporte: comentario") + " de " + g_sp.denunciaNombre;
+            d.titulo = std::string(g_sp.denunciaTipo == "chat" ? "Reporte: chat" : g_sp.denunciaTipo == "mensaje" ? "Reporte: mensajes" : "Reporte: comentario") + " de " + g_sp.denunciaNombre;
             d.cuerpo = std::string("**Motivo:** ") + motivos[std::clamp(g_sp.denunciaMotivo, 0, 4)] + "\n\n" + g_sp.denunciaTexto;
-            for (auto &m : g_sp.denunciaMsgs) if (m.sel) d.mensajes.push_back({{"id", m.id}, {"de", m.de}, {"texto", m.texto}, {"fecha", m.fecha}});
+            for (auto &m : g_sp.denunciaMsgs) if (m.sel) d.mensajes.push_back({{"id", m.id}, {"de", m.de}, {"texto", m.texto}, {"fecha", m.fecha}, {"llave", m.llave}});
+            if (g_sp.denunciaTipo == "mensaje") d.conversacion = g_sp.denunciaConv;
             envio::denunciar(d);
         }
         if (!charla && ui::primaryButton("Enviar denuncia", ImVec2(160, 0))) {
@@ -5436,6 +5636,8 @@ static void drawModals() {
     drawNotificacionesModal();
     revisarNotificaciones();
     drawComentarios();
+    drawMensajes();
+    publicarClave();
     drawSolicitud();
     drawNube();
     static bool fbAbrir = false;
@@ -6304,6 +6506,26 @@ static void runScriptStep() {
         printf("S2DEDIT %s %s -> %s\n", ok ? "OK" : "FAIL", line.c_str(), envio::estadoAccion("comentario").c_str());
     }
     else if (cmd == "nube.abrir") abrirNube();
+    else if (cmd == "mensajes.abrir") { std::string l; in >> l; openMensajes(l); }
+    else if (cmd == "mensajes.enviar") {
+        std::string t; std::getline(in >> std::ws, t);
+        static double desde = 0;
+        if (app.scriptRetry == 0) desde = GetTime();
+        const envio::Perfil *pf = envio::perfil(g_msg.con);
+        if ((!pf || !pf->spCargado) && GetTime() - desde < 30) { app.scriptRetry++; app.scriptPos--; return; }
+        if (app.scriptRetry >= 0 && envio::estadoAccion("mensaje") != "Enviando..." && app.scriptRetry < 1000000) {
+            if (pf && !pf->clavePublica.empty() && app.scriptRetry < 1000000 && envio::estadoAccion("mensaje").empty()) {
+                std::string ll, c = cifra::cifrar(envio::usuario(), pf->clavePublica, t, ll);
+                envio::enviarMensaje(g_msg.con, c);
+                app.scriptRetry = 1000000; app.scriptPos--; return;
+            }
+        }
+        if (envio::estadoAccion("mensaje") == "Enviando..." && GetTime() - desde < 30) { app.scriptPos--; return; }
+        app.scriptRetry = 0;
+        bool ok = !envio::falloAccion("mensaje") && pf && !pf->clavePublica.empty();
+        if (!ok) app.fails++;
+        printf("S2DEDIT %s %s -> %s\n", ok ? "OK" : "FAIL", line.c_str(), envio::estadoAccion("mensaje").c_str());
+    }
     else if (cmd == "nube.subir") {
         if (app.scriptRetry == 0) subirProyectoANube();
         std::string st = envio::estadoAccion("nube");
@@ -6681,10 +6903,41 @@ static int paqueteCli(const std::string &file, const std::string &tipo, const st
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && std::string(argv[1]) == "--prueba-cifrado") {
+        std::string pa = cifra::publica64("prueba-a"), pb = cifra::publica64("prueba-b"), pc = cifra::publica64("prueba-c");
+        std::string ll, t, llb, mal;
+        std::string c = cifra::cifrar("prueba-a", pb, "Hola, ¿qué tal? 🎮", ll);
+        bool lee = cifra::descifrar("prueba-b", pa, c, t, llb) && t == "Hola, ¿qué tal? 🎮" && llb == ll;
+        bool propio = cifra::descifrar("prueba-a", pb, c, mal, llb) && mal == t;
+        bool tercero = !cifra::descifrar("prueba-c", pa, c, mal, llb);
+        std::string con;
+        bool llave = cifra::abrirConLlave(c, ll, con) && con == t;
+        std::string ll2, c2 = cifra::cifrar("prueba-a", pb, "otro", ll2);
+        bool otra = !cifra::abrirConLlave(c2, ll, con);
+        std::string roto = c; roto[60] = roto[60] == 'A' ? 'B' : 'A';
+        bool manipulado = !cifra::descifrar("prueba-b", pa, roto, mal, llb);
+        printf("lee=%d propio=%d tercero_no=%d llave=%d llave_ajena_no=%d manipulado_no=%d\n", lee, propio, tercero, llave, otra, manipulado);
+        bool ok = lee && propio && tercero && llave && otra && manipulado && !pc.empty();
+        printf("%s\n", ok ? "CIFRADO OK" : "CIFRADO FALLA");
+        return ok ? 0 : 1;
+    }
     std::string openPath, scriptPath;
     for (int i = 1; i + 1 < argc; i++) {
         std::string a = argv[i];
         if (a == "--paquete" && i + 2 < argc) return paqueteCli(argv[i + 1], argv[i + 2], i + 3 < argc ? argv[i + 3] : "");
+        if (a == "--clave-publica" && i + 1 < argc) { printf("%s\n", cifra::publica64(argv[i + 1]).c_str()); return 0; }
+        if (a == "--descifrar" && i + 3 < argc) {
+            std::string t, ll;
+            if (!cifra::descifrar(argv[i + 1], argv[i + 2], argv[i + 3], t, ll)) { fprintf(stderr, "No se puede descifrar\n"); return 1; }
+            printf("%s\n", t.c_str());
+            return 0;
+        }
+        if (a == "--verificar-mensaje" && i + 2 < argc) {
+            std::string t;
+            if (!cifra::abrirConLlave(argv[i + 1], argv[i + 2], t)) { fprintf(stderr, "La llave no abre ese mensaje: el texto reportado no se puede comprobar\n"); return 1; }
+            printf("%s\n", t.c_str());
+            return 0;
+        }
         if (a == "--jugar" || a == "--comprobar") {
             std::string llave;
             for (int k = i + 2; k + 1 < argc; k++) if (std::string(argv[k]) == "--llave") llave = argv[k + 1];

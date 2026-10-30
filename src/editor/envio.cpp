@@ -903,6 +903,81 @@ void contarDescarga(const std::string &clave, std::function<void(long long)> fin
     if (g_apiOn) pedir(std::move(p));
 }
 
+namespace {
+std::vector<Conversacion> g_bandeja;
+double g_bandejaAt = -1e9;
+bool g_bandejaPidiendo = false;
+struct Charla { std::vector<Mensaje> lista; double at = -1e9; bool pidiendo = false, cargada = false; };
+std::map<std::string, Charla> g_charlas;
+bool convSegura(const std::string &c) {
+    size_t s = c.find("__");
+    return s != std::string::npos && loginSeguro(c.substr(0, s)) && loginSeguro(c.substr(s + 2)) && c == minus(c);
+}
+Conversacion conversacionDe(const json &x) {
+    Conversacion c;
+    c.id = str(x, "conversacion"); c.con = str(x, "con"); c.ultimo = str(x, "ultimo"); c.estado = str(x, "estado"); c.solicitante = str(x, "solicitante");
+    c.aviso = x.value("aviso", false);
+    return c;
+}
+}
+void pedirBandeja() {
+    if (!conectado() || g_bandejaPidiendo || reloj() - g_bandejaAt < cada(15)) return;
+    g_bandejaPidiendo = true;
+    g_bandejaAt = reloj();
+    pedirApi("GET", "/mensajes", json(), [](int code, const json &b) {
+        g_bandejaPidiendo = false;
+        if (code != 200 || !b.is_object() || !b.contains("conversaciones") || !b["conversaciones"].is_array()) return;
+        std::vector<Conversacion> r;
+        for (auto &x : b["conversaciones"]) if (x.is_object() && convSegura(str(x, "conversacion")) && loginSeguro(str(x, "con"))) r.push_back(conversacionDe(x));
+        g_bandeja.swap(r);
+    });
+}
+const std::vector<Conversacion> &bandeja() { return g_bandeja; }
+void pedirConversacion(const std::string &conv) {
+    if (!conectado() || !convSegura(conv)) return;
+    Charla &c = g_charlas[conv];
+    if (c.pidiendo || reloj() - c.at < cada(5)) return;
+    c.pidiendo = true;
+    c.at = reloj();
+    pedirApi("GET", "/mensajes/" + conv, json(), [conv](int code, const json &b) {
+        Charla &c = g_charlas[conv];
+        c.pidiendo = false;
+        if (code != 200 || !b.is_object()) return;
+        c.cargada = true;
+        std::vector<Mensaje> r;
+        if (b.contains("mensajes") && b["mensajes"].is_array())
+            for (auto &x : b["mensajes"]) if (x.is_object()) r.push_back({str(x, "id"), str(x, "de"), str(x, "cifrado"), str(x, "fecha")});
+        c.lista.swap(r);
+        if (b.contains("estado") && b["estado"].is_object())
+            for (auto &cv : g_bandeja) if (cv.id == conv) { cv.estado = str(b["estado"], "estado"); cv.solicitante = str(b["estado"], "de"); }
+    });
+}
+const std::vector<Mensaje> *mensajes(const std::string &conv) {
+    auto it = g_charlas.find(conv);
+    return it == g_charlas.end() || !it->second.cargada ? nullptr : &it->second.lista;
+}
+void enviarMensaje(const std::string &para, const std::string &cifrado) {
+    if (!conectado() || !loginSeguro(para)) return;
+    accion("mensaje", "Enviando...", false);
+    pedirApi("POST", "/mensajes/" + para, json{{"cifrado", cifrado}}, [para](int code, const json &b) {
+        if (code != 201) { accion("mensaje", error(code, b, "No se pudo enviar el mensaje"), true); return; }
+        accion("mensaje", str(b, "estado") == "solicitud" ? "Solicitud enviada: podrás escribir más cuando la acepte." : "", false);
+        std::string a = minus(g_user), c = minus(para);
+        std::string conv = a < c ? a + "__" + c : c + "__" + a;
+        g_charlas[conv].at = -1e9;
+        g_bandejaAt = -1e9;
+        pedirConversacion(conv);
+        pedirBandeja();
+    });
+}
+void responderSolicitud(const std::string &conv, bool aceptar) {
+    if (!conectado() || !convSegura(conv)) return;
+    pedirApi("POST", "/mensajes/" + conv + (aceptar ? "/aceptar" : "/bloquear"), json::object(), [conv](int code, const json &b) {
+        if (code != 200) { accion("mensaje", error(code, b, "No se pudo responder"), true); return; }
+        for (auto &cv : g_bandeja) if (cv.id == conv) cv.estado = str(b, "estado");
+    });
+}
+
 std::string estadoAccion(const std::string &a) { auto it = g_acciones.find(a); return it == g_acciones.end() ? "" : it->second; }
 bool falloAccion(const std::string &a) { return g_fallos.count(a) > 0; }
 void limpiarAccion(const std::string &a) { g_acciones.erase(a); g_fallos.erase(a); }

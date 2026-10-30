@@ -109,6 +109,15 @@ void meGusta(const std::string &clave, bool poner, std::function<void(long long,
 void misMeGusta(const std::vector<std::string> &claves, std::function<void(const std::map<std::string, bool> &)> fin);
 void contarDescarga(const std::string &clave, std::function<void(long long)> fin);
 
+struct Conversacion { std::string id, con, ultimo, estado, solicitante; bool aviso = false; };
+struct Mensaje { std::string id, de, cifrado, fecha; };
+void pedirBandeja();
+const std::vector<Conversacion> &bandeja();
+void pedirConversacion(const std::string &conv);
+const std::vector<Mensaje> *mensajes(const std::string &conv);
+void enviarMensaje(const std::string &para, const std::string &cifrado);
+void responderSolicitud(const std::string &conv, bool aceptar);
+
 std::string estadoAccion(const std::string &accion);
 bool falloAccion(const std::string &accion);
 void limpiarAccion(const std::string &accion);
