@@ -949,7 +949,7 @@ static void drawProjectPanel() {
 }
 
 struct EditorPrefs {
-    std::string projectsDir; bool autosave = true; std::string name; int color = 0;
+    std::string projectsDir; bool autosave = true; std::string name; int color = 0; uint32_t colorPropio = 0xFF5C8DFFu;
     int autosaveSecs = 30, keepVersions = 20;
     bool animations = true;
     bool safeSave = false;
@@ -965,7 +965,7 @@ static EditorPrefs &prefs() {
         json j = json::parse(in, nullptr, false);
         if (j.is_object()) {
             p.projectsDir = jstr(j, "carpetaProyectos"); p.autosave = jbool(j, "guardadoAutomatico", true);
-            p.name = jstr(j, "nombre"); p.color = (int)jnum(j, "color", 0);
+            p.name = jstr(j, "nombre"); p.color = (int)jnum(j, "color", 0); p.colorPropio = (uint32_t)jnum(j, "colorPropio", (double)0xFF5C8DFFu);
             p.autosaveSecs = std::clamp((int)jnum(j, "segundosGuardado", 30), 5, 3600); p.keepVersions = std::clamp((int)jnum(j, "versiones", 20), 0, 200);
             p.animations = jbool(j, "animaciones", true); p.safeSave = jbool(j, "guardadoSeguro", false); p.lang = jstr(j, "idioma");
             p.news = jbool(j, "buscarNoticias", true);
@@ -980,7 +980,7 @@ static EditorPrefs &prefs() {
 static void savePrefs() {
     if (!app.script.empty()) return;
     std::ofstream(ui::configDir() + "/ajustes.json") << json{{"carpetaProyectos", prefs().projectsDir}, {"guardadoAutomatico", prefs().autosave},
-                                                             {"nombre", prefs().name}, {"color", prefs().color},
+                                                             {"nombre", prefs().name}, {"color", prefs().color}, {"colorPropio", prefs().colorPropio},
                                                              {"segundosGuardado", prefs().autosaveSecs}, {"versiones", prefs().keepVersions},
                                                              {"animaciones", prefs().animations}, {"guardadoSeguro", prefs().safeSave},
                                                              {"idioma", prefs().lang}, {"buscarNoticias", prefs().news}}.dump(1);
@@ -1029,6 +1029,7 @@ static void refreshProjectList() { g_projListStale = true; }
 static void focusScene();
 extern bool rlImGuiScriptMouse, rlImGuiScriptDown;
 extern float rlImGuiScriptX, rlImGuiScriptY;
+extern void (*rlImGuiAntesDePintar)(ImDrawData *);
 
 struct ExampleGame { const char *name, *desc, *level; std::vector<const char *> tags; json doc; bool tpl = false; };
 
@@ -1463,6 +1464,7 @@ struct SourcePlayUI {
     bool showConfig = false;
     char cfgFrase[160] = "";
     int cfgColor = 0, cfgInsignia = 0, cfgEmpezar = 0;
+    ImVec4 cfgColorPropio = ImVec4(0.55f, 0.36f, 0.96f, 1);
     std::string cfgDestacado[3];
     char buscarGente[64] = "";
     bool showDenuncia = false, denunciaCuenta = false;
@@ -1980,7 +1982,9 @@ static void openConfigPerfil() {
     g_sp.showConfig = true;
     snprintf(g_sp.cfgFrase, sizeof g_sp.cfgFrase, "%s", pf ? pf->frase.c_str() : "");
     g_sp.cfgColor = 0;
-    for (int i = 0; i < 8; i++) if (pf && pf->color == kColoresPerfil[i]) g_sp.cfgColor = i;
+    bool conocido = false;
+    for (int i = 0; i < 8; i++) if (pf && pf->color == kColoresPerfil[i]) { g_sp.cfgColor = i; conocido = true; }
+    if (pf && !conocido && pf->color.size() == 7) { g_sp.cfgColor = 8; g_sp.cfgColorPropio = ImGui::ColorConvertU32ToFloat4(colorHex(pf->color, ui::kAccent)); }
     std::vector<int> ins = tienda::insignias(envio::usuario());
     static const char *const nombres[] = {"", "verificada", "admin", "creador", "contribuidor", "beta"};
     g_sp.cfgInsignia = 0;
@@ -2004,14 +2008,25 @@ static void drawConfigPerfil() {
     ImGui::SetNextItemWidth(-1);
     ImGui::InputTextWithHint("##frase", "Una frase corta sobre ti (máximo 140 letras)", g_sp.cfgFrase, 141);
     ImGui::SeparatorText("Color del perfil");
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 9; i++) {
         if (i) ImGui::SameLine(0, 8);
         ImVec2 p = ImGui::GetCursorScreenPos();
         ImGui::PushID(i);
-        if (ImGui::InvisibleButton("##color", ImVec2(34, 34))) g_sp.cfgColor = i;
+        if (ImGui::InvisibleButton("##color", ImVec2(34, 34))) { g_sp.cfgColor = i; if (i == 8) ImGui::OpenPopup("##bannerpropio"); }
+        if (i == 8 && ImGui::IsItemHovered()) ImGui::SetTooltip("Elige tu propio color");
+        if (i == 8 && ImGui::BeginPopup("##bannerpropio")) {
+            ImGui::ColorPicker3("##picker", &g_sp.cfgColorPropio.x, ImGuiColorEditFlags_NoSidePreview | ImGuiColorEditFlags_NoSmallPreview | ImGuiColorEditFlags_PickerHueWheel);
+            ImGui::EndPopup();
+        }
         ImGui::PopID();
         ImDrawList *dl = ImGui::GetWindowDrawList();
-        dl->AddRectFilled(p, ImVec2(p.x + 34, p.y + 34), colorHex(kColoresPerfil[i], ui::kAccent), 10);
+        if (i == 8) {
+            for (int k = 0; k < 6; k++) {
+                ImVec4 rgb; ImGui::ColorConvertHSVtoRGB(k / 6.0f, 0.7f, 1.0f, rgb.x, rgb.y, rgb.z); rgb.w = 1;
+                dl->AddRectFilled(ImVec2(p.x + k * 34 / 6.0f, p.y), ImVec2(p.x + (k + 1) * 34 / 6.0f + 0.5f, p.y + 34), ImGui::ColorConvertFloat4ToU32(rgb), k == 0 ? 10.0f : k == 5 ? 10.0f : 0.0f, k == 0 ? ImDrawFlags_RoundCornersLeft : k == 5 ? ImDrawFlags_RoundCornersRight : ImDrawFlags_RoundCornersNone);
+            }
+            dl->AddRectFilled(ImVec2(p.x + 9, p.y + 9), ImVec2(p.x + 25, p.y + 25), ImGui::ColorConvertFloat4ToU32(g_sp.cfgColorPropio), 5);
+        } else dl->AddRectFilled(p, ImVec2(p.x + 34, p.y + 34), colorHex(kColoresPerfil[i], ui::kAccent), 10);
         if (g_sp.cfgColor == i) dl->AddRect(ImVec2(p.x - 3, p.y - 3), ImVec2(p.x + 37, p.y + 37), ui::kText, 12.0f, 0, 2.0f);
     }
     ImGui::SeparatorText("Insignia que se muestra");
@@ -2052,7 +2067,10 @@ static void drawConfigPerfil() {
     if (ui::primaryButton("Guardar", ImVec2(130, 0))) {
         static const char *const nombres[] = {"", "verificada", "admin", "creador", "contribuidor", "beta"};
         static const char *const empezar[] = {"juegos", "sprites", "sonidos", "contribuciones"};
-        json campos = {{"frase", g_sp.cfgFrase}, {"color", kColoresPerfil[g_sp.cfgColor]}, {"empezar", empezar[g_sp.cfgEmpezar]}};
+        char hex[8];
+        ImVec4 cp = g_sp.cfgColorPropio;
+        snprintf(hex, sizeof hex, "#%02X%02X%02X", (int)(cp.x * 255 + 0.5f), (int)(cp.y * 255 + 0.5f), (int)(cp.z * 255 + 0.5f));
+        json campos = {{"frase", g_sp.cfgFrase}, {"color", g_sp.cfgColor == 8 ? std::string(hex) : std::string(kColoresPerfil[g_sp.cfgColor])}, {"empezar", empezar[g_sp.cfgEmpezar]}};
         campos["insignia"] = g_sp.cfgInsignia > 0 && g_sp.cfgInsignia <= (int)ins.size() ? nombres[ins[g_sp.cfgInsignia - 1]] : "";
         json d = json::object();
         const char *tipos[3] = {"juegos", "sprites", "sonidos"};
@@ -2071,15 +2089,35 @@ static void drawConfigPerfil() {
 
 static void personRow(const std::string &login, const std::string &dato = "") {
     ImGui::PushID(login.c_str());
-    ImGui::AlignTextToFramePadding();
-    authorLink(login);
-    if (!dato.empty()) { ImGui::SameLine(); ImGui::TextDisabled("%s", dato.c_str()); }
+    envio::pedirPerfil(login);
+    const envio::Perfil *pf = envio::perfil(login);
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    float w = ImGui::GetContentRegionAvail().x, h = 54;
+    ImGui::InvisibleButton("##fila", ImVec2(w, h));
+    bool hov = ImGui::IsItemHovered(), clic = ImGui::IsItemClicked();
+    dl->AddRectFilled(p, ImVec2(p.x + w, p.y + h), hov ? ui::kHover : ui::kPanel2, 12);
+    drawAvatar(dl, ImVec2(p.x + 10, p.y + 9), 36, login, pf);
+    ImGui::SetCursorScreenPos(ImVec2(p.x + 56, p.y + (dato.empty() ? 17 : 8)));
+    ImGui::BeginGroup();
+    ImGui::PushFont(ui::boldFont(), 0);
+    ImGui::TextUnformatted(pf && !pf->nombre.empty() ? pf->nombre.c_str() : login.c_str());
+    ImGui::PopFont();
+    drawBadge(tienda::insignia(login));
+    if (!dato.empty()) ImGui::TextDisabled("@%s · %s", login.c_str(), dato.c_str());
+    ImGui::EndGroup();
     int s = envio::sigo(login);
+    ImGui::SetCursorScreenPos(ImVec2(p.x + w - 110, p.y + (h - ImGui::GetFrameHeight()) / 2));
+    bool boton = false;
     if (s >= 0) {
-        ImGui::SameLine(ImGui::GetContentRegionMax().x - 100);
-        if (s ? ImGui::Button("Siguiendo", ImVec2(96, 0)) : ui::primaryButton("Seguir", ImVec2(96, 0))) envio::seguir(login, !s);
+        boton = s ? ImGui::Button("Siguiendo", ImVec2(100, 0)) : ui::primaryButton("Seguir", ImVec2(100, 0));
+        if (boton) envio::seguir(login, !s);
         if (s && ImGui::IsItemHovered()) ImGui::SetTooltip("Dejar de seguir");
-    } else if (login == envio::usuario()) { ImGui::SameLine(ImGui::GetContentRegionMax().x - 100); ImGui::TextDisabled("Tú"); }
+    } else if (login == envio::usuario()) { ImGui::SetCursorScreenPos(ImVec2(p.x + w - 40, p.y + 18)); ImGui::TextDisabled("Tú"); }
+    else ImGui::Dummy(ImVec2(0, 0));
+    if (clic && !boton) openPerfil(login);
+    ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + h + 6));
+    ImGui::Dummy(ImVec2(0, 0));
     ImGui::PopID();
 }
 
@@ -2516,8 +2554,41 @@ static void drawCuentaYComunidad() {
                         "Al entrar te registras en Source 2D. Source 2D nunca ve tu contraseña y solo pide permiso para seguir cuentas.");
         drawBaneo();
         ImGui::Dummy(ImVec2(0, 4));
-        if (envio::conectado() && ImGui::Button("Ver mi perfil")) { ImGui::CloseCurrentPopup(); openPerfil(envio::usuario()); }
-        if (envio::conectado()) ImGui::SameLine();
+        if (envio::conectado()) {
+            std::string yo = envio::usuario();
+            envio::pedirPerfil(yo);
+            const envio::Perfil *pf = envio::perfil(yo);
+            ImDrawList *dl = ImGui::GetWindowDrawList();
+            ImVec2 p = ImGui::GetCursorScreenPos();
+            float w = ImGui::GetContentRegionAvail().x;
+            dl->AddRectFilled(p, ImVec2(p.x + w, p.y + 84), ui::kPanel2, 14);
+            dl->AddRectFilled(p, ImVec2(p.x + 8, p.y + 84), colorHex(pf ? pf->color : "", ui::kAccent), 14, ImDrawFlags_RoundCornersLeft);
+            drawAvatar(dl, ImVec2(p.x + 22, p.y + 14), 56, yo, pf);
+            ImGui::SetCursorScreenPos(ImVec2(p.x + 92, p.y + 16));
+            ImGui::BeginGroup();
+            ImGui::PushFont(ui::boldFont(), 20); ImGui::TextUnformatted(pf && !pf->nombre.empty() ? pf->nombre.c_str() : yo.c_str()); ImGui::PopFont();
+            drawBadge(tienda::insignia(yo));
+            ImGui::TextDisabled("@%s%s", yo.c_str(), envio::yo().unido.empty() ? "" : (" · en Source 2D desde el " + fechaBonita(envio::yo().unido)).c_str());
+            ImGui::EndGroup();
+            ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + 96));
+            float bw = (w - 16) / 3;
+            auto acceso = [&](const char *t, const char *sub, ui::Icon ic) {
+                ImVec2 q = ImGui::GetCursorScreenPos();
+                bool c = ImGui::InvisibleButton(t, ImVec2(bw, 64));
+                dl->AddRectFilled(q, ImVec2(q.x + bw, q.y + 64), ImGui::IsItemHovered() ? ui::kHover : ui::kPanel2, 12);
+                ui::drawIcon(dl, ic, ImVec2(q.x + 24, q.y + 32), 18, ui::kSecondary);
+                dl->AddText(ui::boldFont(), ImGui::GetFontSize(), ImVec2(q.x + 44, q.y + 14), ui::kText, t);
+                dl->AddText(ImVec2(q.x + 44, q.y + 34), ui::kDim, sub);
+                return c;
+            };
+            if (acceso("Mi perfil", "Cómo te ven", ui::Icon::People)) { ImGui::CloseCurrentPopup(); openPerfil(yo); }
+            ImGui::SameLine(0, 8);
+            std::string n = envio::yo().sinLeer ? std::to_string(envio::yo().sinLeer) + " sin leer" : "Al día";
+            if (acceso("Notificaciones", n.c_str(), ui::Icon::Bell)) { ImGui::CloseCurrentPopup(); g_noti.showModal = true; }
+            ImGui::SameLine(0, 8);
+            if (acceso("Configurar", "Perfil y destacados", ui::Icon::Settings)) { ImGui::CloseCurrentPopup(); openConfigPerfil(); }
+            ImGui::Dummy(ImVec2(0, 6));
+        }
         if (ImGui::Button("Cerrar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
@@ -2526,7 +2597,7 @@ static void drawCuentaYComunidad() {
     if (ui::beginModal("Comunidad", nullptr, 0)) {
         envio::pedirRegistrados();
         const auto &rs = envio::registrados();
-        ImGui::Text("%zu %s en Source Play", rs.size(), rs.size() == 1 ? "cuenta" : "cuentas");
+        ImGui::Text("%zu %s en Source 2D", rs.size(), rs.size() == 1 ? "cuenta" : "cuentas");
         ImGui::SetNextItemWidth(-1);
         ImGui::InputTextWithHint("##gente", "Buscar por nombre de usuario", g_sp.buscarGente, sizeof g_sp.buscarGente);
         ImGui::BeginChild("##gentelista", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 4));
@@ -3776,6 +3847,85 @@ static void newsCard(const novedades::Noticia &n, float w) {
     ImGui::Dummy(ImVec2(0, 8));
     ImGui::PopID();
 }
+static void drawIconoMenu(ImDrawList *dl, int id, ImVec2 c, float s, ImU32 col, ImU32 fondo) {
+    float h = s * 0.5f, t = std::max(1.6f, s / 11.0f);
+    auto P = [&](float x, float y) { return ImVec2(c.x + x * h, c.y + y * h); };
+    switch (id) {
+    case 0:
+        dl->AddRect(P(-0.85f, -0.78f), P(0.72f, 0.85f), col, h * 0.38f, 0, t);
+        dl->AddLine(P(-0.07f, -0.3f), P(-0.07f, 0.38f), col, t);
+        dl->AddLine(P(-0.41f, 0.04f), P(0.27f, 0.04f), col, t);
+        for (int i = 0; i < 4; i++) {
+            float a = i * 1.5708f;
+            dl->AddTriangleFilled(P(0.78f + cosf(a) * 0.3f, -0.8f + sinf(a) * 0.3f), P(0.78f + cosf(a + 0.6f) * 0.08f, -0.8f + sinf(a + 0.6f) * 0.08f),
+                                  P(0.78f + cosf(a - 0.6f) * 0.08f, -0.8f + sinf(a - 0.6f) * 0.08f), col);
+        }
+        break;
+    case 1:
+        dl->AddRect(P(-0.95f, -0.5f), P(0.95f, 0.58f), col, h * 0.48f, 0, t);
+        dl->AddLine(P(-0.5f, -0.14f), P(-0.5f, 0.24f), col, t);
+        dl->AddLine(P(-0.69f, 0.05f), P(-0.31f, 0.05f), col, t);
+        dl->AddCircleFilled(P(0.32f, 0.16f), h * 0.12f, col, 12);
+        dl->AddCircleFilled(P(0.56f, -0.08f), h * 0.12f, col, 12);
+        break;
+    case 2:
+        dl->AddRect(P(-0.5f, -0.88f), P(0.82f, 0.42f), col & 0x80FFFFFF, h * 0.2f, 0, t);
+        dl->AddRectFilled(P(-0.86f, -0.52f), P(0.46f, 0.88f), fondo, h * 0.2f);
+        dl->AddRect(P(-0.86f, -0.52f), P(0.46f, 0.88f), col, h * 0.2f, 0, t);
+        dl->AddRectFilled(P(-0.62f, -0.28f), P(-0.18f, 0.12f), col, h * 0.08f);
+        dl->AddLine(P(-0.02f, -0.22f), P(0.22f, -0.22f), col, t * 0.85f);
+        dl->AddLine(P(-0.02f, 0.04f), P(0.22f, 0.04f), col, t * 0.85f);
+        dl->AddLine(P(-0.62f, 0.4f), P(0.22f, 0.4f), col, t * 0.85f);
+        dl->AddLine(P(-0.62f, 0.62f), P(0.02f, 0.62f), col, t * 0.85f);
+        break;
+    case 3: {
+        ImVec2 iz[4] = {P(-0.95f, -0.62f), P(0, -0.48f), P(0, 0.8f), P(-0.95f, 0.64f)};
+        ImVec2 de[4] = {P(0.95f, -0.62f), P(0, -0.48f), P(0, 0.8f), P(0.95f, 0.64f)};
+        dl->AddPolyline(iz, 4, col, ImDrawFlags_Closed, t);
+        dl->AddPolyline(de, 4, col, ImDrawFlags_Closed, t);
+        for (int i = 0; i < 3; i++) {
+            float y = -0.22f + i * 0.27f;
+            dl->AddLine(P(-0.75f, y - 0.03f), P(-0.2f, y + 0.06f), col, t * 0.75f);
+            dl->AddLine(P(0.2f, y + 0.06f), P(i == 2 ? 0.5f : 0.75f, y - 0.03f), col, t * 0.75f);
+        }
+        break;
+    }
+    case 5:
+        dl->AddRect(P(-0.72f, -0.82f), P(0.88f, 0.82f), col, h * 0.18f, 0, t);
+        dl->AddLine(P(-0.72f, -0.3f), P(-0.95f, -0.3f), col, t);
+        dl->AddLine(P(-0.95f, -0.3f), P(-0.95f, 0.62f), col, t);
+        dl->AddBezierQuadratic(P(-0.95f, 0.62f), P(-0.95f, 0.82f), P(-0.72f, 0.82f), col, t);
+        dl->AddRectFilled(P(-0.48f, -0.58f), P(0.64f, -0.28f), col, h * 0.06f);
+        dl->AddRectFilled(P(-0.48f, -0.08f), P(0.0f, 0.4f), col & 0x99FFFFFF, h * 0.05f);
+        dl->AddLine(P(0.18f, -0.05f), P(0.64f, -0.05f), col, t * 0.75f);
+        dl->AddLine(P(0.18f, 0.18f), P(0.64f, 0.18f), col, t * 0.75f);
+        dl->AddLine(P(-0.48f, 0.58f), P(0.64f, 0.58f), col, t * 0.75f);
+        break;
+    case 7:
+        dl->PathLineTo(P(-0.78f, 0.48f));
+        dl->PathBezierCubicCurveTo(P(-0.55f, 0.25f), P(-0.62f, -0.1f), P(-0.6f, -0.25f));
+        dl->PathBezierCubicCurveTo(P(-0.55f, -0.78f), P(0.55f, -0.78f), P(0.6f, -0.25f));
+        dl->PathBezierCubicCurveTo(P(0.62f, -0.1f), P(0.55f, 0.25f), P(0.78f, 0.48f));
+        dl->PathStroke(col, ImDrawFlags_Closed, t);
+        dl->AddCircleFilled(P(0, -0.82f), h * 0.11f, col, 10);
+        dl->AddBezierQuadratic(P(-0.22f, 0.66f), P(0, 0.95f), P(0.22f, 0.66f), col, t);
+        break;
+    case 4:
+        dl->AddRect(P(-0.9f, -0.75f), P(0.9f, 0.75f), col, h * 0.22f, 0, t);
+        dl->AddTriangleFilled(P(-0.68f, 0.55f), P(-0.15f, -0.18f), P(0.3f, 0.55f), col);
+        dl->AddTriangleFilled(P(0.05f, 0.55f), P(0.38f, 0.08f), P(0.7f, 0.55f), col & 0xB3FFFFFF);
+        dl->AddCircleFilled(P(0.42f, -0.35f), h * 0.16f, col, 12);
+        break;
+    case 6:
+        dl->AddEllipseFilled(P(-0.52f, 0.58f), ImVec2(h * 0.28f, h * 0.2f), col, -0.4f);
+        dl->AddEllipseFilled(P(0.48f, 0.4f), ImVec2(h * 0.28f, h * 0.2f), col, -0.4f);
+        dl->AddLine(P(-0.27f, 0.52f), P(-0.27f, -0.6f), col, t);
+        dl->AddLine(P(0.73f, 0.34f), P(0.73f, -0.8f), col, t);
+        dl->AddQuadFilled(P(-0.27f - t / h * 0.5f, -0.6f), P(0.73f + t / h * 0.5f, -0.8f), P(0.73f + t / h * 0.5f, -0.5f), P(-0.27f - t / h * 0.5f, -0.3f), col);
+        break;
+    }
+}
+
 static void drawNewsSection() {
     sectionTitle("Noticias", 30);
     std::string st = novedades::estado();
@@ -3827,10 +3977,14 @@ static void drawStartPage() {
         if (i == 4 && ImGui::IsItemHovered()) ImGui::SetTooltip("Tus sprites: dibújalos, anímalos y guárdalos en cualquier formato");
         bool hov = ImGui::IsItemHovered(), sel = app.homeSection == i;
         ImDrawList *ml = ImGui::GetWindowDrawList();
-        if (sel || hov) ml->AddRectFilled(p, ImVec2(p.x + menuW - 16, p.y + 40), sel ? ui::kPanel2 : ui::kHover, 8);
+        float ah = ui::animTo(ImGui::GetID("##hov"), hov ? 1.0f : 0.0f, 14.0f), as = ui::animTo(ImGui::GetID("##sel"), sel ? 1.0f : 0.0f, 12.0f);
+        ImVec4 hv = ImGui::ColorConvertU32ToFloat4(ui::kHover);
+        hv.w *= ah;
+        if (sel || ah > 0.01f) ml->AddRectFilled(p, ImVec2(p.x + menuW - 16, p.y + 40), sel ? ui::kPanel2 : ImGui::ColorConvertFloat4ToU32(hv), 10);
+        if (as > 0.01f) ml->AddRectFilled(ImVec2(p.x, p.y + 20 - 11 * as), ImVec2(p.x + 3.5f, p.y + 20 + 11 * as), ui::kAccent, 2);
         ImU32 c = sel ? ui::kSelectedIconBg : ui::kText2;
-        ui::drawIcon(ml, it.icon, ImVec2(p.x + 24, p.y + 20), 18, c);
-        ml->AddText(sel ? ui::boldFont() : ImGui::GetFont(), ImGui::GetFontSize() + 1, ImVec2(p.x + 46, p.y + 11), sel ? ui::kText : ui::kText2, it.label);
+        drawIconoMenu(ml, i, ImVec2(p.x + 27, p.y + 20), 20 * (1.0f + 0.1f * ah), c, sel ? ui::kPanel2 : ui::kPanel);
+        ml->AddText(sel ? ui::boldFont() : ImGui::GetFont(), ImGui::GetFontSize() + 1, ImVec2(p.x + 50, p.y + 11), sel ? ui::kText : ui::kText2, it.label);
         if (i == 5 && novedades::sinLeer() > 0) ml->AddCircleFilled(ImVec2(p.x + menuW - 40, p.y + 20), 4.5f, ui::kAccent);
         if (i == 7 && envio::yo().sinLeer > 0) {
             std::string c = envio::yo().sinLeer > 9 ? "9+" : std::to_string(envio::yo().sinLeer);
@@ -4742,6 +4896,7 @@ static void drawSessionChat() {
     }
 }
 
+static uint32_t miColorColab() { return prefs().color == 8 ? (prefs().colorPropio | 0xFF000000u) : collab::colorFor(prefs().color); }
 static void drawCollabDialog() {
     if (app.showCollab) { ImGui::OpenPopup("Trabajar juntos"); app.showCollab = false; }
     ImGui::SetNextWindowSize(ImVec2(620, 0), ImGuiCond_Appearing);
@@ -4762,12 +4917,33 @@ static void drawCollabDialog() {
         ImGui::SetNextItemWidth(200);
         if (ImGui::InputText("##nombre", nm, sizeof nm)) { prefs().name = nm; savePrefs(); }
         ImGui::SameLine();
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0; i < 9; i++) {
             ImGui::PushID(i);
             ImVec2 c = ImGui::GetCursorScreenPos();
-            if (ImGui::InvisibleButton("##col", ImVec2(22, 22))) { prefs().color = i; savePrefs(); }
-            ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(c.x + 11, c.y + 11), 8, collab::colorFor(i));
-            if (prefs().color == i) ImGui::GetWindowDrawList()->AddCircle(ImVec2(c.x + 11, c.y + 11), 10.5f, IM_COL32_WHITE, 0, 2);
+            if (ImGui::InvisibleButton("##col", ImVec2(22, 22))) {
+                prefs().color = i; savePrefs();
+                if (i == 8) ImGui::OpenPopup("##colorpropio");
+            }
+            ImDrawList *cd = ImGui::GetWindowDrawList();
+            if (i < 8) cd->AddCircleFilled(ImVec2(c.x + 11, c.y + 11), 8, collab::colorFor(i));
+            else {
+                for (int k = 0; k < 12; k++) {
+                    ImVec4 rgb; ImGui::ColorConvertHSVtoRGB(k / 12.0f, 0.75f, 1.0f, rgb.x, rgb.y, rgb.z); rgb.w = 1;
+                    cd->PathArcTo(ImVec2(c.x + 11, c.y + 11), 8, k * 0.5236f, (k + 1) * 0.5236f + 0.05f, 4);
+                    cd->PathLineTo(ImVec2(c.x + 11, c.y + 11));
+                    cd->PathFillConvex(ImGui::ColorConvertFloat4ToU32(rgb));
+                }
+                cd->AddCircleFilled(ImVec2(c.x + 11, c.y + 11), 4.5f, prefs().colorPropio);
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Elige tu propio color");
+            }
+            if (prefs().color == i) cd->AddCircle(ImVec2(c.x + 11, c.y + 11), 10.5f, IM_COL32_WHITE, 0, 2);
+            if (i == 8 && ImGui::BeginPopup("##colorpropio")) {
+                ImVec4 v = ImGui::ColorConvertU32ToFloat4(prefs().colorPropio);
+                if (ImGui::ColorPicker3("##picker", &v.x, ImGuiColorEditFlags_NoSidePreview | ImGuiColorEditFlags_NoSmallPreview | ImGuiColorEditFlags_PickerHueWheel)) {
+                    v.w = 1; prefs().colorPropio = ImGui::ColorConvertFloat4ToU32(v); savePrefs();
+                }
+                ImGui::EndPopup();
+            }
             ImGui::PopID();
             ImGui::SameLine(0, 2);
         }
@@ -4785,7 +4961,7 @@ static void drawCollabDialog() {
                     ImGui::Dummy(ImVec2(0, 6));
                     if (ui::primaryButton("Empezar a compartir", ImVec2(190, 0))) {
                         std::string err;
-                        if (collab::host(app.proj, prefs().name, collab::colorFor(prefs().color), err)) { app.collabMsg.clear(); notify("Compartiendo el proyecto. Código: " + collab::code()); }
+                        if (collab::host(app.proj, prefs().name, miColorColab(), err)) { app.collabMsg.clear(); notify("Compartiendo el proyecto. Código: " + collab::code()); }
                         else { app.collabMsg = "No se pudo compartir: " + err; app.collabMsgErr = true; }
                     }
                 }
@@ -4818,7 +4994,7 @@ static void drawCollabDialog() {
                     std::string addr = app.joinAddr, cd = app.joinCode;
                     guardSwitch([addr, cd] {
                         std::string err;
-                        if (collab::join(addr, cd, prefs().name, collab::colorFor(prefs().color), err)) { app.collabMsg.clear(); }
+                        if (collab::join(addr, cd, prefs().name, miColorColab(), err)) { app.collabMsg.clear(); }
                         else { app.collabMsg = err; app.collabMsgErr = true; app.showCollab = true; }
                     });
                 }
@@ -5731,6 +5907,9 @@ static void runScriptStep() {
     else if (cmd == "cuenta.perfil") { std::string l; in >> l; openPerfil(l.empty() ? envio::usuario() : l); }
     else if (cmd == "cuenta.configurar") openConfigPerfil();
     else if (cmd == "cuenta.notis") g_noti.showModal = true;
+    else if (cmd == "cuenta.tu") g_sp.showCuenta = true;
+    else if (cmd == "trabajar.dialogo") { app.collabTab = 0; app.showCollab = true; }
+    else if (cmd == "cuenta.comunidad") { g_sp.showComunidad = true; envio::pedirRegistrados(); }
     else if (cmd == "cuenta.cerrar") ImGui::CloseCurrentPopup();
     else if (cmd == "cuenta.guardar") {
         std::string frase; std::getline(in >> std::ws, frase);
@@ -6159,6 +6338,7 @@ int main(int argc, char **argv) {
     rlImGuiBeginInitImGui();
     ui::setupFontAndTheme();
     rlImGuiEndInitImGui();
+    rlImGuiAntesDePintar = ui::animarVentanas;
     ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     static std::string iniPath = ui::configDir() + "/editor.ini";

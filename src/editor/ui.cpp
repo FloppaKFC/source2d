@@ -1,4 +1,5 @@
 #include "ui.hpp"
+#include "imgui_internal.h"
 #include <cstring>
 #include <unordered_map>
 #include <fstream>
@@ -54,7 +55,7 @@ void setupFontAndTheme() {
 
     ImGuiStyle &s = ImGui::GetStyle();
     ImGui::StyleColorsDark(&s);
-    s.WindowRounding = 8; s.ChildRounding = 8; s.FrameRounding = 8; s.PopupRounding = 8;
+    s.WindowRounding = 12; s.ChildRounding = 10; s.FrameRounding = 8; s.PopupRounding = 10;
     s.ScrollbarRounding = 8; s.GrabRounding = 8; s.TabRounding = 8;
     s.WindowPadding = ImVec2(10, 10); s.FramePadding = ImVec2(10, 6); s.ItemSpacing = ImVec2(8, 6);
     s.ScrollbarSize = 12;
@@ -231,6 +232,85 @@ float animTo(ImGuiID id, float target, float speed) {
     *v += (target - *v) * std::min(1.0f, ImGui::GetIO().DeltaTime * speed);
     if (std::fabs(*v - target) < 0.002f) *v = target;
     return *v;
+}
+namespace {
+struct AnimVentana {
+    double abre = 0, cierra = -1;
+    bool modal = false;
+    ImVec2 origen;
+    std::vector<ImDrawList *> copia;
+};
+std::unordered_map<ImGuiID, AnimVentana> g_ventanas;
+std::vector<ImDrawList *> g_temporales;
+void soltarCopia(AnimVentana &a) {
+    for (auto *d : a.copia) IM_DELETE(d);
+    a.copia.clear();
+}
+void transformar(ImDrawList *dl, ImVec2 o, float s, float alfa) {
+    for (auto &v : dl->VtxBuffer) {
+        v.pos.x = o.x + (v.pos.x - o.x) * s;
+        v.pos.y = o.y + (v.pos.y - o.y) * s;
+        unsigned a = (v.col >> IM_COL32_A_SHIFT) & 0xFF;
+        v.col = (v.col & ~IM_COL32_A_MASK) | ((ImU32)(a * alfa) << IM_COL32_A_SHIFT);
+    }
+    for (auto &c : dl->CmdBuffer) {
+        c.ClipRect.x = o.x + (c.ClipRect.x - o.x) * s; c.ClipRect.z = o.x + (c.ClipRect.z - o.x) * s;
+        c.ClipRect.y = o.y + (c.ClipRect.y - o.y) * s; c.ClipRect.w = o.y + (c.ClipRect.w - o.y) * s;
+    }
+}
+float suave(float t) { t = std::clamp(t, 0.0f, 1.0f); return 1 - (1 - t) * (1 - t) * (1 - t); }
+}
+void animarVentanas(ImDrawData *dd) {
+    for (auto *d : g_temporales) IM_DELETE(d);
+    g_temporales.clear();
+    if (!dd) return;
+    ImGuiContext &g = *GImGui;
+    double ahora = g.Time;
+    std::unordered_map<ImGuiID, std::vector<ImDrawList *>> listas;
+    for (ImGuiWindow *w : g.Windows) {
+        if (!w->Active || w->Hidden || !w->RootWindow) continue;
+        ImGuiWindow *r = w->RootWindow;
+        if (!(r->Flags & (ImGuiWindowFlags_Popup | ImGuiWindowFlags_Modal)) || (r->Flags & ImGuiWindowFlags_Tooltip)) continue;
+        listas[r->ID].push_back(w->DrawList);
+    }
+    for (auto &[id, ls] : listas) {
+        ImGuiWindow *r = ImGui::FindWindowByID(id);
+        auto it = g_ventanas.find(id);
+        if (it == g_ventanas.end() || it->second.cierra >= 0) {
+            AnimVentana a;
+            if (it != g_ventanas.end()) soltarCopia(it->second);
+            a.abre = ahora;
+            a.modal = (r->Flags & ImGuiWindowFlags_Modal) != 0;
+            g_ventanas[id] = a;
+            it = g_ventanas.find(id);
+        }
+        AnimVentana &a = it->second;
+        a.origen = a.modal ? ImVec2(r->Pos.x + r->Size.x / 2, r->Pos.y + r->Size.y / 2) : ImVec2(r->Pos.x + r->Size.x / 2, r->Pos.y);
+        float dur = a.modal ? 0.2f : 0.12f, t = g_anim ? (float)((ahora - a.abre) / dur) : 1.0f;
+        if (t < 1.0f) {
+            float k = suave(t), s = (a.modal ? 0.86f : 0.9f) + (a.modal ? 0.14f : 0.1f) * k;
+            for (auto *d : ls) transformar(d, a.origen, s, std::min(1.0f, k * 1.4f));
+        }
+        if (g_anim) {
+            soltarCopia(a);
+            for (auto *d : ls) a.copia.push_back(d->CloneOutput());
+        }
+    }
+    for (auto it = g_ventanas.begin(); it != g_ventanas.end();) {
+        AnimVentana &a = it->second;
+        if (listas.count(it->first)) { ++it; continue; }
+        if (a.cierra < 0) a.cierra = ahora;
+        float dur = a.modal ? 0.16f : 0.1f, t = (float)((ahora - a.cierra) / dur);
+        if (!g_anim || t >= 1.0f || a.copia.empty()) { soltarCopia(a); it = g_ventanas.erase(it); continue; }
+        float k = suave(t), s = 1.0f - (a.modal ? 0.12f : 0.08f) * k;
+        for (auto *d : a.copia) {
+            ImDrawList *c = d->CloneOutput();
+            transformar(c, a.origen, s, 1.0f - k);
+            dd->AddDrawList(c);
+            g_temporales.push_back(c);
+        }
+        ++it;
+    }
 }
 bool beginModal(const char *name, bool *open, ImGuiWindowFlags flags) {
     ImVec2 c = ImGui::GetMainViewport()->GetCenter();

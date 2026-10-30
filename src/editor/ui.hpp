@@ -46,6 +46,7 @@ void setAnimations(bool on);
 bool animations();
 float animTo(ImGuiID id, float target, float speed = 14.0f);
 bool beginModal(const char *name, bool *open = nullptr, ImGuiWindowFlags flags = 0);
+void animarVentanas(ImDrawData *dd);
 bool iconButton(const char *id, Icon ic, bool active = false, const char *tooltip = nullptr, float size = 30.0f);
 
 void noteFocus(const char *kind, const std::string &key = "");

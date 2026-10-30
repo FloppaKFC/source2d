@@ -518,10 +518,13 @@ void rlImGuiBeginDelta(float deltaTime)
     ImGui::NewFrame();
 }
 
+void (*rlImGuiAntesDePintar)(ImDrawData *) = nullptr;
+
 void rlImGuiEnd(void)
 {
     ImGui::SetCurrentContext(GlobalContext);
     ImGui::Render();
+    if (rlImGuiAntesDePintar) rlImGuiAntesDePintar(ImGui::GetDrawData());
     ImGui_ImplRaylib_RenderDrawData(ImGui::GetDrawData());
 }
 
