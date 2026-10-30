@@ -204,6 +204,9 @@ void iniciar(bool buscar, bool pruebas) {
     }
 }
 
+void refrescar(Tipo t) {
+    if (time(nullptr) - g_t[t].ultima > 30) buscarAhora(t);
+}
 void buscarAhora(Tipo t) {
     Tienda &T = g_t[t];
     if (!T.on || !g_buscar || !T.meta.empty()) return;
@@ -274,7 +277,7 @@ void tick() {
                 if (v >= 0) { auto &c = T.cuenta[it->id]; (it->que == 'd' ? c.first : c.second) = v; }
                 it = lista->erase(it);
             }
-        if (g_buscar && T.meta.empty() && T.ultima && time(nullptr) - T.ultima > 3600) buscarAhora((Tipo)t);
+        if (g_buscar && T.meta.empty() && T.ultima && time(nullptr) - T.ultima > 120) buscarAhora((Tipo)t);
     }
 }
 

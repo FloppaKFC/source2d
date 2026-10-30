@@ -1711,6 +1711,9 @@ static bool containsNoCase(const std::string &hay, const std::string &needle) {
 static void openComentarios(const std::string &tipo, const std::string &id, const std::string &nombre, const std::string &autor);
 static void drawBaneo();
 static void drawSourcePlaySection() {
+    static int antes = -1;
+    if (antes != app.homeSection) tienda::refrescar();
+    antes = app.homeSection;
     sectionTitle("Source Play", 30);
     drawBaneo();
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kText2), "Juegos hechos con Source 2D, gratis: búscalos, descárgalos y juega.");
@@ -3815,6 +3818,8 @@ static bool storeTabs(store::Tipo t) {
 
 static void openCrearPaquete(store::Tipo t);
 static void drawStoreSection(store::Tipo t) {
+    static int vista[2] = {-1, -1};
+    if (vista[t] != app.homeSection) { vista[t] = app.homeSection; store::refrescar(t); }
     if (!g_st.pedido[t]) { g_st.pedido[t] = true; store::buscarAhora(t); }
     store::mirarContadores(t);
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kText2), t == store::Sprites ?
@@ -6886,8 +6891,30 @@ static int paqueteCli(const std::string &file, const std::string &tipo, const st
     std::error_code ec;
     fs::create_directories(fs::u8path(out), ec);
     auto nombre = [](std::string s) { for (char &c : s) if (strchr("/\\:*?\"<>|", c)) c = '_'; return s.empty() ? std::string("sin nombre") : s; };
-    if (pk.contains("sprites")) for (auto x : pk["sprites"]) { x["format"] = "source2d-sprite"; std::ofstream(fs::u8path(out + "/" + nombre(jstr(x, "name")) + ".s2dsprite")) << x.dump(); }
-    if (pk.contains("sonidos")) for (auto &x : pk["sonidos"]) std::ofstream(fs::u8path(out + "/" + nombre(jstr(x, "name")) + ".s2dsound")) << x.dump(1);
+    fs::create_directories(fs::u8path(out + "/vista previa"), ec);
+    if (pk.contains("sprites")) for (auto x : pk["sprites"]) {
+        x["format"] = "source2d-sprite";
+        std::string n = nombre(jstr(x, "name"));
+        std::ofstream(fs::u8path(out + "/" + n + ".s2dsprite")) << x.dump();
+        SpriteEditor se;
+        std::string e;
+        std::string png = out + "/vista previa/" + n + ".png";
+        if (se.load(x) && se.exportFile(png, 1, false, e)) {
+            Image im = LoadImage(png.c_str());
+            if (im.data) {
+                int k = std::max(1, 256 / std::max(1, std::min(im.width, im.height)));
+                if (k > 1) { ImageResizeNN(&im, im.width * k, im.height * k); ExportImage(im, png.c_str()); }
+                UnloadImage(im);
+            }
+            printf("  vista previa: %s.png\n", n.c_str());
+        }
+    }
+    if (pk.contains("sonidos")) for (auto &x : pk["sonidos"]) {
+        std::string n = nombre(jstr(x, "name"));
+        std::ofstream(fs::u8path(out + "/" + n + ".s2dsound")) << x.dump(1);
+        std::string e;
+        if (sound::exportWav(x, out + "/vista previa/" + n + ".wav", e)) printf("  para escuchar: %s.wav\n", n.c_str());
+    }
     if (pk.contains("tilesets") || pk.contains("autotiles")) {
         json doc = {{"id", "p_revision"}, {"name", "Revisión de paquete"}, {"version", 3}, {"settings", {{"width", 960}, {"height", 540}}},
                     {"globals", json::array()}, {"sprites", json::array()}, {"tilesets", json::array()}, {"objects", json::array()},

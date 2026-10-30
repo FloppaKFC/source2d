@@ -146,8 +146,18 @@ def probar(ref):
         fuera = os.path.join(d, "contenido")
         comprobar_store(d, e["tipo"], fuera)
         print(f"  Licencia: {info.get('licencia')}  ·  Categoría: {info.get('categoria')}")
-        print(f"  Contenido sacado a {fuera}: los sprites (.s2dsprite) y sonidos (.s2dsound) se abren con el editor para verlos y escucharlos.")
-        abrir(fuera)
+        vista = os.path.join(fuera, "vista previa")
+        print(f"  Vista previa en {vista} (imágenes PNG de cada sprite y .wav de cada sonido)")
+        abrir(vista)
+        wavs = sorted(f for f in os.listdir(vista) if f.endswith(".wav")) if os.path.isdir(vista) else []
+        rep = shutil.which("pw-play") or shutil.which("paplay") or shutil.which("aplay")
+        if wavs and rep and input("  ¿Escuchar los sonidos aquí? [S/n]: ").strip().lower() in ("", "s", "si", "sí"):
+            for w in wavs:
+                print(f"  ♪ {w[:-4]}  (Ctrl+C para pasar al siguiente)")
+                try:
+                    subprocess.run([rep, os.path.join(vista, w)])
+                except KeyboardInterrupt:
+                    pass
     if os.path.exists(os.path.join(d, "portada.png")):
         abrir(os.path.join(d, "portada.png"))
     print(f"\n  Archivos del envío en {d}")
@@ -203,15 +213,20 @@ def main():
         d = tempfile.mkdtemp(prefix="s2d-noticias-")
         claves, _ = r2.listar("novedades/")
         for k, _ in claves:
-            open(os.path.join(d, k[len("novedades/"):]), "wb").write(r2.leer(k))
-        antes = {f: open(os.path.join(d, f), "rb").read() for f in os.listdir(d)}
+            p = os.path.join(d, k[len("novedades/"):])
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            open(p, "wb").write(r2.leer(k))
+
+        def todos():
+            return {os.path.relpath(os.path.join(r, f), d).replace(os.sep, "/"): os.path.join(r, f) for r, _, fs in os.walk(d) for f in fs}
+        antes = {k: open(p, "rb").read() for k, p in todos().items()}
         r = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "anunciar.py")] + sys.argv[2:] + ["--sin-subir"],
                            env=dict(os.environ, S2D_VERSIONES_DIR=d))
         if r.returncode == 0:
-            for f in os.listdir(d):
-                p = os.path.join(d, f)
-                if os.path.isfile(p) and antes.get(f) != open(p, "rb").read():
-                    r2.subir_archivo("novedades/" + f, p, False, "application/json; charset=utf-8" if f.endswith(".json") else "application/octet-stream")
+            for f, p in todos().items():
+                if antes.get(f) != open(p, "rb").read():
+                    tipo = "application/json; charset=utf-8" if f.endswith(".json") else "image/png" if f.endswith(".png") else "image/jpeg" if f.endswith((".jpg", ".jpeg")) else "application/octet-stream"
+                    r2.subir_archivo("novedades/" + f, p, False, tipo)
                     print(f"  subido novedades/{f}")
         shutil.rmtree(d, ignore_errors=True)
         sys.exit(r.returncode)

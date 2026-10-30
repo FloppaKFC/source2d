@@ -113,11 +113,34 @@ solicitudes() {
 
 noticias() {
     titulo "Noticias"
-    echo "${D}Salen en Inicio > Noticias de todos los editores. Para encuestas: {encuesta: \"Pregunta\", \"Opción 1\", \"Opción 2\"}${N}"
-    local t x; pedir "Título" t
+    echo "${D}Salen en Inicio > Noticias de todos los editores.${N}"
+    echo "  1) Publicar una noticia   2) Ver las noticias   3) Borrar una   4) Resultados de una encuesta   5) Volver"
+    local o; pedir "Elige" o 1
+    case "$o" in
+        2) "${AD[@]}" noticias --lista; return ;;
+        3) "${AD[@]}" noticias --lista; local id; pedir "Id de la noticia" id; [ -n "$id" ] && si_no "¿Borrar la noticia $id?" && "${AD[@]}" noticias --borrar "$id"; return ;;
+        4) local id; pedir "Id de la noticia" id; [ -n "$id" ] && "${AD[@]}" noticias --resultados "$id"; return ;;
+        5) return ;;
+    esac
+    local t x tp im en hs
+    pedir "Título" t
     [ -z "$t" ] && return
+    echo "${D}Texto. Para una lista: {lista:uno, dos, tres}. Para una encuesta: {encuesta: \"Pregunta\", \"Opción 1\", \"Opción 2\"}${N}"
     pedir "Texto" x
-    "${AD[@]}" noticias "$t" "$x"
+    echo "  Tipo: 1) Aviso   2) Evento   3) Actualización   4) Consejo"
+    pedir "Tipo" tp 1
+    local args=("$t" "$x")
+    case "$tp" in 2) args+=(--tipo evento) ;; 3) args+=(--tipo actualizacion) ;; 4) args+=(--tipo consejo) ;; *) args+=(--tipo aviso) ;; esac
+    pedir "Imagen (ruta, vacío = sin imagen)" im
+    [ -n "$im" ] && args+=(--imagen "${im/#\~/$HOME}")
+    pedir "Enlace (https://..., vacío = sin enlace)" en
+    [ -n "$en" ] && args+=(--enlace "$en")
+    si_no "¿Importante? (sale en una ventana al abrir el editor)" && args+=(--importante)
+    si_no "¿Fijarla arriba del todo?" && args+=(--fijar)
+    si_no "¿Notificarla? (aviso emergente en los editores abiertos)" && args+=(--notificar)
+    pedir "Que deje de salir después del día (AAAA-MM-DD, vacío = nunca)" hs
+    [ -n "$hs" ] && args+=(--hasta "$hs")
+    "${AD[@]}" noticias "${args[@]}"
 }
 
 while :; do

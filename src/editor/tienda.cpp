@@ -22,7 +22,7 @@ namespace fs = std::filesystem;
 
 namespace tienda {
 namespace {
-const time_t kCada = 600;
+const time_t kCada = 120;
 const double kContadoresCada = 60, kCuentasCada = 60;
 
 struct Bajada { sys::Proc p; std::string dest, hash, id; long long tam = 0; bool vivo = false; int code = 0; };
@@ -294,6 +294,9 @@ void iniciar(bool buscar, bool pruebas) {
     if (buscar) buscarAhora();
 }
 
+void refrescar() {
+    if (time(nullptr) - g_ultima > 30) buscarAhora();
+}
 void buscarAhora() {
     if (!g_on || !g_meta.empty()) return;
     g_ultima = time(nullptr);

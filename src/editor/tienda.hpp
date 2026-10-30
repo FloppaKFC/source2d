@@ -19,6 +19,7 @@ enum class Estado { NoInstalado, Descargando, Instalado, Actualizable };
 void iniciar(bool buscar, bool pruebas);
 void tick();
 void buscarAhora();
+void refrescar();
 std::string estado();
 const std::vector<Juego> &juegos();
 std::vector<std::string> categorias();

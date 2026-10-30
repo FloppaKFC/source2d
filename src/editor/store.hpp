@@ -17,6 +17,7 @@ struct Paquete {
 void iniciar(bool buscar, bool pruebas);
 void tick();
 void buscarAhora(Tipo t);
+void refrescar(Tipo t);
 std::string estado(Tipo t);
 const std::vector<Paquete> &paquetes(Tipo t);
 const Paquete *buscar(Tipo t, const std::string &id);
