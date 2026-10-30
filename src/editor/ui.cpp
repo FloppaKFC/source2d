@@ -305,6 +305,9 @@ void animarVentanas(ImDrawData *dd) {
         float k = suave(t), s = 1.0f - (a.modal ? 0.12f : 0.08f) * k;
         for (auto *d : a.copia) {
             ImDrawList *c = d->CloneOutput();
+            c->_VtxWritePtr = c->VtxBuffer.Data + c->VtxBuffer.Size;
+            c->_IdxWritePtr = c->IdxBuffer.Data + c->IdxBuffer.Size;
+            c->_VtxCurrentIdx = (unsigned)c->VtxBuffer.Size;
             transformar(c, a.origen, s, 1.0f - k);
             dd->AddDrawList(c);
             g_temporales.push_back(c);
