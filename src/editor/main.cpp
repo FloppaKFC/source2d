@@ -4709,6 +4709,14 @@ static void drawIconoMenu(ImDrawList *dl, int id, ImVec2 c, float s, ImU32 col, 
         dl->AddTriangleFilled(P(0.05f, 0.55f), P(0.38f, 0.08f), P(0.7f, 0.55f), col & 0xB3FFFFFF);
         dl->AddCircleFilled(P(0.42f, -0.35f), h * 0.16f, col, 12);
         break;
+    case 8:
+        dl->AddLine(P(0, -0.9f), P(0, 0.3f), col, t);
+        dl->AddLine(P(-0.42f, -0.12f), P(0, 0.3f), col, t);
+        dl->AddLine(P(0.42f, -0.12f), P(0, 0.3f), col, t);
+        dl->AddLine(P(-0.88f, 0.2f), P(-0.88f, 0.82f), col, t);
+        dl->AddLine(P(-0.88f, 0.82f), P(0.88f, 0.82f), col, t);
+        dl->AddLine(P(0.88f, 0.82f), P(0.88f, 0.2f), col, t);
+        break;
     case 6:
         dl->AddEllipseFilled(P(-0.52f, 0.58f), ImVec2(h * 0.28f, h * 0.2f), col, -0.4f);
         dl->AddEllipseFilled(P(0.48f, 0.4f), ImVec2(h * 0.28f, h * 0.2f), col, -0.4f);
@@ -4717,6 +4725,137 @@ static void drawIconoMenu(ImDrawList *dl, int id, ImVec2 c, float s, ImU32 col, 
         dl->AddQuadFilled(P(-0.27f - t / h * 0.5f, -0.6f), P(0.73f + t / h * 0.5f, -0.8f), P(0.73f + t / h * 0.5f, -0.5f), P(-0.27f - t / h * 0.5f, -0.3f), col);
         break;
     }
+}
+
+static void drawDescargasSection() {
+    static int tab = 0, cat = 0;
+    static char buscar[64] = "";
+    static std::string sel[3];
+    sectionTitle("Descargas", 30);
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ui::kText2), "Todo lo que has descargado de Source Play y Source Store, como una biblioteca.");
+    ImGui::Dummy(ImVec2(0, 6));
+    struct Item { std::string id, nombre, autor, cat, portada, extra; const tienda::Juego *j = nullptr; const store::Paquete *p = nullptr; };
+    std::vector<Item> listas[3];
+    for (auto &j : tienda::juegos())
+        if (tienda::estadoDe(j) != tienda::Estado::NoInstalado) listas[0].push_back({j.id, j.nombre, j.autor, j.categoria, j.portadaLocal, j.abierto ? "Abierto" : "Cerrado", &j, nullptr});
+    for (auto &id : tienda::instaladosSinCatalogo()) listas[0].push_back({id, tienda::nombreInstalado(id), "", "Retirados", "", "Ya no está en Source Play"});
+    for (int t = 0; t < 2; t++)
+        for (auto &p : store::paquetes(t ? store::Sonidos : store::Sprites))
+            if (store::instalado(t ? store::Sonidos : store::Sprites, p.id)) listas[t + 1].push_back({p.id, p.nombre, p.autor, p.categoria, p.portadaLocal, p.licencia, nullptr, &p});
+    const char *nombres[3] = {"Juegos", "Sprites", "Música y sonidos"};
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    for (int t = 0; t < 3; t++) {
+        if (t) ImGui::SameLine(0, 6);
+        std::string l = std::string(nombres[t]) + "  " + std::to_string(listas[t].size());
+        ImVec2 ts = ImGui::CalcTextSize(l.c_str()), p = ImGui::GetCursorScreenPos();
+        ImGui::PushID(t);
+        if (ImGui::InvisibleButton("##tab", ImVec2(ts.x + 28, 34))) { tab = t; cat = 0; }
+        bool hov = ImGui::IsItemHovered();
+        ImGui::PopID();
+        dl->AddRectFilled(p, ImVec2(p.x + ts.x + 28, p.y + 34), tab == t ? ui::kAccent : hov ? ui::kHover : ui::kPanel2, 17);
+        dl->AddText(tab == t ? ui::boldFont() : ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(p.x + 14, p.y + 17 - ts.y / 2), tab == t ? IM_COL32_WHITE : ui::kText2, l.c_str());
+    }
+    ImGui::Dummy(ImVec2(0, 8));
+    auto &lista = listas[tab];
+    std::vector<std::string> cats = {"Todas"};
+    for (auto &x : lista) if (std::find(cats.begin(), cats.end(), x.cat) == cats.end()) cats.push_back(x.cat);
+    if (cat >= (int)cats.size()) cat = 0;
+    float alto = ImGui::GetContentRegionAvail().y;
+    ImGui::BeginChild("##biblio", ImVec2(300, alto), ImGuiChildFlags_Borders);
+    ImGui::SetNextItemWidth(-1);
+    ImGui::InputTextWithHint("##bb", "Buscar", buscar, sizeof buscar);
+    for (size_t c = 0; c < cats.size(); c++) {
+        if (c) ImGui::SameLine(0, 4);
+        if (ImGui::GetCursorPosX() + ImGui::CalcTextSize(cats[c].c_str()).x + 20 > ImGui::GetContentRegionMax().x) ImGui::NewLine();
+        ImGui::PushID((int)c);
+        bool on = cat == (int)c;
+        if (on) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::ColorConvertU32ToFloat4(ui::kAccent));
+        if (ImGui::SmallButton(cats[c].c_str())) cat = (int)c;
+        if (on) ImGui::PopStyleColor();
+        ImGui::PopID();
+    }
+    ImGui::Separator();
+    if (lista.empty()) { ImGui::PushTextWrapPos(280); ImGui::TextDisabled("Todavía no has descargado nada aquí. Búscalo en %s.", tab == 0 ? "Source Play" : tab == 1 ? "Source Sprite > Source Store" : "Source Sound > Source Store"); ImGui::PopTextWrapPos(); }
+    for (auto &x : lista) {
+        if (cat && x.cat != cats[cat]) continue;
+        if (!containsNoCase(x.nombre, buscar) && !containsNoCase(x.autor, buscar)) continue;
+        if (sel[tab].empty()) sel[tab] = x.id;
+        ImGui::PushID(x.id.c_str());
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        float w = ImGui::GetContentRegionAvail().x;
+        if (ImGui::InvisibleButton("##it", ImVec2(w, 44))) sel[tab] = x.id;
+        ImDrawList *ld = ImGui::GetWindowDrawList();
+        if (sel[tab] == x.id || ImGui::IsItemHovered()) ld->AddRectFilled(p, ImVec2(p.x + w, p.y + 44), sel[tab] == x.id ? ui::kPanel3 : ui::kHover, 8);
+        ImVec2 a(p.x + 4, p.y + 4), b(p.x + 64, p.y + 40);
+        if (const Texture2D *t = newsImage(x.portada)) ld->AddImageRounded((ImTextureID)(intptr_t)t->id, a, b, ImVec2(0, 0), ImVec2(1, 1), IM_COL32_WHITE, 6);
+        else {
+            ld->AddRectFilled(a, b, ui::kPanel2, 6);
+            json pk;
+            if (x.p && tab == 1 && store::vista(store::Sprites, *x.p, pk)) dibujarSpritesPaquete(ld, pk, x.p->archivo.blake2b, a, ImVec2(60, 36), 1);
+        }
+        ld->AddText(ImVec2(p.x + 74, p.y + 6), ui::kText, x.nombre.c_str());
+        ld->AddText(ImVec2(p.x + 74, p.y + 24), ui::kDim, x.cat.c_str());
+        ImGui::PopID();
+    }
+    ImGui::EndChild();
+    ImGui::SameLine(0, 16);
+    ImGui::BeginChild("##detalle", ImVec2(0, alto));
+    const Item *it = nullptr;
+    for (auto &x : lista) if (x.id == sel[tab]) it = &x;
+    if (!it) ImGui::TextDisabled("Elige algo de la lista.");
+    else {
+        ImDrawList *d2 = ImGui::GetWindowDrawList();
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        float w = std::min(ImGui::GetContentRegionAvail().x, 720.0f), h = w * 9 / 16 * 0.62f;
+        d2->AddRectFilled(p, ImVec2(p.x + w, p.y + h), ui::kPanel3, 14);
+        if (const Texture2D *t = newsImage(it->portada)) d2->AddImageRounded((ImTextureID)(intptr_t)t->id, p, ImVec2(p.x + w, p.y + h), ImVec2(0, 0), ImVec2(1, 1), IM_COL32_WHITE, 14);
+        else if (it->p && tab == 1) { json pk; if (store::vista(store::Sprites, *it->p, pk)) dibujarSpritesPaquete(d2, pk, it->p->archivo.blake2b, p, ImVec2(w, h), 6); }
+        else ui::drawIcon(d2, tab == 0 ? ui::Icon::Gamepad : ui::Icon::Bell, ImVec2(p.x + w / 2, p.y + h / 2), 44, ui::kDim);
+        ImGui::Dummy(ImVec2(w, h + 8));
+        ImGui::PushFont(ui::boldFont(), 26); ImGui::TextUnformatted(it->nombre.c_str()); ImGui::PopFont();
+        if (!it->autor.empty()) { ImGui::TextDisabled("por"); ImGui::SameLine(0, 4); authorLink(it->autor); }
+        for (const std::string &e : {it->cat, it->extra}) {
+            if (e.empty()) continue;
+            ImGui::SameLine(0, 10);
+            ImVec2 q = ImGui::GetCursorScreenPos(), ts = ImGui::CalcTextSize(e.c_str());
+            ImGui::Dummy(ImVec2(ts.x + 18, ts.y + 6));
+            d2->AddRectFilled(q, ImVec2(q.x + ts.x + 18, q.y + ts.y + 6), ui::kPanel2, 10);
+            d2->AddText(ImVec2(q.x + 9, q.y + 3), ui::kText2, e.c_str());
+        }
+        ImGui::Dummy(ImVec2(0, 8));
+        if (tab == 0) {
+            if (ui::primaryButton("Jugar", ImVec2(180, 44))) playInstalled(it->id);
+            if (it->j && tienda::estadoDe(*it->j) == tienda::Estado::Actualizable) { ImGui::SameLine(); if (ImGui::Button("Actualizar", ImVec2(140, 44))) tienda::descargar(*it->j); }
+        } else {
+            store::Tipo st = tab == 1 ? store::Sprites : store::Sonidos;
+            if (ui::primaryButton("Añadir al proyecto", ImVec2(200, 44))) storeAddToProject(st, it->id);
+            ImGui::SameLine();
+            if (ImGui::Button("Guardar en mis creaciones", ImVec2(220, 44))) {
+                json pk; std::string err;
+                if (store::leer(st, it->id, pk, err)) notify(std::to_string(storeToCreations(st, pk)) + " guardado(s)");
+            }
+        }
+        ImGui::SameLine();
+        if ((it->j || it->p) && ImGui::Button("Ver ficha", ImVec2(120, 44))) openFicha(tab, it->id);
+        ImGui::SameLine();
+        if (ImGui::Button("Borrar", ImVec2(100, 44))) {
+            if (tab == 0) tienda::borrar(it->id); else store::borrar(tab == 1 ? store::Sprites : store::Sonidos, it->id);
+            notify(it->nombre + " borrado de este equipo");
+            sel[tab].clear();
+        }
+        if (it->j && !it->j->descripcion.empty()) {
+            ImGui::Dummy(ImVec2(0, 8));
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + w);
+            ImGui::TextUnformatted(it->j->descripcion.c_str());
+            ImGui::PopTextWrapPos();
+        } else if (it->p && !it->p->descripcion.empty()) {
+            ImGui::Dummy(ImVec2(0, 8));
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + w);
+            ImGui::TextUnformatted(it->p->descripcion.c_str());
+            ImGui::PopTextWrapPos();
+        }
+    }
+    ImGui::EndChild();
 }
 
 static void drawNewsSection() {
@@ -4758,6 +4897,7 @@ static void drawStartPage() {
     items.push_back({"Notificaciones", ui::Icon::Bell, 7});
     items.push_back({"Source Sprite", ui::Icon::Image, 4});
     items.push_back({"Source Sound", ui::Icon::Bell, 6});
+    items.push_back({"Descargas", ui::Icon::Download, 8});
     for (int k = 0; k < (int)items.size(); k++) {
         const Item &it = items[k];
         int i = it.id;
@@ -4848,6 +4988,7 @@ static void drawStartPage() {
     else if (app.homeSection == 3) { sectionTitle("Escuela", 30); school::drawSection(); drawTemplateLessons(); }
     else if (app.homeSection == 5) drawNewsSection();
     else if (app.homeSection == 7) drawNotificacionesSection();
+    else if (app.homeSection == 8) drawDescargasSection();
     else if (app.homeSection == 4) drawSpriteGallery();
     else if (app.homeSection == 6) drawSoundGallery();
     else drawCreateSection();
