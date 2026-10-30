@@ -53,6 +53,8 @@ S2D_JUEGOS_DIR="$T/juegos" python3 tools/source_cuentas.py creador FloppaKFC --s
 S2D_JUEGOS_DIR="$T/juegos" python3 tools/source_play.py destacar otro-aventura-de-plataformas --sin-subir | grep -v Firmado
 sed "s|CAPTURA|$T/sourceplay.png|" test/editor_sourceplay2.txt > "$T/guion_sp2.txt"
 XDG_CONFIG_HOME="$T/spcfg" S2D_TIENDA_URL="file://$T/juegos/" S2D_FIRMA_PUBLICA="$PUB" "$ED" --script "$T/guion_sp2.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
+NODE=${S2D_NODE:-$(command -v node || true)}
+if [ -n "$NODE" ]; then echo "== Worker de Source 2D (R2 y GitHub de mentira)"; "$NODE" test/worker_prueba.mjs; else echo "(sin Node: no se prueba el Worker; S2D_NODE elige uno)"; fi
 echo "== Source Store: crear paquetes de sprites y sonidos, publicarlos, descargarlos y anadirlos a un proyecto"
 mkdir -p "$T/stpaq" "$T/stsp" "$T/stso" "$T/stcfg" "$T/stcfg2"
 cp test/proyecto_prueba.source2d.json "$T/st.json"
