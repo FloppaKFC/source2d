@@ -2,10 +2,11 @@
 import argparse, datetime, os, shutil, subprocess, sys, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from anunciar import RAIZ, cargar, guardar_y_firmar, huella, repo, subir
+import r2
+from anunciar import RAIZ, cargar, guardar_y_firmar, huella
 
-REPO = "FloppaKFC/source2d-versiones"
-NOMBRES = {"linux": "Source2D-linux", "windows": "Source2D-windows.exe"}
+REPO = "FloppaKFC/source2d"
+NOMBRES = {"linux": "Source2D.x86_64", "windows": "Source2D.exe", "appimage": "Source2D.AppImage"}
 
 def gh():
     local = os.path.join(RAIZ, "build", "toolchain", "gh", "gh")
@@ -17,6 +18,7 @@ def main():
     ap.add_argument("num", type=int, help="S2D_VERSION_NUM de esa version")
     ap.add_argument("--linux")
     ap.add_argument("--windows")
+    ap.add_argument("--appimage")
     ap.add_argument("--canal", choices=["estable", "experimental"], default="estable")
     ap.add_argument("--notas", default="")
     ap.add_argument("--sin-noticia", action="store_true")
@@ -28,7 +30,9 @@ def main():
     if ".." in a.nombre or "/" in a.nombre:
         ap.error("el nombre no puede llevar '/' ni '..'")
 
-    d = repo()
+    d = tempfile.mkdtemp(prefix="s2d-novedades-")
+    for k, _ in r2.listar("novedades/")[0]:
+        open(os.path.join(d, k[len("novedades/"):]), "wb").write(r2.leer(k))
     vj = cargar(d, "versiones.json", "versiones", "versiones")
     nj = cargar(d, "noticias.json", "noticias", "noticias")
     if any(v.get("nombre") == a.nombre for v in vj["versiones"]):
@@ -39,7 +43,7 @@ def main():
     etiqueta = a.nombre.replace(" ", "-")
     tmp = tempfile.mkdtemp(prefix="s2d-version-")
     archivos, subidas = {}, []
-    for sistema, origen in (("linux", a.linux), ("windows", a.windows)):
+    for sistema, origen in (("linux", a.linux), ("windows", a.windows), ("appimage", a.appimage)):
         if not origen:
             continue
         dest = os.path.join(tmp, NOMBRES[sistema])
@@ -68,9 +72,12 @@ def main():
         ns.append(n)
     guardar_y_firmar(d, {"versiones.json": vj, "noticias.json": nj})
     if a.sin_subir:
-        print("Firmado. No se ha subido (--sin-subir).")
-    else:
-        subir(d, f"Version {a.nombre}")
+        print(f"Firmado en {d}. No se ha subido (--sin-subir).")
+        return
+    for f in ("versiones.json", "versiones.json.firma", "noticias.json", "noticias.json.firma"):
+        r2.subir_archivo("novedades/" + f, os.path.join(d, f), False, "application/json; charset=utf-8" if f.endswith(".json") else "text/plain")
+    shutil.rmtree(d, ignore_errors=True)
+    print(f"Publicada {a.nombre}: los editores la verán en Inicio > Noticias y en el selector de versiones.")
 
 if __name__ == "__main__":
     main()

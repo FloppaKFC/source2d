@@ -27,15 +27,28 @@ make -f Makefile.linux ZIG="$ZIG" check-glibc
 rm -rf Release
 mkdir -p Release/Linux Release/Windows
 echo "== editores comprimidos (un solo archivo que se descomprime al abrirse)"
-python3 tools/pack_exe.py build/lnx/lite/stub build/lnx/Source2D Release/Linux/Source2D
+python3 tools/pack_exe.py build/lnx/lite/stub build/lnx/Source2D Release/Linux/Source2D.x86_64
 cp build/win/Source2D.exe Release/Windows/Source2D.exe
+echo "== AppImage para Linux"
+AIT=build/toolchain/appimagetool
+if [ ! -x "$AIT" ]; then
+    curl -fsSL https://github.com/AppImage/appimagetool/releases/download/1.9.0/appimagetool-x86_64.AppImage -o "$AIT" && chmod +x "$AIT"
+fi
+AD=build/appimage/Source2D.AppDir
+rm -rf build/appimage && mkdir -p "$AD/usr/bin"
+cp build/lnx/Source2D "$AD/usr/bin/source2d"
+printf '#!/bin/sh\nexec "$(dirname "$(readlink -f "$0")")/usr/bin/source2d" "$@"\n' > "$AD/AppRun" && chmod +x "$AD/AppRun"
+printf '[Desktop Entry]\nType=Application\nName=Source 2D\nComment=Motor de juegos 2D con eventos\nExec=source2d\nIcon=source2d\nCategories=Development;Game;\n' > "$AD/source2d.desktop"
+python3 tools/icono_appimage.py "$AD/source2d.png"
+ARCH=x86_64 "$AIT" --appimage-extract-and-run "$AD" Release/Linux/Source2D.AppImage >/dev/null
 make LICENCIAS-TERCEROS.txt
 cp LICENCIAS-TERCEROS.txt Release/LICENCIAS-TERCEROS.txt
 rm -rf Release/Idiomas && cp -r Idiomas Release/Idiomas
 cat > Release/LEEME.txt <<'TXT'
 Source 2D @VERSION@ - motor de juegos 2D con eventos
 
-Linux:   Release/Linux/Source2D        (dale permiso de ejecucion si hace falta: chmod +x Source2D)
+Linux:   Release/Linux/Source2D.AppImage   o   Release/Linux/Source2D.x86_64
+         (dale permiso de ejecucion si hace falta: chmod +x; el .x86_64 funciona aunque la distro no traiga FUSE)
 Windows: Release/Windows/Source2D.exe  (Windows 10 u 11; en 7 y 8.1 hace falta la actualizacion KB2999226 de Microsoft)
 
 Cada uno es un unico archivo: no hay que instalar nada. Los proyectos se guardan solos en
