@@ -32,7 +32,7 @@ void mirarContadores(Tipo t);
 long long descargas(Tipo t, const std::string &id);
 long long meGusta(Tipo t, const std::string &id);
 bool leGusta(Tipo t, const std::string &id);
-void darMeGusta(Tipo t, const Paquete &p);
+bool darMeGusta(Tipo t, const Paquete &p, bool poner = true);
 
 bool valido(const json &paquete, Tipo t, std::string &err);
 int anadirAlProyecto(Project &proj, const json &paquete);

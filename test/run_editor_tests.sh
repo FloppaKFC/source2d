@@ -34,12 +34,11 @@ echo "== Noticias con encuesta y Source Play (clave de firma, repositorios y con
 make -s build/firma
 export S2D_FIRMA_DIR="$T/clave" S2D_FIRMA_CONTRASENA=contrasena-de-prueba
 PUB=$(python3 test/desktop/clave_prueba.py "$S2D_FIRMA_CONTRASENA")
-mkdir -p "$T/news" "$T/cont/get/source2d-floppa" "$T/cont/hit/source2d-floppa" "$T/spcfg" "$T/paq" "$T/juegos"
+mkdir -p "$T/news" "$T/r2/contadores" "$T/spcfg" "$T/paq" "$T/juegos"
 S2D_VERSIONES_DIR="$T/news" python3 tools/anunciar.py "Encuesta" 'Elige. {encuesta: "¿Qué quieres?", "Luces", "Red", "Mapas", "3d"} Gracias' --sin-subir >/dev/null
 K1=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['noticias'][0]['encuesta']['clave'])" "$T/news/noticias.json")
-echo '{"value":5}' > "$T/cont/get/source2d-floppa/$K1-0"; echo '{"value":2}' > "$T/cont/get/source2d-floppa/$K1-1"
-echo '{"value":3}' > "$T/cont/hit/source2d-floppa/$K1-1"
-XDG_CONFIG_HOME="$T/spcfg" S2D_NOVEDADES_URL="file://$T/news/" S2D_FIRMA_PUBLICA="$PUB" S2D_CONTADOR_URL="file://$T/cont/" \
+echo '{"value":5}' > "$T/r2/contadores/$K1-0.json"; echo '{"value":2}' > "$T/r2/contadores/$K1-1.json"
+XDG_CONFIG_HOME="$T/spcfg" S2D_NOVEDADES_URL="file://$T/news/" S2D_FIRMA_PUBLICA="$PUB" S2D_R2_URL="file://$T/r2/" \
     "$ED" --script test/editor_encuesta.txt | grep "S2DEDIT FAIL\|S2DEDIT FIN"
 cp test/proyecto_prueba.source2d.json "$T/sp.json"
 sed "s|PROYECTO|$T/sp.json|; s|PAQ|$T/paq|g; s|MINIATURA|$T/imagen.png|" test/editor_sourceplay.txt > "$T/guion_sp.txt"
@@ -53,8 +52,6 @@ S2D_JUEGOS_DIR="$T/juegos" python3 tools/source_cuentas.py creador FloppaKFC --s
 S2D_JUEGOS_DIR="$T/juegos" python3 tools/source_play.py destacar otro-aventura-de-plataformas --sin-subir | grep -v Firmado
 sed "s|CAPTURA|$T/sourceplay.png|" test/editor_sourceplay2.txt > "$T/guion_sp2.txt"
 XDG_CONFIG_HOME="$T/spcfg" S2D_TIENDA_URL="file://$T/juegos/" S2D_FIRMA_PUBLICA="$PUB" "$ED" --script "$T/guion_sp2.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
-NODE=${S2D_NODE:-$(command -v node || true)}
-if [ -n "$NODE" ]; then echo "== Worker de Source 2D (R2 y GitHub de mentira)"; "$NODE" test/worker_prueba.mjs; else echo "(sin Node: no se prueba el Worker; S2D_NODE elige uno)"; fi
 echo "== Source Store: crear paquetes de sprites y sonidos, publicarlos, descargarlos y anadirlos a un proyecto"
 mkdir -p "$T/stpaq" "$T/stsp" "$T/stso" "$T/stcfg" "$T/stcfg2"
 cp test/proyecto_prueba.source2d.json "$T/st.json"
@@ -65,14 +62,26 @@ S2D_SONIDOS_DIR="$T/stso" S2D_EDITOR="$ED" python3 tools/source_store.py sonidos
 cp test/proyecto_prueba.source2d.json "$T/st2.json"
 sed "s|PROYECTO|$T/st2.json|; s|CAPTURA|$T/store.png|" test/editor_store2.txt > "$T/guion_st2.txt"
 XDG_CONFIG_HOME="$T/stcfg2" S2D_STORE_SPRITES_URL="file://$T/stsp/" S2D_STORE_SONIDOS_URL="file://$T/stso/" S2D_FIRMA_PUBLICA="$PUB" \
-    S2D_CONTADOR_URL="file://$T/cont/" "$ED" --script "$T/guion_st2.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
-echo "== Publicar en Source Play con un GitHub de mentira (entrar con codigo, envio, revision, registro, perfil y seguir)"
+    S2D_R2_URL="file://$T/r2/" "$ED" --script "$T/guion_st2.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
+NODE=${S2D_NODE:-$(command -v node || true)}
+if [ -n "$NODE" ]; then
+echo "== Worker de Source 2D (R2 y GitHub de mentira)"
+"$NODE" test/worker_prueba.mjs
+echo "== Publicar con el Worker de verdad en local (entrar con GitHub de mentira, envio, rechazo en tiempo real, registro, perfil, seguir y denunciar)"
 python3 test/desktop/github_falso.py 47790 "$T/ghsub" 2>/dev/null & GHP=$!
-mkdir -p "$T/ghsub" "$T/ghcfg"; cp "$T/imagen.png" "$T/ghsub/avatar.png"; sleep 0.5
+mkdir -p "$T/ghsub" "$T/ghcfg" "$T/wr2/cuentas" "$T/wr2-meta" "$T/wpriv"; cp "$T/imagen.png" "$T/ghsub/avatar.png"
+echo '{"login":"amiga","unido":"2026-10-01T09:00:00Z","beta":true}' > "$T/wr2/cuentas/amiga.json"
+echo '{"login":"amiga","unido":"2026-10-01T09:00:00Z","beta":"1"}' > "$T/wr2-meta/cuentas%2Famiga.json"
+"$NODE" test/worker_servidor.mjs 47791 "$T/wr2" "$T/wpriv" http://127.0.0.1:47790 >/dev/null 2>&1 & WKP=$!
+python3 test/desktop/revisor_falso.py "$T/wpriv" "falta un final" & RVP=$!
+sleep 0.8
 sed "s|PROYECTO|$T/sp.json|; s|CAPTURA|$T/perfil.png|" test/editor_envio.txt > "$T/guion_envio.txt"
 XDG_CONFIG_HOME="$T/ghcfg" S2D_GITHUB_API=http://127.0.0.1:47790 S2D_GITHUB_WEB=http://127.0.0.1:47790 S2D_GITHUB_CLIENT_ID=cliente-de-prueba \
-    "$ED" --script "$T/guion_envio.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
-kill $GHP 2>/dev/null || true
+    S2D_API_URL=http://127.0.0.1:47791 S2D_R2_URL="file://$T/wr2/" "$ED" --script "$T/guion_envio.txt" | grep "S2DEDIT FAIL\|S2DEDIT FIN"
+ls "$T/wpriv/denuncias/"*.json >/dev/null 2>&1 && echo "denuncia guardada en el bucket privado" || echo "S2DEDIT FAIL la denuncia no llego"
+[ -s "$T/wr2/cuentas/creador.json" ] && echo "cuenta registrada en R2" || echo "S2DEDIT FAIL registro"
+kill $GHP $WKP $RVP 2>/dev/null || true
+else echo "(sin Node: no se prueban el Worker ni los envios; S2D_NODE elige uno)"; fi
 unset S2D_FIRMA_DIR S2D_FIRMA_CONTRASENA
 echo "== extension Steam (se anade y aparecen sus condiciones y acciones; sin Steam el juego sigue)"
 sed "s|PROYECTO|$T/proj.json|" test/editor_steam.txt > "$T/guion_steam.txt"

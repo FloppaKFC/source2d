@@ -1,4 +1,6 @@
 #include "store.hpp"
+#include "envio.hpp"
+#include "servidor.hpp"
 #include "exporter.hpp"
 #include "firma_publica.hpp"
 #include "sound_studio.hpp"
@@ -20,11 +22,8 @@ namespace fs = std::filesystem;
 
 namespace store {
 namespace {
-struct Def { const char *nombre, *base, *releases, *envVar; };
-const Def kDefs[2] = {
-    {"sprites", "https://raw.githubusercontent.com/FloppaKFC/source2d-sprites/main/", "https://github.com/FloppaKFC/source2d-sprites/releases/download/", "S2D_STORE_SPRITES_URL"},
-    {"sonidos", "https://raw.githubusercontent.com/FloppaKFC/source2d-sonidos/main/", "https://github.com/FloppaKFC/source2d-sonidos/releases/download/", "S2D_STORE_SONIDOS_URL"}};
-const char *kContador = "https://abacus.jasoncameron.dev/", *kEspacio = "source2d-floppa";
+struct Def { const char *nombre, *envVar; };
+const Def kDefs[2] = {{"sprites", "S2D_STORE_SPRITES_URL"}, {"sonidos", "S2D_STORE_SONIDOS_URL"}};
 
 struct Bajada { sys::Proc p; std::string dest, hash, id; long long tam = 0; bool vivo = false; int code = 0; char que = 0; };
 struct Tienda {
@@ -34,13 +33,14 @@ struct Tienda {
     std::vector<Bajada> meta, portadas, bajadas, cuentas, hits;
     std::map<std::string, std::string> errores;
     std::map<std::string, std::pair<long long, long long>> cuenta;
-    std::set<std::string> gustan;
+    std::set<std::string> gustan, contados;
+    bool gustanSincronizado = false;
     double cuentasAt = -1e9;
     time_t ultima = 0;
 };
 Tienda g_t[2];
 bool g_buscar = false, g_pruebas = false;
-std::string g_contador = kContador;
+std::string g_contador;
 uint8_t g_pub[32];
 
 std::string dir(int t) { return ui::configDir() + "/source-store/" + kDefs[t].nombre; }
@@ -109,7 +109,7 @@ tienda::Archivo archivoDe(int t, const json &x) {
     uint8_t tmp[32];
     if (!rutaSegura(a.ruta) || !fromHex(a.blake2b, tmp, 32)) return tienda::Archivo{};
     if (url.empty()) a.url = g_t[t].base + a.ruta;
-    else if ((url.rfind(kDefs[t].releases, 0) == 0 || (g_pruebas && url.rfind("file://", 0) == 0)) && url.find("..") == std::string::npos) a.url = url;
+    else if ((servidor::urlDeR2(url) || (g_pruebas && url.rfind("file://", 0) == 0)) && url.find("..") == std::string::npos) a.url = url;
     else return tienda::Archivo{};
     return a;
 }
@@ -166,14 +166,16 @@ long long valor(Bajada &b) {
     if (b.code != 0 || !j.is_object() || !j.contains("value") || !j["value"].is_number_integer()) return -1;
     return j["value"].get<long long>();
 }
-void sumar(int t, const Paquete &p, char que) {
-    if (g_contador.empty() || p.contador.empty()) return;
-    Bajada b; b.dest = dir(t) + "/contadores/hit-" + p.id + "-" + que + ".json"; b.id = p.id; b.que = que;
-    if (lanzar(b, g_contador + "hit/" + kEspacio + "/" + p.contador + "-" + que, {"--max-time", "15", "--max-filesize", "4096"})) g_t[t].hits.push_back(b);
-}
 void guardarGustan(int t) {
     if (g_pruebas && !getenv(kDefs[t].envVar)) return;
-    sys::writeDurable(dir(t) + "/local.json", json{{"gustan", g_t[t].gustan}}.dump());
+    sys::writeDurable(dir(t) + "/local.json", json{{"gustan", g_t[t].gustan}, {"contados", g_t[t].contados}}.dump());
+}
+void contarDescargaUnaVez(int t, const Paquete &p) {
+    if (p.contador.empty() || g_t[t].contados.count(p.id)) return;
+    g_t[t].contados.insert(p.id);
+    guardarGustan(t);
+    std::string id = p.id;
+    envio::contarDescarga(p.contador + "-d", [t, id](long long v) { if (v >= 0) g_t[t].cuenta[id].first = v; });
 }
 std::string instDir(int t, const std::string &id) { return dir(t) + "/instalados/" + id; }
 }
@@ -182,21 +184,22 @@ void iniciar(bool buscar, bool pruebas) {
     g_pruebas = pruebas;
     std::string pub = S2D_FIRMA_PUBLICA;
     if (pruebas) { const char *k = getenv("S2D_FIRMA_PUBLICA"); pub = k ? k : ""; }
-    if (const char *c = getenv("S2D_CONTADOR_URL")) g_contador = c;
-    else if (pruebas) g_contador.clear();
+    g_contador = pruebas && !getenv("S2D_R2_URL") ? "" : servidor::r2();
     if (!fromHex(pub, g_pub, 32)) return;
     g_buscar = buscar;
     for (int t = 0; t < 2; t++) {
         const char *url = getenv(kDefs[t].envVar);
         if (pruebas && !url) continue;
         Tienda &T = g_t[t];
-        T.base = url && *url ? url : kDefs[t].base;
+        T.base = url && *url ? std::string(url) : servidor::r2() + kDefs[t].nombre + "/";
         T.on = true;
         std::error_code ec;
         if (pruebas) fs::remove_all(fs::u8path(dir(t)), ec);
         json l = json::parse(leer(dir(t) + "/local.json"), nullptr, false);
         if (l.is_object() && l.contains("gustan") && l["gustan"].is_array())
             for (auto &x : l["gustan"]) if (x.is_string()) T.gustan.insert(x.get<std::string>());
+        if (l.is_object() && l.contains("contados") && l["contados"].is_array())
+            for (auto &x : l["contados"]) if (x.is_string()) T.contados.insert(x.get<std::string>());
         cargarCache(t);
     }
 }
@@ -214,11 +217,13 @@ void buscarAhora(Tipo t) {
     T.estado = "Buscando...";
 }
 
+void sincronizarGustan(int t);
 void tick() {
     std::error_code ec;
     for (int t = 0; t < 2; t++) {
         Tienda &T = g_t[t];
         if (!T.on) continue;
+        sincronizarGustan(t);
         if (!T.meta.empty()) {
             bool all = true;
             for (auto &b : T.meta) if (b.vivo && !sys::finished(b.p, &b.code)) all = false; else b.vivo = false;
@@ -255,7 +260,7 @@ void tick() {
                 fs::rename(fs::u8path(it->dest), fs::u8path(instDir(t, it->id) + "/paquete.dat"), ec);
                 sys::writeDurable(instDir(t, it->id) + "/info.json", json{{"id", p->id}, {"version", p->version}, {"blake2b", p->archivo.blake2b}}.dump());
                 T.errores.erase(it->id);
-                sumar(t, *p, 'd');
+                contarDescargaUnaVez(t, *p);
             } else {
                 fs::remove(fs::u8path(it->dest), ec);
                 T.errores[it->id] = it->code && it->code != 22 ? "No se pudo descargar. ¿Hay internet?" : err.empty() ? "El archivo no coincide con el catálogo y se borró." : err;
@@ -320,20 +325,47 @@ void mirarContadores(Tipo t) {
         if (p.contador.empty() || n++ >= 40) continue;
         for (char q : {'d', 'g'}) {
             Bajada b; b.id = p.id; b.que = q; b.dest = dir(t) + "/contadores/" + p.id + "-" + q + ".json";
-            if (lanzar(b, g_contador + "get/" + kEspacio + "/" + p.contador + "-" + q, {"--max-time", "15", "--max-filesize", "4096"})) T.cuentas.push_back(b);
+            std::string url = g_contador + "contadores/" + p.contador + "-" + q + ".json";
+            if (url.rfind("https://", 0) == 0) url += "?t=" + std::to_string((long long)time(nullptr));
+            if (lanzar(b, url, {"--max-time", "15", "--max-filesize", "4096"})) T.cuentas.push_back(b);
         }
     }
 }
 long long descargas(Tipo t, const std::string &id) { auto it = g_t[t].cuenta.find(id); return it == g_t[t].cuenta.end() ? -1 : it->second.first; }
 long long meGusta(Tipo t, const std::string &id) { auto it = g_t[t].cuenta.find(id); return it == g_t[t].cuenta.end() ? -1 : it->second.second; }
 bool leGusta(Tipo t, const std::string &id) { return g_t[t].gustan.count(id) > 0; }
-void darMeGusta(Tipo t, const Paquete &p) {
-    if (g_t[t].gustan.count(p.id)) return;
-    g_t[t].gustan.insert(p.id);
+bool darMeGusta(Tipo t, const Paquete &p, bool poner) {
+    if (!envio::conectado() || p.contador.empty()) return false;
+    Tienda &T = g_t[t];
+    if (poner == (T.gustan.count(p.id) > 0)) return true;
+    if (poner) T.gustan.insert(p.id); else T.gustan.erase(p.id);
     guardarGustan(t);
-    auto &c = g_t[t].cuenta[p.id];
-    if (c.second >= 0) c.second++;
-    sumar(t, p, 'g');
+    auto &c = T.cuenta[p.id];
+    if (c.second >= 0) c.second += poner ? 1 : -1;
+    std::string id = p.id;
+    envio::meGusta(p.contador + "-g", poner, [t, id](long long v, bool mio) {
+        if (v < 0) return;
+        g_t[t].cuenta[id].second = v;
+        if (mio) g_t[t].gustan.insert(id); else g_t[t].gustan.erase(id);
+        guardarGustan(t);
+    });
+    return true;
+}
+void sincronizarGustan(int t) {
+    Tienda &T = g_t[t];
+    if (!envio::conectado()) { T.gustanSincronizado = false; return; }
+    if (T.gustanSincronizado || T.paquetes.empty()) return;
+    T.gustanSincronizado = true;
+    std::vector<std::string> claves;
+    for (auto &p : T.paquetes) if (!p.contador.empty()) claves.push_back(p.contador + "-g");
+    envio::misMeGusta(claves, [t](const std::map<std::string, bool> &r) {
+        for (auto &p : g_t[t].paquetes) {
+            auto it = r.find(p.contador + "-g");
+            if (it == r.end()) continue;
+            if (it->second) g_t[t].gustan.insert(p.id); else g_t[t].gustan.erase(p.id);
+        }
+        guardarGustan(t);
+    });
 }
 
 bool valido(const json &pk, Tipo t, std::string &err) {

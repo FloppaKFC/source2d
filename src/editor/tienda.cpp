@@ -1,4 +1,6 @@
 #include "tienda.hpp"
+#include "envio.hpp"
+#include "servidor.hpp"
 #include "cerrado.hpp"
 #include "exporter.hpp"
 #include "firma_publica.hpp"
@@ -20,21 +22,22 @@ namespace fs = std::filesystem;
 
 namespace tienda {
 namespace {
-const char *kBase = "https://raw.githubusercontent.com/FloppaKFC/source2d-juegos/main/";
-const char *kContador = "https://abacus.jasoncameron.dev/", *kEspacio = "source2d-floppa";
-const char *kReleases = "https://github.com/FloppaKFC/source2d-juegos/releases/download/";
-const time_t kCada = 3600;
-const double kContadoresCada = 60;
+const time_t kCada = 600;
+const double kContadoresCada = 60, kCuentasCada = 60;
 
 struct Bajada { sys::Proc p; std::string dest, hash, id; long long tam = 0; bool vivo = false; int code = 0; };
 struct Cuenta { long long d = -1, g = -1; };
 
 bool g_on = false, g_buscar = false, g_pruebas = false, g_hayCache = false;
-std::string g_base = kBase, g_contador = kContador, g_estado;
+std::string g_base, g_cuentasUrl, g_contador, g_estado;
 uint8_t g_pub[32];
 std::vector<Juego> g_juegos;
 std::set<std::string> g_retirados;
-std::map<std::string, int> g_insignias;
+std::map<std::string, std::set<int>> g_insignias;
+std::map<std::string, std::vector<std::string>> g_contribuciones;
+std::set<std::string> g_contados;
+std::vector<Bajada> g_cuentasMeta;
+double g_cuentasMetaAt = -1e9;
 std::vector<Bajada> g_meta, g_portadas, g_juegosBaj, g_fuentes, g_cuentas, g_hits;
 std::map<std::string, std::string> g_errores;
 std::map<std::string, Cuenta> g_cuenta;
@@ -42,6 +45,7 @@ std::set<std::string> g_gustan;
 std::set<std::string> g_favs;
 std::set<std::string> g_destacados;
 double g_cuentasAt = -1e9;
+bool g_gustanSincronizado = false;
 time_t g_ultima = 0;
 
 std::string dir() { return ui::configDir() + "/source-play"; }
@@ -113,7 +117,7 @@ Archivo archivoDe(const json &x) {
     uint8_t tmp[32];
     if (!rutaSegura(a.ruta) || !fromHex(a.blake2b, tmp, 32)) return Archivo{};
     if (url.empty()) a.url = g_base + a.ruta;
-    else if ((url.rfind(kReleases, 0) == 0 || (g_pruebas && url.rfind("file://", 0) == 0)) && url.find("..") == std::string::npos) a.url = url;
+    else if ((servidor::urlDeR2(url) || (g_pruebas && url.rfind("file://", 0) == 0)) && url.find("..") == std::string::npos) a.url = url;
     else return Archivo{};
     return a;
 }
@@ -126,6 +130,7 @@ void guardarLocal() {
     json j = estadoLocal();
     j["gustan"] = g_gustan;
     j["favoritos"] = g_favs;
+    j["contados"] = g_contados;
     sys::writeDurable(dir() + "/local.json", j.dump());
 }
 json infoInstalado(const std::string &id) {
@@ -153,10 +158,21 @@ bool firmado(const std::string &data, const std::string &firma, const char *tipo
 std::string minus(std::string s) { for (auto &c : s) c = (char)tolower((unsigned char)c); return s; }
 void cargarCuentas() {
     g_insignias.clear();
+    g_contribuciones.clear();
     json c;
     if (!firmado(leer(dir() + "/cuentas.json"), leer(dir() + "/cuentas.json.firma"), "cuentas", c)) return;
-    for (auto &[k, v] : std::map<std::string, int>{{"verificados", 1}, {"admins", 2}, {"creadores", 3}})
-        if (c.contains(k) && c[k].is_array()) for (auto &x : c[k]) if (x.is_string()) g_insignias[minus(x)] = std::max(g_insignias[minus(x)], v);
+    for (auto &[k, v] : std::map<std::string, int>{{"verificados", 1}, {"admins", 2}, {"creadores", 3}, {"contribuidores", 4}})
+        if (c.contains(k) && c[k].is_array()) for (auto &x : c[k]) if (x.is_string()) g_insignias[minus(x)].insert(v);
+    if (c.contains("contribuciones") && c["contribuciones"].is_object())
+        for (auto &[login, lista] : c["contribuciones"].items()) {
+            if (!lista.is_array()) continue;
+            for (auto &x : lista) if (x.is_string()) g_contribuciones[minus(login)].push_back(x.get<std::string>());
+        }
+}
+void guardarCuentasBajadas(const std::string &carpeta) {
+    std::string cd = leer(carpeta + "/cuentas.json"), cf = leer(carpeta + "/cuentas.json.firma");
+    json cj;
+    if (firmado(cd, cf, "cuentas", cj)) { sys::writeDurable(dir() + "/cuentas.json", cd); sys::writeDurable(dir() + "/cuentas.json.firma", cf); }
 }
 void cargarCache() {
     cargarCuentas();
@@ -212,9 +228,7 @@ void procesarBusqueda() {
         sys::writeDurable(dir() + "/catalogo.json", d);
         sys::writeDurable(dir() + "/catalogo.json.firma", f);
     } else if (!d.empty()) fprintf(stderr, "Source 2D: el catalogo de Source Play no viene firmado por " S2D_FIRMA_AUTOR ", se ignora\n");
-    std::string cd = leer(dir() + "/descarga/cuentas.json"), cf = leer(dir() + "/descarga/cuentas.json.firma");
-    json cj;
-    if (firmado(cd, cf, "cuentas", cj)) { sys::writeDurable(dir() + "/cuentas.json", cd); sys::writeDurable(dir() + "/cuentas.json.firma", cf); }
+    guardarCuentasBajadas(dir() + "/descarga");
     std::error_code ec;
     fs::remove_all(fs::u8path(dir() + "/descarga"), ec);
     cargarCache();
@@ -228,7 +242,7 @@ const Juego *buscarJuego(const std::string &id) {
     for (auto &j : g_juegos) if (j.id == id) return &j;
     return nullptr;
 }
-std::string urlContador(const char *accion, const std::string &clave) { return g_contador + accion + "/" + kEspacio + "/" + clave; }
+std::string urlContador(const std::string &clave) { return g_contador + "contadores/" + clave + ".json"; }
 long long valor(Bajada &b) {
     json j = json::parse(leer(b.dest), nullptr, false);
     std::error_code ec;
@@ -237,10 +251,22 @@ long long valor(Bajada &b) {
     if (b.code != 0 || !j.is_object() || !j.contains("value") || !j["value"].is_number_integer()) return -1;
     return j["value"].get<long long>();
 }
-void sumar(const std::string &clave, const std::string &id, char que) {
-    if (g_contador.empty() || clave.empty()) return;
-    Bajada b; b.dest = dir() + "/contadores/hit-" + id + "-" + que + ".json"; b.id = id; b.hash = std::string(1, que);
-    if (lanzar(b, urlContador("hit", clave + "-" + que), {"--max-time", "15", "--max-filesize", "4096"})) g_hits.push_back(b);
+void contarDescargaUnaVez(const Juego &j) {
+    if (j.contador.empty() || g_contados.count(j.id)) return;
+    g_contados.insert(j.id);
+    guardarLocal();
+    std::string id = j.id;
+    envio::contarDescarga(j.contador + "-d", [id](long long v) { if (v >= 0) g_cuenta[id].d = v; });
+}
+void refrescarCuentas() {
+    if (!g_cuentasMeta.empty() || g_cuentasUrl.empty()) return;
+    g_cuentasMetaAt = reloj();
+    for (const char *nm : {"cuentas.json", "cuentas.json.firma"}) {
+        Bajada b;
+        b.dest = dir() + "/cuentas-nuevas/" + nm;
+        if (!lanzar(b, sinCache(g_cuentasUrl + nm), {"--max-time", "30", "--max-filesize", "4000000"})) { g_cuentasMeta.clear(); return; }
+        g_cuentasMeta.push_back(b);
+    }
 }
 }
 
@@ -253,9 +279,9 @@ void iniciar(bool buscar, bool pruebas) {
         pub = k ? k : "";
         if (!url) return;
     }
-    if (url && *url) g_base = url;
-    if (const char *c = getenv("S2D_CONTADOR_URL")) g_contador = c;
-    else if (pruebas) g_contador.clear();
+    g_base = url && *url ? std::string(url) : servidor::r2() + "juegos/";
+    g_cuentasUrl = url && *url ? std::string(url) : servidor::r2();
+    g_contador = pruebas && !getenv("S2D_R2_URL") ? "" : servidor::r2();
     if (!fromHex(pub, g_pub, 32)) return;
     g_on = true;
     g_buscar = buscar;
@@ -263,6 +289,7 @@ void iniciar(bool buscar, bool pruebas) {
     json l = estadoLocal();
     if (l.contains("gustan") && l["gustan"].is_array()) for (auto &x : l["gustan"]) if (x.is_string()) g_gustan.insert(x.get<std::string>());
     if (l.contains("favoritos") && l["favoritos"].is_array()) for (auto &x : l["favoritos"]) if (x.is_string()) g_favs.insert(x.get<std::string>());
+    if (l.contains("contados") && l["contados"].is_array()) for (auto &x : l["contados"]) if (x.is_string()) g_contados.insert(x.get<std::string>());
     cargarCache();
     if (buscar) buscarAhora();
 }
@@ -273,7 +300,8 @@ void buscarAhora() {
     for (const char *nm : {"catalogo.json", "catalogo.json.firma", "cuentas.json", "cuentas.json.firma"}) {
         Bajada b;
         b.dest = dir() + "/descarga/" + nm;
-        if (!lanzar(b, sinCache(g_base + nm), {"--max-time", "30", "--max-filesize", "8000000"})) {
+        std::string base = std::string(nm).rfind("cuentas", 0) == 0 ? g_cuentasUrl : g_base;
+        if (!lanzar(b, sinCache(base + nm), {"--max-time", "30", "--max-filesize", "8000000"})) {
             g_estado = "No se encontró curl: no se puede abrir Source Play.";
             g_meta.clear();
             return;
@@ -290,6 +318,31 @@ void tick() {
         for (auto &b : g_meta) if (b.vivo && !sys::finished(b.p, &b.code)) all = false; else b.vivo = false;
         if (all) { procesarBusqueda(); g_meta.clear(); }
     }
+    if (!g_cuentasMeta.empty()) {
+        bool all = true;
+        for (auto &b : g_cuentasMeta) if (b.vivo && !sys::finished(b.p, &b.code)) all = false; else b.vivo = false;
+        if (all) {
+            guardarCuentasBajadas(dir() + "/cuentas-nuevas");
+            std::error_code ec2;
+            fs::remove_all(fs::u8path(dir() + "/cuentas-nuevas"), ec2);
+            g_cuentasMeta.clear();
+            cargarCuentas();
+        }
+    } else if (g_buscar && g_meta.empty() && reloj() - g_cuentasMetaAt > (g_pruebas ? 1 : kCuentasCada)) refrescarCuentas();
+    if (!g_gustanSincronizado && envio::conectado() && !g_juegos.empty()) {
+        g_gustanSincronizado = true;
+        std::vector<std::string> claves;
+        for (auto &j : g_juegos) if (!j.contador.empty()) claves.push_back(j.contador + "-g");
+        envio::misMeGusta(claves, [](const std::map<std::string, bool> &r) {
+            for (auto &j : g_juegos) {
+                auto it = r.find(j.contador + "-g");
+                if (it == r.end()) continue;
+                if (it->second) g_gustan.insert(j.id); else g_gustan.erase(j.id);
+            }
+            guardarLocal();
+        });
+    }
+    if (!envio::conectado()) g_gustanSincronizado = false;
     std::error_code ec;
     bool portada = false;
     for (auto it = g_portadas.begin(); it != g_portadas.end();) {
@@ -311,7 +364,7 @@ void tick() {
             json info = {{"id", j->id}, {"nombre", j->nombre}, {"autor", j->autor}, {"version", j->version}, {"abierto", j->abierto}};
             if (!j->abierto) info["llave"] = j->llave;
             if (ec || !sys::writeDurable(instDir(j->id) + "/info.json", info.dump())) g_errores[it->id] = "No se pudo guardar el juego.";
-            else { g_errores.erase(it->id); sumar(j->contador, j->id, 'd'); }
+            else { g_errores.erase(it->id); contarDescargaUnaVez(*j); }
         } else {
             fs::remove(fs::u8path(it->dest), ec);
             g_errores[it->id] = it->code && it->code != 22 ? "No se pudo descargar. ¿Hay internet?" : "El archivo descargado no coincide con el catálogo y se borró.";
@@ -448,7 +501,7 @@ void mirarContadores() {
         for (char q : {'d', 'g'}) {
             Bajada b; b.id = j.id; b.hash = std::string(1, q);
             b.dest = dir() + "/contadores/" + j.id + "-" + q + ".json";
-            if (lanzar(b, urlContador("get", j.contador + "-" + q), {"--max-time", "15", "--max-filesize", "4096"})) g_cuentas.push_back(b);
+            if (lanzar(b, sinCache(urlContador(j.contador + "-" + q)), {"--max-time", "15", "--max-filesize", "4096"})) g_cuentas.push_back(b);
         }
     }
 }
@@ -461,17 +514,44 @@ void setFavorito(const std::string &id, bool si) {
     if (si) g_favs.insert(id); else g_favs.erase(id);
     guardarLocal();
 }
-void darMeGusta(const Juego &j) {
-    if (g_gustan.count(j.id)) return;
-    g_gustan.insert(j.id);
+bool darMeGusta(const Juego &j, bool poner) {
+    if (!envio::conectado() || j.contador.empty()) return false;
+    if (poner == (g_gustan.count(j.id) > 0)) return true;
+    if (poner) g_gustan.insert(j.id); else g_gustan.erase(j.id);
     guardarLocal();
     auto &c = g_cuenta[j.id];
-    if (c.g >= 0) c.g++;
-    sumar(j.contador, j.id, 'g');
+    if (c.g >= 0) c.g += poner ? 1 : -1;
+    std::string id = j.id;
+    envio::meGusta(j.contador + "-g", poner, [id](long long v, bool mio) {
+        if (v < 0) return;
+        g_cuenta[id].g = v;
+        if (mio) g_gustan.insert(id); else g_gustan.erase(id);
+        guardarLocal();
+    });
+    return true;
+}
+std::vector<int> insignias(const std::string &login) {
+    std::vector<int> r;
+    auto it = g_insignias.find(minus(login));
+    if (it != g_insignias.end()) r.assign(it->second.begin(), it->second.end());
+    if (envio::esBeta(login)) r.push_back(5);
+    return r;
 }
 int insignia(const std::string &login) {
-    auto it = g_insignias.find(minus(login));
-    return it == g_insignias.end() ? 0 : it->second;
+    std::vector<int> ins = insignias(login);
+    if (ins.empty()) return 0;
+    static const std::map<std::string, int> nombres = {{"verificada", 1}, {"admin", 2}, {"creador", 3}, {"contribuidor", 4}, {"beta", 5}};
+    if (const envio::Perfil *p = envio::perfil(login)) {
+        auto n = nombres.find(p->insignia);
+        if (n != nombres.end() && std::find(ins.begin(), ins.end(), n->second) != ins.end()) return n->second;
+    }
+    int mejor = 0;
+    for (int v : ins) if (v != 5 && v > mejor) mejor = v;
+    return mejor ? mejor : ins.front();
+}
+std::vector<std::string> contribuciones(const std::string &login) {
+    auto it = g_contribuciones.find(minus(login));
+    return it == g_contribuciones.end() ? std::vector<std::string>() : it->second;
 }
 std::vector<const Juego *> juegosDe(const std::string &login) {
     std::vector<const Juego *> r;

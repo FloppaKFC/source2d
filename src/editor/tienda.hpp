@@ -43,8 +43,10 @@ long long meGusta(const std::string &id);
 bool leGusta(const std::string &id);
 bool favorito(const std::string &id);
 void setFavorito(const std::string &id, bool si);
-void darMeGusta(const Juego &j);
+bool darMeGusta(const Juego &j, bool poner = true);
 
 int insignia(const std::string &login);
+std::vector<int> insignias(const std::string &login);
+std::vector<std::string> contribuciones(const std::string &login);
 std::vector<const Juego *> juegosDe(const std::string &login);
 }

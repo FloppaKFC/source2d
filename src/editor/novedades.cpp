@@ -1,4 +1,5 @@
 #include "novedades.hpp"
+#include "servidor.hpp"
 #include "firma_publica.hpp"
 #include "json.hpp"
 #include "sys.hpp"
@@ -25,10 +26,8 @@ const char *kSistema = "windows", *kExe = "Source2D.exe";
 #else
 const char *kSistema = "linux", *kExe = "Source2D";
 #endif
-const char *kBase = "https://raw.githubusercontent.com/FloppaKFC/source2d-versiones/main/";
 const time_t kCada = 3 * 3600;
 const double kSondeo = 5;
-const char *kContador = "https://abacus.jasoncameron.dev/", *kEspacio = "source2d-floppa";
 const double kVotosCada = 20;
 
 struct Bajada { sys::Proc p; std::string dest, hash; bool vivo = false; int code = 0; };
@@ -42,7 +41,7 @@ struct Conteo {
 struct DescargaVer { Version v; sys::Proc p; bool vivo = false; std::string parcial, final_, error; };
 
 bool g_on = false, g_buscar = false, g_pruebas = false, g_hayCache = false;
-std::string g_base = kBase, g_versDir, g_estado, g_contador = kContador;
+std::string g_base, g_versDir, g_estado, g_contador, g_apiVotos;
 uint8_t g_pub[32];
 std::vector<Noticia> g_news;
 std::vector<Version> g_vers;
@@ -249,9 +248,9 @@ void iniciar(bool buscar, const std::string &versionsDir, bool pruebas) {
         pub = k ? k : "";
         if (!url) return;
     }
-    if (url && *url) g_base = url;
-    if (const char *c = getenv("S2D_CONTADOR_URL")) g_contador = c;
-    else if (pruebas) g_contador.clear();
+    g_base = url && *url ? std::string(url) : servidor::r2() + "novedades/";
+    g_contador = pruebas && !getenv("S2D_R2_URL") ? "" : servidor::r2();
+    g_apiVotos = pruebas && !getenv("S2D_API_URL") ? "" : servidor::api();
     if (!fromHex(pub, g_pub, 32)) return;
     g_on = true;
     g_buscar = buscar;
@@ -410,17 +409,18 @@ void importanteVisto(int id) {
 }
 
 namespace {
-std::string urlVoto(const char *accion, const Encuesta &e, int i) {
-    return g_contador + accion + "/" + kEspacio + "/" + e.clave + "-" + std::to_string(i);
+std::string urlVoto(const Encuesta &e, int i) {
+    std::string u = g_contador + "contadores/" + e.clave + "-" + std::to_string(i) + ".json";
+    return u.rfind("https://", 0) == 0 ? u + "?t=" + std::to_string((long long)time(nullptr)) : u;
 }
 void enviarVoto(const Noticia &n, Conteo &c) {
     auto it = g_votos.find(n.id);
-    if (it == g_votos.end() || c.voto.vivo || g_contador.empty()) return;
+    if (it == g_votos.end() || c.voto.vivo || g_apiVotos.empty()) return;
     std::error_code ec;
     fs::create_directories(fs::u8path(dir() + "/encuestas"), ec);
     c.voto = Bajada{};
     c.voto.dest = dir() + "/encuestas/" + std::to_string(n.id) + "-voto.json";
-    lanzarCurl(c.voto, urlVoto("hit", n.encuesta, it->second), {"--max-time", "15", "--max-filesize", "4096"});
+    lanzarCurl(c.voto, g_apiVotos + "/contador/" + n.encuesta.clave + "-" + std::to_string(it->second), {"--max-time", "15", "--max-filesize", "4096", "-X", "POST"});
 }
 }
 
@@ -439,7 +439,7 @@ void mirarEncuesta(const Noticia &n) {
     c.b.assign(n.encuesta.opciones.size(), Bajada{});
     for (size_t i = 0; i < c.b.size(); i++) {
         c.b[i].dest = dir() + "/encuestas/" + std::to_string(n.id) + "-" + std::to_string(i) + ".json";
-        lanzarCurl(c.b[i], urlVoto("get", n.encuesta, (int)i), {"--max-time", "15", "--max-filesize", "4096"});
+        lanzarCurl(c.b[i], urlVoto(n.encuesta, (int)i), {"--max-time", "15", "--max-filesize", "4096"});
     }
 }
 std::vector<long long> votos(int id) {

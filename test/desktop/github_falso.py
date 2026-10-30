@@ -24,7 +24,7 @@ class H(BaseHTTPRequestHandler):
         return self.rfile.read(n).decode() if n else ""
 
     def autorizado(self):
-        if self.headers.get("Authorization") != "Bearer token-de-prueba":
+        if self.headers.get("Authorization") != "Bearer gho_tokenDePruebaDeSource2D00000000000":
             self.responder(401, {"message": "Bad credentials"})
             return False
         return True
@@ -40,7 +40,7 @@ class H(BaseHTTPRequestHandler):
             estado["sondeos"] += 1
             if estado["sondeos"] < 2:
                 return self.responder(200, {"error": "authorization_pending"})
-            return self.responder(200, {"access_token": "token-de-prueba", "token_type": "bearer"})
+            return self.responder(200, {"access_token": "gho_tokenDePruebaDeSource2D00000000000", "token_type": "bearer"})
         if not self.autorizado():
             return
         if self.path == "/repos/FloppaKFC/source2d-envios/forks":
