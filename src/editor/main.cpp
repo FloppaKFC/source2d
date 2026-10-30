@@ -2097,6 +2097,8 @@ static void drawConfigPerfil() {
     }
     ImGui::EndDisabled();
     ImGui::SameLine();
+    if (ImGui::Button("Volver al perfil", ImVec2(150, 0))) { ImGui::CloseCurrentPopup(); openPerfil(yo); }
+    ImGui::SameLine();
     if (ImGui::Button("Cerrar", ImVec2(110, 0))) ImGui::CloseCurrentPopup();
     std::string st = envio::estadoAccion("perfil");
     if (!st.empty()) { ImGui::SameLine(); ImGui::TextColored(envio::falloAccion("perfil") ? ImVec4(1, 0.55f, 0.5f, 1) : ImVec4(0.6f, 0.9f, 0.7f, 1), "%s", st.c_str()); }

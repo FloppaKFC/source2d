@@ -247,13 +247,26 @@ void soltarCopia(AnimVentana &a) {
     a.copia.clear();
 }
 void transformar(ImDrawList *dl, ImVec2 o, float s, float alfa) {
-    for (auto &v : dl->VtxBuffer) {
-        v.pos.x = o.x + (v.pos.x - o.x) * s;
-        v.pos.y = o.y + (v.pos.y - o.y) * s;
+    ImVec2 pantalla = ImGui::GetIO().DisplaySize;
+    std::vector<char> fondo(dl->VtxBuffer.Size, 0);
+    for (auto &c : dl->CmdBuffer) {
+        if (c.ClipRect.z - c.ClipRect.x < pantalla.x || c.ClipRect.w - c.ClipRect.y < pantalla.y) continue;
+        for (unsigned i = 0; i < c.ElemCount; i++) {
+            unsigned v = c.VtxOffset + dl->IdxBuffer[(int)(c.IdxOffset + i)];
+            if (v < fondo.size()) fondo[v] = 1;
+        }
+    }
+    for (int i = 0; i < dl->VtxBuffer.Size; i++) {
+        ImDrawVert &v = dl->VtxBuffer[i];
+        if (!fondo[i]) {
+            v.pos.x = o.x + (v.pos.x - o.x) * s;
+            v.pos.y = o.y + (v.pos.y - o.y) * s;
+        }
         unsigned a = (v.col >> IM_COL32_A_SHIFT) & 0xFF;
         v.col = (v.col & ~IM_COL32_A_MASK) | ((ImU32)(a * alfa) << IM_COL32_A_SHIFT);
     }
     for (auto &c : dl->CmdBuffer) {
+        if (c.ClipRect.z - c.ClipRect.x >= pantalla.x && c.ClipRect.w - c.ClipRect.y >= pantalla.y) continue;
         c.ClipRect.x = o.x + (c.ClipRect.x - o.x) * s; c.ClipRect.z = o.x + (c.ClipRect.z - o.x) * s;
         c.ClipRect.y = o.y + (c.ClipRect.y - o.y) * s; c.ClipRect.w = o.y + (c.ClipRect.w - o.y) * s;
     }
